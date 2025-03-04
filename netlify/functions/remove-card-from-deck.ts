@@ -7,11 +7,8 @@ const handler = async (event: { body: string }) => {
 
     const removeCardFromDeckQuery = fql`
       let deck = decks.firstWhere(.id == ${body.deckId})
-      let cardIndex = deck?.cards.indexOf(${body.cardId}) ?? -1
-      let before = deck?.cards.take(cardIndex)
-      let after = deck?.cards.drop(cardIndex + 1)
       deck?.update({
-        cards: before?.concat(after ?? [])
+        cards: ${body.cards}
       })`
 
     const response = await client.query(removeCardFromDeckQuery)

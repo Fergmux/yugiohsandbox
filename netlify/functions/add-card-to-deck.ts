@@ -8,7 +8,7 @@ const handler = async (event: { body: string }) => {
     const addCardToDeckQuery = fql`
       let deck = decks.firstWhere(.id == ${body.deckId})
       deck?.update({
-        cards: deck?.cards.append(${body.cardId})
+        cards: ${body.cards}
       })`
     const response = await client.query(addCardToDeckQuery)
     console.log(response.data)
