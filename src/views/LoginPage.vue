@@ -6,7 +6,7 @@ import { ref } from 'vue'
 const userStore = useUserStore()
 const { user } = storeToRefs(userStore)
 const { addUser, getUser } = userStore
-const userName = ref('')
+const userName = ref('ferg')
 </script>
 
 <template>

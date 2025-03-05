@@ -13,10 +13,31 @@ export interface YugiohCard {
   desc: string
   type: string
   card_images: CardImage[]
+  faceDown?: boolean
+  defense?: boolean
 }
 
 export interface Deck {
   id: string
   name: string
   cards: number[]
+}
+
+export interface BoardSide {
+  deck: YugiohCard[]
+  hand: YugiohCard[]
+  field: (YugiohCard | null)[]
+  graveyard: YugiohCard[]
+  banished: YugiohCard[]
+  extra: YugiohCard[]
+}
+
+export interface GameState {
+  code: number | null
+  player1: User | null
+  player2: User | null
+  deck1: string | null
+  deck2: string | null
+  cards1: BoardSide
+  cards2: BoardSide
 }

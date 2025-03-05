@@ -64,9 +64,8 @@ const selectCard = (card: YugiohCard) => {
 }
 
 // Construct image URL from S3 bucket using card ID
-const getS3ImageUrl = (cardId: number): string => {
-  return `${import.meta.env.VITE_S3_BUCKET_URL}${cardId}.jpg`
-}
+const getS3ImageUrl = (cardId: number): string =>
+  `${import.meta.env.VITE_S3_BUCKET_URL}${cardId}.jpg`
 
 // CARD SEARCH //
 const searchQuery = ref('')
