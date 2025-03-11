@@ -11,6 +11,7 @@ const actionIconMap: Record<string, string> = {
   shuffle: 'shuffle',
   set: 'download',
   defence: 'shield',
+  'face-down': 'place_item',
 }
 
 const props = defineProps<{
@@ -22,9 +23,12 @@ const props = defineProps<{
   hint?: string | number
   count?: number
   actions?: false | string[]
+  controls?: boolean
+  counters?: number
 }>()
 const emit = defineEmits<{
   (e: 'action', name: string): void
+  (e: 'increment', count: number): void
 }>()
 const cardList = computed(() => props.cards ?? [props.card])
 
@@ -51,21 +55,46 @@ const getS3ImageUrl = (cardId: number): string =>
         }"
       />
     </template>
-    <div
-      class="absolute top-0 left-0 z-[110] flex h-full w-full items-end justify-center opacity-0 hover:opacity-100"
-    >
-      <p v-if="hint" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-        {{ hint }}
-      </p>
-      <div v-if="actions">
-        <button
-          v-for="action in actions"
-          :key="action"
-          @click.stop="emit('action', action)"
-          class="m-2 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-none text-black active:bg-gray-100"
+    <div class="relative h-full w-full">
+      <div class="absolute z-[110] flex h-full flex-col flex-wrap items-center">
+        <div
+          v-for="counter in counters"
+          :key="counter"
+          class="m-1 size-7 rounded-full border-1 border-gray-300 bg-gray-600 text-center leading-6"
         >
-          <span class="material-icons" :title="action">{{ actionIconMap[action] }}</span>
-        </button>
+          {{ counter }}
+        </div>
+      </div>
+
+      <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
+        <div v-if="controls" class="absolute top-0 right-0 flex w-min">
+          <div
+            class="material-icons m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
+            @click.stop="emit('increment', -1)"
+          >
+            remove
+          </div>
+          <div
+            class="material-icons m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
+            @click.stop="emit('increment', 1)"
+          >
+            add
+          </div>
+        </div>
+
+        <p v-if="hint" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          {{ hint }}
+        </p>
+        <div v-if="actions" class="absolute bottom-0 flex w-full justify-center">
+          <button
+            v-for="action in actions"
+            :key="action"
+            @click.stop="emit('action', action)"
+            class="m-2 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-none text-black active:bg-gray-600"
+          >
+            <span class="material-icons" :title="action">{{ actionIconMap[action] }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

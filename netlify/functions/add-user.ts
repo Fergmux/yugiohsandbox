@@ -5,6 +5,11 @@ const handler = async (event: { body: string }) => {
     const body = JSON.parse(event.body)
     console.log(body)
 
+    const getUserQuery = fql`users.firstWhere(.username == ${body.username})`
+    const userResponse = await client.query(getUserQuery)
+    console.log(userResponse.data, JSON.stringify(userResponse.data))
+    if (userResponse.data) throw new Error('User already exists')
+
     // Build query that uses the previous var and sub-query
     const upsertCollectionQuery = fql`users.create({
       username: ${body.username},
@@ -22,13 +27,15 @@ const handler = async (event: { body: string }) => {
       },
     }
   } catch (err) {
-    console.error(err)
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message: err }),
+    if (err instanceof Error) {
+      console.error(err)
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: err.message }),
+      }
     }
   }
 }

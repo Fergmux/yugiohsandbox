@@ -8,6 +8,7 @@ import InspectModal from './InspectModal.vue'
 const props = defineProps<{
   cards?: YugiohCard[]
   selectedIndex?: number
+  revealed?: YugiohCard[]
   // actions?: false | string[]
 }>()
 const emit = defineEmits<{
@@ -35,6 +36,8 @@ const handleKeyUp = (e: KeyboardEvent) => {
     emit('close')
   }
 }
+
+const revealedCards = ref<YugiohCard[]>(props.revealed ?? [])
 </script>
 
 <template>
@@ -44,34 +47,42 @@ const handleKeyUp = (e: KeyboardEvent) => {
         class="h-max-content absolute top-1/2 left-1/2 grid w-full -translate-x-1/2 -translate-y-1/2 gap-2 overflow-auto p-32"
         :style="cards?.length > 1 ? gridStyle : 'grid-template-columns: 1fr;'"
       >
-        <img
-          v-for="(card, index) in cards"
-          :key="card.id"
-          :src="getS3ImageUrl(card.id)"
-          class="m-auto"
-          @click.right.prevent="cards?.length > 1 && (selectedCard = [card])"
-          @click.stop="emit('select', index)"
-          @dragstart.prevent=""
-          :class="{
-            'border-4 border-yellow-200': index === selectedIndex,
-          }"
-        />
-        <!-- <div
-          class="absolute top-0 left-0 z-[110] flex h-full w-full items-end justify-center opacity-0 hover:opacity-100"
-        >
-          <div v-if="actions">
-            <button
-              v-for="action in actions"
-              :key="action"
-              @click.stop="emit('action', action)"
-              class="m-2 rounded-md border-1 border-gray-300 bg-gray-400 p-2 text-black"
-            >
-              {{ action }}
-            </button>
-          </div>
-        </div> -->
+        <div v-for="(card, index) in cards" :key="card.id" class="relative">
+          <img
+            :src="getS3ImageUrl(card.faceDown && !revealedCards.includes(card) ? 0 : card.id)"
+            class="m-auto"
+            @click.right.prevent="
+              cards?.length > 1 &&
+              (!card?.faceDown || revealedCards.includes(card)) &&
+              (selectedCard = [card])
+            "
+            @click.stop="emit('select', index)"
+            @dragstart.prevent=""
+            :class="{
+              'border-4 border-yellow-200': index === selectedIndex,
+            }"
+          />
+          <button
+            v-if="cards.length > 1"
+            @click.stop="
+              revealedCards.includes(card)
+                ? revealedCards.splice(revealedCards.indexOf(card), 1)
+                : revealedCards.push(card)
+            "
+            class="absolute bottom-0 left-1/2 m-2 -translate-x-1/2 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
+          >
+            <span class="material-icons">
+              {{ revealedCards.includes(card) ? 'remove' : 'add' }}
+            </span>
+          </button>
+        </div>
       </div>
     </div>
-    <inspect-modal v-if="selectedCard" :cards="selectedCard" @close="selectedCard = undefined" />
+    <inspect-modal
+      v-if="selectedCard"
+      :cards="selectedCard"
+      @close="selectedCard = undefined"
+      :revealed="revealedCards"
+    />
   </Teleport>
 </template>

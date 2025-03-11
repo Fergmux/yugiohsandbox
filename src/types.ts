@@ -15,6 +15,8 @@ export interface YugiohCard {
   card_images: CardImage[]
   faceDown?: boolean
   defence?: boolean
+  counters?: number
+  revealed?: boolean
 }
 
 export interface Deck {

@@ -19,6 +19,8 @@ const handler = async (event: { path: string }) => {
       const response = await client.query(getUserQuery)
       console.log(response.data)
 
+      if (!response.data) throw new Error('User not found')
+
       // Variables can be used as arguments in an FQL query
       // const collectionName = 'users'
 
@@ -40,13 +42,15 @@ const handler = async (event: { path: string }) => {
       }
     }
   } catch (err) {
-    console.error(err)
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message: err }),
+    if (err instanceof Error) {
+      console.error(err)
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: err.message }),
+      }
     }
   }
 }

@@ -16,7 +16,7 @@ const router = createRouter({
       component: () => import('@/views/DeckBuilder.vue'),
     },
     {
-      path: '/play',
+      path: '/play/:gameCode?',
       name: 'play',
       component: () => import('@/views/PlaySpace.vue'),
     },
@@ -31,9 +31,12 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   console.log(userStore.user, to)
+  if (!userStore.user) {
+    await userStore.loginExisting()
+  }
   if (!userStore.user && to.name !== 'login') {
     next('/')
   } else {
