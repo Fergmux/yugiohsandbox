@@ -14,7 +14,7 @@ export interface YugiohCard {
   type: string
   card_images: CardImage[]
   faceDown?: boolean
-  defense?: boolean
+  defence?: boolean
 }
 
 export interface Deck {
@@ -30,6 +30,12 @@ export interface BoardSide {
   graveyard: YugiohCard[]
   banished: YugiohCard[]
   extra: YugiohCard[]
+  zones: (YugiohCard | null)[]
+}
+
+export interface ExtraZone {
+  card: YugiohCard | null
+  owner: User | null
 }
 
 export interface GameState {

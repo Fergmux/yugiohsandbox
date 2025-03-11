@@ -18,6 +18,16 @@ import { storeToRefs } from 'pinia'
 import type { ComputedRef, Ref } from 'vue'
 import { computed, onMounted, ref } from 'vue'
 
+/*
+TODO:
+- Counters
+- Tokens
+- Show to opponent
+- Give to opponent
+- Attach cards
+- localstorage username
+*/
+
 const extraDeckTypes = [
   'Fusion Monster',
   'Link Monster',
@@ -42,6 +52,7 @@ const defaultGameState: GameState = {
     graveyard: [],
     banished: [],
     extra: [],
+    zones: Array(2).fill(null),
   },
   cards2: {
     deck: [],
@@ -50,6 +61,7 @@ const defaultGameState: GameState = {
     graveyard: [],
     banished: [],
     extra: [],
+    zones: Array(2).fill(null),
   },
 }
 const deckStore = useDeckStore()
@@ -108,9 +120,8 @@ const cardsInExtraDeck = computed(() =>
 
 const setDeck = (id: string) => {
   if (!player.value) return
-  console.log('setDeck', id)
   deckId.value = id
-  gameState.value[deck.value].deck = cardsInNormalDeck.value
+  gameState.value[deck.value].deck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
   gameState.value[deck.value].extra = cardsInExtraDeck.value
   gameState.value[deckKey.value] = id
   updateGame()
@@ -188,13 +199,13 @@ const deckKey = computed(() => (player.value === 'player1' ? 'deck1' : 'deck2'))
   </div>
   <!-- WHOLE PLAYSPACE -->
   <div class="m-8">
-    <!-- TODO OPPONENT -->
+    <!-- OPPONENT -->
     <field-side
       v-if="gameId"
       v-model="gameState"
       :deck="deck === 'cards2' ? 'cards1' : 'cards2'"
       @update="updateGame"
-      class="mb-16 rotate-180"
+      class="mb-2 rotate-180"
     />
     <!-- PLAYER -->
     <field-side
