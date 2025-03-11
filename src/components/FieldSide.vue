@@ -267,6 +267,7 @@ const handleDeckAction = (action: string) => {
       gameState.value[props.deck].deck.sort(() => Math.random() - 0.5)
       updateGame()
       break
+    // case 'search'
   }
 }
 
@@ -470,7 +471,11 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
     <inspect-modal
       v-if="inspectedCards"
       :cards="inspectedCards"
-      :revealed="iv && inspectedCardsLocation === 'extra' ? inspectedCards : undefined"
+      :revealed="
+        iv && (inspectedCardsLocation === 'extra' || inspectedCardsLocation === 'deck')
+          ? inspectedCards
+          : undefined
+      "
       :selected-index="
         selectedCardLocation === inspectedCardsLocation ? selectedCardIndex : undefined
       "
