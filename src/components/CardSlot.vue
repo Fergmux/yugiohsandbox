@@ -11,7 +11,8 @@ const actionIconMap: Record<string, string> = {
   shuffle: 'shuffle',
   set: 'download',
   defence: 'shield',
-  'face-down': 'place_item',
+  'face-down': 'system_update_alt',
+  search: 'search',
 }
 
 const props = defineProps<{
@@ -69,13 +70,13 @@ const getS3ImageUrl = (cardId: number): string =>
       <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
         <div v-if="controls" class="absolute top-0 right-0 flex w-min">
           <div
-            class="material-icons m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
+            class="material-symbols-outlined m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
             @click.stop="emit('increment', -1)"
           >
             remove
           </div>
           <div
-            class="material-icons m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
+            class="material-symbols-outlined m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
             @click.stop="emit('increment', 1)"
           >
             add
@@ -92,7 +93,9 @@ const getS3ImageUrl = (cardId: number): string =>
             @click.stop="emit('action', action)"
             class="m-2 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-none text-black active:bg-gray-600"
           >
-            <span class="material-icons" :title="action">{{ actionIconMap[action] }}</span>
+            <span class="material-symbols-outlined" :title="action">{{
+              actionIconMap[action]
+            }}</span>
           </button>
         </div>
       </div>

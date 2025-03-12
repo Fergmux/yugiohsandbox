@@ -15,7 +15,6 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import type { ComputedRef, Ref } from 'vue'
 import { computed, onMounted, ref } from 'vue'
@@ -26,9 +25,13 @@ TODO:
 -- MUST HAVES --
 - Tokens
 - Attach cards
+- turns
 
 -- NICE TO HAVES --
-- speed up deck/card add
+- life point tracker
+- coin flip
+- Textbox for atk/def
+- better ordering of cards in deck builder
 */
 
 const extraDeckTypes = [
@@ -147,10 +150,10 @@ const setDeck = (id: string) => {
   updateGame()
 }
 
-const updateGame = debounce(async () => {
+const updateGame = async () => {
   if (!gameId.value) return
   await updateDoc(doc(db, 'games', gameId.value), gameState.value)
-}, 500)
+}
 
 const joinGame = async () => {
   const q = query(collection(db, 'games'), where('code', '==', Number(gameCode.value)))
@@ -255,7 +258,10 @@ const deckKey = computed(() => (player.value === 'player1' ? 'deck1' : 'deck2'))
     <p v-else>No decks yet</p>
   </div>
   <!-- WHOLE PLAYSPACE -->
-  <div v-if="gameId && (deckId || player === null)" class="m-8">
+  <div
+    v-if="gameId && (deckId || player === null)"
+    class="mx-auto my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)]"
+  >
     <!-- OPPONENT -->
     <field-side
       v-if="gameId"

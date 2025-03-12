@@ -65,17 +65,18 @@ const getActions = (location: keyof BoardSide, index: number) =>
       : []
 
 const deckActions = computed(() =>
-  selectedCard.value ? ['shuffle-in', 'place-top', 'place-bottom'] : ['shuffle'],
+  selectedCard.value ? ['shuffle-in', 'place-top', 'place-bottom'] : ['shuffle', 'search'],
 )
 
 const zoneIsFree = (index: number) => gameState.value[opponentDeck.value].zones[index] === null
 
 // Selecting card
 const selectedCard: Ref<YugiohCard | undefined> = ref()
-const inspectedCards: Ref<YugiohCard[] | undefined> = ref()
+const inspectedCards: Ref<YugiohCard[] | YugiohCard | undefined> = ref()
 const inspectedCardsLocation: Ref<keyof BoardSide | undefined> = ref()
 const selectedCardLocation: Ref<keyof BoardSide | undefined> = ref()
 const selectedCardIndex: Ref<number | undefined> = ref()
+const revealDeck = ref(false)
 
 const selectCard = (card?: YugiohCard | null, location?: keyof BoardSide, index?: number) => {
   if (!card || !location) return
@@ -120,12 +121,13 @@ const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
 }
 
 const inspectCard = (card: YugiohCard | null, location: keyof BoardSide | null) => {
-  inspectedCards.value = card ? [card] : undefined
+  inspectedCards.value = card ?? undefined
   inspectedCardsLocation.value = location ?? undefined
 }
 
-const inspectCards = (location: keyof BoardSide) => {
-  const cards = getCards(location)
+const inspectCards = (location?: keyof BoardSide, deck?: 'cards1' | 'cards2') => {
+  if (!location) return
+  const cards = gameState.value[deck ?? props.deck][location]
   inspectedCards.value = cards ? (cards.filter(Boolean) as YugiohCard[]) : undefined
   inspectedCardsLocation.value = location ?? undefined
 }
@@ -153,15 +155,25 @@ const drawCard = (source: keyof BoardSide) => {
   updateGame()
 }
 
+const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown?: boolean) => {
+  selectCard(
+    Array.isArray(inspectedCards.value) ? inspectedCards.value[index] : inspectedCards.value,
+    inspectedCardsLocation.value,
+    index,
+  )
+  moveCard(destination, undefined, { faceDown })
+  inspectCards(inspectedCardsLocation.value)
+}
+
 const moveCard = (
-  destination: keyof BoardSide,
+  destination?: keyof BoardSide,
   index?: number,
-  options: { faceDown?: boolean; defence?: boolean } = {},
+  options?: { faceDown?: boolean; defence?: boolean } = {},
 ) => {
   // Check selected card is valid
   if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
   const card = gameState.value[props.deck][selectedCardLocation.value][selectedCardIndex.value]
-  if (!card) return
+  if (!card || !destination) return
 
   // if it's on the field or zones, replace with null
   if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
@@ -208,12 +220,13 @@ const moveCard = (
     } else {
       // hand/gy/banished
       const orientationOptions = destination === 'banished' ? {} : { faceDown: false }
-      gameState.value[props.deck][destination].unshift({
+      const method = destination === 'hand' ? 'push' : 'unshift'
+      gameState.value[props.deck][destination][method]({
         ...card,
-        ...orientationOptions,
         defence: false,
         counters: 0,
         ...options,
+        ...orientationOptions,
       })
     }
   }
@@ -267,7 +280,10 @@ const handleDeckAction = (action: string) => {
       gameState.value[props.deck].deck.sort(() => Math.random() - 0.5)
       updateGame()
       break
-    // case 'search'
+    case 'search':
+      revealDeck.value = true
+      inspectCards('deck')
+      break
   }
 }
 
@@ -282,14 +298,26 @@ const handleBanishedAction = (action: string) => {
 const handleIncrement = (count: number, location: keyof BoardSide, index: number) => {
   const card = getCard(location, index)
   if (!card) return
-  card.counters = (card.counters || 0) + count
+  const newCount = (card.counters || 0) + count
+  card.counters = newCount < 0 ? 0 : newCount
   updateGame()
 }
+
+const closeInspectModal = () => {
+  revealDeck.value = false
+  inspectCard(null, null)
+}
+
+const showCards = computed(() => {
+  const revealedCards = [...getCards('extra'), ...getCards('field'), ...extraZones.value]
+  const cards = revealDeck.value ? [...revealedCards, ...getCards('deck')] : revealedCards
+  return cards.filter(Boolean) as YugiohCard[]
+})
 </script>
 <template>
   <!-- PLAYER -->
-  <div>
-    <div class="grid w-full grid-cols-7 gap-2">
+  <div class="h-1/2">
+    <div class="grid grid-cols-7 gap-2">
       <!-- BANISHED/EXTRA -->
       <template v-if="i || (viewer && props.deck === 'cards1')">
         <!-- OPPONENT BANISHED -->
@@ -297,6 +325,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
           class="bg-gray-200"
           :cards="gameState[opponentDeck].banished"
           :hint="gameState[opponentDeck].banished.length"
+          @click.right.prevent="inspectCards('banished', opponentDeck)"
         />
         <div @click="resetSelectedCard"></div>
         <!-- EXTRA 0 -->
@@ -313,7 +342,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
           :hint="
             (viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined
           "
-          :controls="i && !!extraZones[0]"
+          :controls="!!getCard('zones', 0)"
           :counters="extraZones[0]?.counters"
           @action="(evt) => i && handleAction(evt, 'zones', 0)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
@@ -333,7 +362,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
           :hint="
             (viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined
           "
-          :controls="i && !!extraZones[1]"
+          :controls="!!getCard('zones', 1)"
           :counters="extraZones[1]?.counters"
           @action="(evt) => handleAction(evt, 'zones', 1)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
@@ -349,7 +378,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
               ? moveCard('banished')
               : selectCard(getCard('banished', 0), 'banished', 0))
           "
-          @click.right.prevent="i && inspectCards('banished')"
+          @click.right.prevent="inspectCards('banished')"
           :hint="getCards('banished').length"
           :actions="i && ['face-down']"
           @action="(evt) => i && handleBanishedAction(evt)"
@@ -388,7 +417,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
             ? moveCard('graveyard')
             : selectCard(getCard('graveyard', 0), 'graveyard', 0))
         "
-        @click.right.prevent="iv && inspectCards('graveyard')"
+        @click.right.prevent="inspectCards('graveyard')"
       />
       <!-- EXTRA DECK -->
       <card-slot
@@ -431,29 +460,29 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
         :selected-index="i && selectedCardLocation === 'deck' && selectedCardIndex"
       />
     </div>
-    <div @click="i && moveCard('hand')" class="mt-4 flex max-h-80 w-full justify-center">
+    <div @click="i && moveCard('hand')" class="mt-4 flex w-full justify-center">
       <div v-for="(card, index) in getCards('hand')" :key="`${card?.id}+${index}`" class="relative">
         <img
           v-if="card"
           :class="{
             'border-4 border-yellow-200': isSelected('hand', index),
           }"
-          class="h-auto max-h-80 max-w-full min-w-0 flex-[1,1,auto] object-contain"
+          class="h-full max-h-80 max-w-full min-w-0 object-contain"
           :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
         />
         <div
           class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
           @click.stop="i && selectCard(card, 'hand', index)"
-          @click.right.prevent="iv && inspectCard(card, 'hand')"
+          @click.right.prevent="(iv || card?.revealed) && inspectCard(card, 'hand')"
           @dragstart.prevent=""
         >
-          <div class="absolute bottom-0 left-1/2 flex -translate-x-1/2">
+          <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2">
             <button
               title="Reveal"
               @click.stop="showToOpponent(index)"
               class="m-1 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
-              <span class="material-icons">
+              <span class="material-symbols-outlined">
                 {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
               </span>
             </button>
@@ -462,7 +491,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
               @click.stop="giveToOpponent(index)"
               class="m-1 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
-              <span class="material-icons"> volunteer_activism </span>
+              <span class="material-symbols-outlined"> volunteer_activism </span>
             </button>
           </div>
         </div>
@@ -471,16 +500,21 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
     <inspect-modal
       v-if="inspectedCards"
       :cards="inspectedCards"
-      :revealed="
-        iv && (inspectedCardsLocation === 'extra' || inspectedCardsLocation === 'deck')
-          ? inspectedCards
-          : undefined
-      "
+      :show-cards="showCards"
+      :inspected-cards-location="inspectedCardsLocation"
       :selected-index="
         selectedCardLocation === inspectedCardsLocation ? selectedCardIndex : undefined
       "
-      @close="inspectCard(null, null)"
-      @select="(evt) => selectCard(inspectedCards?.[evt], inspectedCardsLocation, evt)"
+      @close="closeInspectModal"
+      @select="
+        (evt) =>
+          selectCard(
+            Array.isArray(inspectedCards) ? inspectedCards[evt] : inspectedCards,
+            inspectedCardsLocation,
+            evt,
+          )
+      "
+      @draw="drawFromInspected"
     />
   </div>
 </template>

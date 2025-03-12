@@ -16,7 +16,7 @@ export function useOptimalGrid(itemCount: Ref<number>) {
     const count = itemCount.value
     if (count === 0) return { columns: 0, rows: 0 }
 
-    const imageArea = viewportWidth.value * viewportHeight.value * 0.6
+    const imageArea = viewportWidth.value * viewportHeight.value * 0.5
     const areaPerCard = imageArea / count
 
     const width = Math.sqrt(areaPerCard * 0.67)

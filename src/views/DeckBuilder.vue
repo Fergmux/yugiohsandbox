@@ -59,13 +59,21 @@ const cardsInDeck: ComputedRef<YugiohCard[] | undefined> =
   ) ?? []
 
 const cardsInNormalDeck = computed(() =>
-  cardsInDeck.value?.filter((card) => !extraDeckTypes.includes(card.type) && card.type !== 'Token'),
+  cardsInDeck.value
+    ?.filter((card) => !extraDeckTypes.includes(card.type) && card.type !== 'Token')
+    .sort((a, b) => a.name.localeCompare(b.name)),
 )
 const cardsInExtraDeck = computed(() =>
-  cardsInDeck.value?.filter((card) => extraDeckTypes.includes(card.type)),
+  cardsInDeck.value
+    ?.filter((card) => extraDeckTypes.includes(card.type))
+    .sort((a, b) => a.name.localeCompare(b.name)),
 )
 
-const tokenCards = computed(() => cardsInDeck.value?.filter((card) => card.type === 'Token'))
+const tokenCards = computed(() =>
+  cardsInDeck.value
+    ?.filter((card) => card.type === 'Token')
+    .sort((a, b) => a.name.localeCompare(b.name)),
+)
 
 // SELECT CARD //
 
@@ -258,6 +266,6 @@ watch(searchQuery, () => {
         </button>
       </div>
     </div>
-    <inspect-modal v-if="selectedCard" :cards="[selectedCard]" @close="selectCard(null)" />
+    <inspect-modal v-if="selectedCard" :card-list="[selectedCard]" @close="selectCard(null)" />
   </div>
 </template>
