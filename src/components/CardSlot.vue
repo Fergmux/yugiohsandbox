@@ -13,6 +13,7 @@ const actionIconMap: Record<string, string> = {
   defence: 'shield',
   'face-down': 'system_update_alt',
   search: 'search',
+  attach: 'attach_file',
 }
 
 const props = defineProps<{
@@ -22,10 +23,10 @@ const props = defineProps<{
   selectedIndex?: false | number
   faceDown?: boolean
   hint?: string | number
-  count?: number
   actions?: false | string[]
   controls?: boolean
   counters?: number
+  name?: string
 }>()
 const emit = defineEmits<{
   (e: 'action', name: string): void
@@ -39,6 +40,12 @@ const getS3ImageUrl = (cardId: number): string =>
 
 <template>
   <div class="relative aspect-square border-1 border-gray-300">
+    <div
+      v-if="name"
+      class="absolute top-1/2 left-1/2 w-full -translate-x-1/2 -translate-y-1/2 text-center text-xl font-bold text-gray-400 opacity-70"
+    >
+      {{ name }}
+    </div>
     <template v-for="(card, index) in cardList" :key="card?.id">
       <img
         v-if="card"

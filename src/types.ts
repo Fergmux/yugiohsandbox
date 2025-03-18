@@ -9,6 +9,7 @@ export interface CardImage {
 
 export interface YugiohCard {
   id: number
+  uid: string
   name: string
   desc: string
   type: string
@@ -17,6 +18,7 @@ export interface YugiohCard {
   defence?: boolean
   counters?: number
   revealed?: boolean
+  attached?: string
 }
 
 export interface Deck {
@@ -33,6 +35,8 @@ export interface BoardSide {
   banished: YugiohCard[]
   extra: YugiohCard[]
   zones: (YugiohCard | null)[]
+  tokens: YugiohCard[]
+  attached: YugiohCard[]
 }
 
 export interface ExtraZone {
@@ -42,10 +46,20 @@ export interface ExtraZone {
 
 export interface GameState {
   code: number | null
-  player1: User | null
-  player2: User | null
-  deck1: string | null
-  deck2: string | null
-  cards1: BoardSide
-  cards2: BoardSide
+  players: {
+    player1: User | null
+    player2: User | null
+  }
+  decks: {
+    player1: string | null
+    player2: string | null
+  }
+  lifePoints: {
+    player1: number
+    player2: number
+  }
+  cards: {
+    player1: BoardSide
+    player2: BoardSide
+  }
 }

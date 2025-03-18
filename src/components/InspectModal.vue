@@ -43,7 +43,12 @@ const handleKeyUp = (e: KeyboardEvent) => {
   }
 }
 
-const revealedCards = ref<YugiohCard[]>(props.showCards ? [...props.showCards] : [])
+const drawCard = (destination: keyof BoardSide, index: number, card: YugiohCard) => {
+  emit('draw', destination, index, !revealedCardIds.value.includes(card.uid))
+}
+const showCardIds = computed(() => props.showCards?.map((card) => card.uid) ?? [])
+const revealedCards = ref<Set<YugiohCard>>(props.showCards ? new Set(props.showCards) : new Set())
+const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card) => card.uid))
 </script>
 
 <template>
@@ -57,16 +62,14 @@ const revealedCards = ref<YugiohCard[]>(props.showCards ? [...props.showCards] :
         class="h-max-content absolute top-1/2 left-1/2 grid w-full -translate-x-1/2 -translate-y-1/2 gap-2 overflow-auto p-32"
         :style="cardList?.length > 1 ? gridStyle : 'grid-template-columns: 1fr;'"
       >
-        <div v-for="(card, index) in cardList" :key="card.id" class="relative">
+        <div v-for="(card, index) in cardList" :key="`${card.id}+${index}`" class="relative">
           <img
-            :src="getS3ImageUrl(card.faceDown && !revealedCards.includes(card) ? 0 : card.id)"
+            :src="getS3ImageUrl(card.faceDown && !revealedCardIds.includes(card.uid) ? 0 : card.id)"
             class="m-auto h-full max-h-screen"
             @click.right.prevent="
-              cardList?.length > 1 && (!card?.faceDown || revealedCards.includes(card))
+              cardList?.length > 1 && (!card?.faceDown || revealedCardIds.includes(card.uid))
                 ? (selectedCard = card)
-                : revealedCards.includes(card)
-                  ? revealedCards.splice(revealedCards.indexOf(card), 1)
-                  : revealedCards.push(card)
+                : revealedCards.add(card)
             "
             @click.stop="emit('select', index)"
             @dragstart.prevent=""
@@ -74,44 +77,61 @@ const revealedCards = ref<YugiohCard[]>(props.showCards ? [...props.showCards] :
               'border-4 border-yellow-200': index === selectedIndex,
             }"
           />
-          <div class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
+          <div class="absolute bottom-0 flex w-full flex-wrap-reverse justify-center gap-2">
             <button
-              v-if="inspectedCardsLocation !== 'hand' && Array.isArray(cards)"
+              v-if="
+                !(inspectedCardsLocation === 'attached' && index === 0) &&
+                inspectedCardsLocation !== 'hand' &&
+                Array.isArray(cards)
+              "
               title="Draw"
-              @click.stop="emit('draw', 'hand', index, !revealedCards.includes(card))"
+              @click.stop="drawCard('hand', index, card)"
               class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
               <span class="material-symbols-outlined">back_hand</span>
             </button>
             <button
-              v-if="inspectedCardsLocation !== 'graveyard' && Array.isArray(cards)"
+              v-if="
+                !(inspectedCardsLocation === 'attached' && index === 0) &&
+                inspectedCardsLocation !== 'graveyard' &&
+                Array.isArray(cards) &&
+                inspectedCardsLocation !== 'tokens'
+              "
               title="Graveyard"
-              @click.stop="emit('draw', 'graveyard', index, !revealedCards.includes(card))"
+              @click.stop="drawCard('graveyard', index, card)"
               class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
               <span class="material-symbols-outlined">skull</span>
             </button>
             <button
-              v-if="inspectedCardsLocation !== 'banished' && Array.isArray(cards)"
+              v-if="
+                !(inspectedCardsLocation === 'attached' && index === 0) &&
+                inspectedCardsLocation !== 'banished' &&
+                Array.isArray(cards) &&
+                inspectedCardsLocation !== 'tokens'
+              "
               title="Banish"
-              @click.stop="emit('draw', 'banished', index, !revealedCards.includes(card))"
+              @click.stop="drawCard('banished', index, card)"
               class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
               <span class="material-symbols-outlined">block</span>
             </button>
             <button
               v-if="
-                Array.isArray(cards) && !showCards?.includes(card) && revealedCards.includes(card)
+                Array.isArray(cards) &&
+                inspectedCardsLocation !== 'tokens' &&
+                revealedCardIds.includes(card.uid) &&
+                !showCardIds.includes(card.uid)
               "
               @click.stop="
-                revealedCards.includes(card)
-                  ? revealedCards.splice(revealedCards.indexOf(card), 1)
-                  : revealedCards.push(card)
+                revealedCardIds.includes(card.uid)
+                  ? revealedCards.delete(card)
+                  : revealedCards.add(card)
               "
               class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
               <span class="material-symbols-outlined">
-                {{ revealedCards.includes(card) ? 'visibility_off' : 'visibility' }}
+                {{ revealedCardIds.includes(card.uid) ? 'visibility_off' : 'visibility' }}
               </span>
             </button>
           </div>
@@ -122,8 +142,7 @@ const revealedCards = ref<YugiohCard[]>(props.showCards ? [...props.showCards] :
       v-if="selectedCard"
       :cards="selectedCard"
       @close="selectedCard = undefined"
-      :revealed="true"
-      :show-cards="revealedCards"
+      :show-cards="Array.from(revealedCards)"
       :inspected-cards-location="inspectedCardsLocation"
     />
   </Teleport>

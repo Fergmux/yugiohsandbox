@@ -55,6 +55,7 @@ const cardsInDeck: ComputedRef<YugiohCard[] | undefined> =
     () =>
       selectedDeck.value?.cards
         .map((cardId: number) => cardIdMap.value.get(cardId))
+        .sort((a, b) => (a && b ? a.name.localeCompare(b.name) : 0))
         .filter(Boolean) as YugiohCard[] | undefined,
   ) ?? []
 
@@ -157,7 +158,7 @@ watch(searchQuery, () => {
         </h2>
         <div class="mt-4">
           <h3 class="text-2xl font-semibold">
-            Normal deck <span class="font-normal"> - {{ cardsInNormalDeck?.length }}/60</span>
+            Main deck <span class="font-normal"> - {{ cardsInNormalDeck?.length }}/60</span>
           </h3>
           <div class="mt-2">
             <ul
@@ -266,6 +267,6 @@ watch(searchQuery, () => {
         </button>
       </div>
     </div>
-    <inspect-modal v-if="selectedCard" :card-list="[selectedCard]" @close="selectCard(null)" />
+    <inspect-modal v-if="selectedCard" :cards="[selectedCard]" @close="selectCard(null)" />
   </div>
 </template>

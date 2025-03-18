@@ -6,11 +6,14 @@ import { getS3ImageUrl } from '@/utils'
 import type { Ref } from 'vue'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { computed, ref } from 'vue'
+import LifePoints from '@/components/LifePoints.vue'
+
+type CardLocation = keyof BoardSide | 'attached'
 
 // Handle game state synchronisation
 const props = defineProps<{
   modelValue: GameState
-  deck: 'cards1' | 'cards2'
+  player: 'player1' | 'player2'
   interactive?: boolean
   viewer?: boolean
 }>()
@@ -34,8 +37,8 @@ const updateGame = async () => {
 }
 
 const extraZones = computed(() =>
-  gameState.value[props.deck].zones.map((zone, index) =>
-    zone === null ? gameState.value[opponentDeck.value].zones[index] : zone,
+  gameState.value.cards[props.player].zones.map((zone, index) =>
+    zone === null ? gameState.value.cards[opponentPlayerKey.value].zones[index] : zone,
   ),
 )
 
@@ -47,38 +50,48 @@ const bottomRow = Array(5)
   .fill(0)
   .map((_, i) => i + 6)
 
-// Utility functions
-const opponentDeck = computed(() => (props.deck === 'cards1' ? 'cards2' : 'cards1'))
+const updateLifePoints = (value: number, player: 'player1' | 'player2') => {
+  gameState.value.lifePoints[player] += value
+  updateGame()
+}
 
-const getCards = (location: keyof BoardSide) => gameState.value[props.deck][location]
+// Utility functions
+
+const getCardData = (key: 'player1' | 'player2') => gameState.value.cards[key]
+const cards = computed(() => getCardData(props.player))
+const opponentCards = computed(() => getCardData(opponentPlayerKey.value))
+const opponentPlayerKey = computed(() => (props.player === 'player1' ? 'player2' : 'player1'))
+
+const getCards = (location: keyof BoardSide) => cards.value[location]
 
 const getCard = (location: keyof BoardSide, index: number) => getCards(location)[index]
 
 const isSelected = (location: keyof BoardSide, index: number) =>
   selectedCardLocation.value === location && selectedCardIndex.value === index
 
-const getActions = (location: keyof BoardSide, index: number) =>
-  selectedCard.value && !getCard(location, index)
-    ? ['set', 'defence']
-    : getCard(location, index)
-      ? ['flip', 'position']
-      : []
+const getActions = (location: keyof BoardSide, index: number) => {
+  if (selectedCard.value) {
+    return getCard(location, index) ? ['attach'] : ['set', 'defence']
+  } else {
+    return getCard(location, index) ? ['flip', 'position'] : []
+  }
+}
 
 const deckActions = computed(() =>
   selectedCard.value ? ['shuffle-in', 'place-top', 'place-bottom'] : ['shuffle', 'search'],
 )
 
-const zoneIsFree = (index: number) => gameState.value[opponentDeck.value].zones[index] === null
+const zoneIsFree = (index: number) => opponentCards.value.zones[index] === null
 
 // Selecting card
 const selectedCard: Ref<YugiohCard | undefined> = ref()
 const inspectedCards: Ref<YugiohCard[] | YugiohCard | undefined> = ref()
-const inspectedCardsLocation: Ref<keyof BoardSide | undefined> = ref()
-const selectedCardLocation: Ref<keyof BoardSide | undefined> = ref()
+const inspectedCardsLocation: Ref<CardLocation | undefined> = ref()
+const selectedCardLocation: Ref<CardLocation | undefined> = ref()
 const selectedCardIndex: Ref<number | undefined> = ref()
 const revealDeck = ref(false)
 
-const selectCard = (card?: YugiohCard | null, location?: keyof BoardSide, index?: number) => {
+const selectCard = (card?: YugiohCard | null, location?: CardLocation, index?: number) => {
   if (!card || !location) return
   if (selectedCardLocation.value === location && selectedCardIndex.value === index) {
     resetSelectedCard()
@@ -121,13 +134,17 @@ const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
 }
 
 const inspectCard = (card: YugiohCard | null, location: keyof BoardSide | null) => {
-  inspectedCards.value = card ?? undefined
-  inspectedCardsLocation.value = location ?? undefined
+  const attachedCards = getCards('attached').filter(
+    (c) => c?.attached === card?.uid,
+  ) as YugiohCard[]
+  inspectedCards.value =
+    attachedCards.length && card ? [card, ...attachedCards] : (card ?? undefined)
+  inspectedCardsLocation.value = attachedCards.length ? 'attached' : (location ?? undefined)
 }
 
-const inspectCards = (location?: keyof BoardSide, deck?: 'cards1' | 'cards2') => {
+const inspectCards = (location?: CardLocation, playerKey?: 'player1' | 'player2') => {
   if (!location) return
-  const cards = gameState.value[deck ?? props.deck][location]
+  const cards = getCardData(playerKey ?? props.player)[location]
   inspectedCards.value = cards ? (cards.filter(Boolean) as YugiohCard[]) : undefined
   inspectedCardsLocation.value = location ?? undefined
 }
@@ -141,28 +158,46 @@ const showToOpponent = (index: number) => {
 const giveToOpponent = (index: number) => {
   const card = getCard('hand', index)
   if (!card) return
-  gameState.value[opponentDeck.value].hand.push({ ...card, faceDown: false })
-  gameState.value[props.deck].hand.splice(index, 1)
+  opponentCards.value.hand.push({ ...card, faceDown: false })
+  getCards('hand').splice(index, 1)
   updateGame()
 }
 
 // Moving cards
 const drawCard = (source: keyof BoardSide) => {
-  if (!gameState.value[props.deck][source].length) return
-  const card = gameState.value[props.deck][source].shift()
+  if (!getCards(source).length) return
+  const card = getCards(source).shift()
   if (!card) return
-  gameState.value[props.deck].hand.push({ ...card, faceDown: false })
+  getCards('hand').push({ ...card, faceDown: false })
   updateGame()
 }
 
 const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown?: boolean) => {
-  selectCard(
-    Array.isArray(inspectedCards.value) ? inspectedCards.value[index] : inspectedCards.value,
-    inspectedCardsLocation.value,
-    index,
-  )
+  const card = Array.isArray(inspectedCards.value)
+    ? inspectedCards.value[index]
+    : inspectedCards.value
+  let newIndex = index
+  if (inspectedCardsLocation.value === 'attached') {
+    newIndex = getCards('attached').findIndex((c) => c?.uid === card?.uid)
+  }
+  debugger
+  selectCard(card, inspectedCardsLocation.value, newIndex)
   moveCard(destination, undefined, { faceDown })
-  inspectCards(inspectedCardsLocation.value)
+  inspectCard(
+    Array.isArray(inspectedCards.value) ? inspectedCards.value[0] : (inspectedCards.value ?? null),
+    'field',
+  )
+}
+
+const removeSelectedCard = () => {
+  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
+  // if it's on the field or zones, replace with null
+  if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
+    cards.value[selectedCardLocation.value].splice(selectedCardIndex.value, 1, null)
+  } else {
+    // otherwise, remove the card from its location
+    cards.value[selectedCardLocation.value].splice(selectedCardIndex.value, 1)
+  }
 }
 
 const moveCard = (
@@ -171,35 +206,33 @@ const moveCard = (
   options?: { faceDown?: boolean; defence?: boolean } = {},
 ) => {
   // Check selected card is valid
+  debugger
   if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
-  const card = gameState.value[props.deck][selectedCardLocation.value][selectedCardIndex.value]
+  const card = getCard(selectedCardLocation.value, selectedCardIndex.value)
   if (!card || !destination) return
 
-  // if it's on the field or zones, replace with null
-  if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
-    gameState.value[props.deck][selectedCardLocation.value].splice(selectedCardIndex.value, 1, null)
-  } else {
-    // otherwise, remove the card from its location
-    gameState.value[props.deck][selectedCardLocation.value].splice(selectedCardIndex.value, 1)
-  }
+  if (destination === 'tokens' && card.type !== 'Token') return
+  if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return
+
+  removeSelectedCard()
 
   // if there's an index, move the card to the target location
   if (index != undefined) {
-    const target = gameState.value[props.deck][destination][index]
+    const target = getCard(destination, index)
     if (target === null) {
       // if the target is null, replace it with the card (field/zones)
       const orientationOptions =
         selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones'
           ? {}
           : { faceDown: false, defence: false }
-      gameState.value[props.deck][destination][index] = {
+      getCards(destination)[index] = {
         ...card,
         ...orientationOptions,
         ...options,
       }
     } else {
       // otherwise, insert the card at the target index (deck)
-      gameState.value[props.deck][destination].splice(index, 0, {
+      getCards(destination).splice(index, 0, {
         ...card,
         faceDown: true,
         defence: false,
@@ -209,8 +242,8 @@ const moveCard = (
     }
   } else {
     // if there's no index, move the card to the target location
-    if (destination === 'deck' || destination === 'extra') {
-      gameState.value[props.deck][destination].unshift({
+    if (destination === 'deck' || destination === 'extra' || destination === 'tokens') {
+      getCards(destination).unshift({
         ...card,
         faceDown: true,
         defence: false,
@@ -221,7 +254,7 @@ const moveCard = (
       // hand/gy/banished
       const orientationOptions = destination === 'banished' ? {} : { faceDown: false }
       const method = destination === 'hand' ? 'push' : 'unshift'
-      gameState.value[props.deck][destination][method]({
+      getCards(destination)[method]({
         ...card,
         defence: false,
         counters: 0,
@@ -257,6 +290,11 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
       cardToChange.defence = !cardToChange.defence
       updateGame()
       break
+    case 'attach':
+      if (!selectedCard.value) return
+      selectedCard.value.attached = getCard('field', index)?.uid
+      moveCard('attached')
+      break
   }
 }
 
@@ -265,7 +303,7 @@ const handleDeckAction = (action: string) => {
   switch (action) {
     case 'shuffle-in':
       if (!selectedCard.value) return
-      const randomIndex = Math.floor(Math.random() * (gameState.value[props.deck].deck.length + 1))
+      const randomIndex = Math.floor(Math.random() * (getCards('deck').length + 1))
       moveCard('deck', randomIndex, options)
       break
     case 'place-top':
@@ -274,10 +312,10 @@ const handleDeckAction = (action: string) => {
       break
     case 'place-bottom':
       if (!selectedCard.value) return
-      moveCard('deck', gameState.value[props.deck].deck.length, options)
+      moveCard('deck', getCards('deck').length, options)
       break
     case 'shuffle':
-      gameState.value[props.deck].deck.sort(() => Math.random() - 0.5)
+      getCards('deck').sort(() => Math.random() - 0.5)
       updateGame()
       break
     case 'search':
@@ -305,11 +343,17 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
 
 const closeInspectModal = () => {
   revealDeck.value = false
+  debugger
   inspectCard(null, null)
 }
 
 const showCards = computed(() => {
-  const revealedCards = [...getCards('extra'), ...getCards('field'), ...extraZones.value]
+  const revealedCards = [
+    ...getCards('extra'),
+    ...getCards('tokens'),
+    ...getCards('field'),
+    ...extraZones.value,
+  ]
   const cards = revealDeck.value ? [...revealedCards, ...getCards('deck')] : revealedCards
   return cards.filter(Boolean) as YugiohCard[]
 })
@@ -319,18 +363,23 @@ const showCards = computed(() => {
   <div class="h-1/2">
     <div class="grid grid-cols-7 gap-2">
       <!-- BANISHED/EXTRA -->
-      <template v-if="i || (viewer && props.deck === 'cards1')">
+      <template v-if="i || (viewer && props.player === 'player1')">
         <!-- OPPONENT BANISHED -->
         <card-slot
           class="bg-gray-200"
-          :cards="gameState[opponentDeck].banished"
-          :hint="gameState[opponentDeck].banished.length"
-          @click.right.prevent="inspectCards('banished', opponentDeck)"
+          :name="'Banished Zone'"
+          :cards="opponentCards.banished"
+          :hint="opponentCards.banished.length"
+          @click.right.prevent="inspectCards('banished', opponentPlayerKey)"
         />
-        <div @click="resetSelectedCard"></div>
+        <life-points
+          :life-points="gameState.lifePoints[opponentPlayerKey]"
+          @update="updateLifePoints($event, opponentPlayerKey)"
+        />
         <!-- EXTRA 0 -->
         <card-slot
           :card="extraZones[0]"
+          :name="'Extra Monster Zone'"
           @click="i && zoneIsFree(0) && handleFieldClick(0, 'zones')"
           @click.right.prevent="
             (!extraZones[0]?.faceDown || zoneIsFree(0) || viewer) &&
@@ -347,10 +396,22 @@ const showCards = computed(() => {
           @action="(evt) => i && handleAction(evt, 'zones', 0)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
         />
-        <div @click="resetSelectedCard"></div>
+        <!-- TOKENS -->
+        <card-slot
+          class=""
+          :name="'Tokens'"
+          :cards="getCards('tokens')"
+          :hint="getCards('tokens').length"
+          @click.right.prevent="iv && inspectCards('tokens')"
+          @click.stop="i && (selectedCard ? moveCard('tokens') : drawCard('tokens'))"
+          :actions="i && ['search']"
+          @action="i && inspectCards('tokens')"
+          :selected-index="i && selectedCardLocation === 'tokens' && selectedCardIndex"
+        />
         <!-- EXTRA 1 -->
         <card-slot
           :card="extraZones[1]"
+          :name="'Extra Monster Zone'"
           @click="i && zoneIsFree(1) && handleFieldClick(1, 'zones')"
           @click.right.prevent="
             (!extraZones[1]?.faceDown || zoneIsFree(1) || viewer) &&
@@ -367,11 +428,16 @@ const showCards = computed(() => {
           @action="(evt) => handleAction(evt, 'zones', 1)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
         />
-        <div @click="resetSelectedCard"></div>
+        <life-points
+          :life-points="gameState.lifePoints[props.player]"
+          reverse
+          @update="updateLifePoints($event, props.player)"
+        />
         <!-- BANISHED -->
         <card-slot
           class="bg-gray-200"
           :cards="getCards('banished')"
+          :name="'Banished Zone'"
           @click.stop="
             i &&
             (selectedCard
@@ -380,7 +446,7 @@ const showCards = computed(() => {
           "
           @click.right.prevent="inspectCards('banished')"
           :hint="getCards('banished').length"
-          :actions="i && ['face-down']"
+          :actions="i && selectedCard ? ['face-down'] : []"
           @action="(evt) => i && handleBanishedAction(evt)"
           :selected-index="i && selectedCardLocation === 'banished' && selectedCardIndex"
         />
@@ -390,7 +456,13 @@ const showCards = computed(() => {
       <card-slot
         v-for="index in topRow"
         :key="index"
+        :name="index ? 'Monster Card Zone' : 'Field Card Zone'"
         :card="getCard('field', index)"
+        :cards="[
+          getCard('field', index),
+          ...(getCards('attached').filter((c) => c?.attached === getCard('field', index)?.uid) ??
+            []),
+        ]"
         :class="index === 0 ? 'bg-green-600' : 'bg-yellow-700'"
         @click.stop="i && handleFieldClick(index)"
         @click.right.prevent="
@@ -409,6 +481,7 @@ const showCards = computed(() => {
       <card-slot
         class="bg-gray-700"
         :cards="getCards('graveyard')"
+        :name="'Graveyard'"
         :hint="getCards('graveyard').length"
         :selected-index="i && selectedCardLocation === 'graveyard' && selectedCardIndex"
         @click.stop="
@@ -423,6 +496,7 @@ const showCards = computed(() => {
       <card-slot
         class="bg-violet-800"
         :cards="getCards('extra')"
+        :name="'Extra Deck Zone'"
         :hint="getCards('extra').length"
         @click.right.prevent="iv && inspectCards('extra')"
         @click.stop="i && (selectedCard ? moveCard('extra') : inspectCards('extra'))"
@@ -433,6 +507,7 @@ const showCards = computed(() => {
         v-for="index in bottomRow"
         :key="index"
         :card="getCard('field', index)"
+        :name="'Spell & Trap Card Zone'"
         class="bg-teal-600"
         @click.stop="i && handleFieldClick(index)"
         @click.right.prevent="
@@ -451,16 +526,16 @@ const showCards = computed(() => {
       <card-slot
         class="bg-amber-900"
         :cards="getCards('deck')"
+        :name="'Deck Zone'"
         :hint="getCards('deck').length"
         @click.stop="i && drawCard('deck')"
         @click.right.prevent="iv && inspectCards('deck')"
-        :count="getCards('deck').length"
         :actions="i && deckActions"
         @action="(evt) => i && handleDeckAction(evt)"
         :selected-index="i && selectedCardLocation === 'deck' && selectedCardIndex"
       />
     </div>
-    <div @click="i && moveCard('hand')" class="mt-4 flex w-full justify-center">
+    <div @click="i && moveCard('hand')" class="mt-4 flex min-h-80 w-full justify-center">
       <div v-for="(card, index) in getCards('hand')" :key="`${card?.id}+${index}`" class="relative">
         <img
           v-if="card"
@@ -507,11 +582,11 @@ const showCards = computed(() => {
       "
       @close="closeInspectModal"
       @select="
-        (evt) =>
+        (index) =>
           selectCard(
-            Array.isArray(inspectedCards) ? inspectedCards[evt] : inspectedCards,
+            Array.isArray(inspectedCards) ? inspectedCards[index] : inspectedCards,
             inspectedCardsLocation,
-            evt,
+            index,
           )
       "
       @draw="drawFromInspected"

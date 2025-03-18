@@ -16,22 +16,27 @@ import {
   where,
 } from 'firebase/firestore'
 import { storeToRefs } from 'pinia'
+import { v4 as uuidv4 } from 'uuid'
 import type { ComputedRef, Ref } from 'vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-
 /*
 TODO:
+PLAYSPACE
+
 -- MUST HAVES --
-- Tokens
 - Attach cards
-- turns
 
 -- NICE TO HAVES --
-- life point tracker
-- coin flip
 - Textbox for atk/def
-- better ordering of cards in deck builder
+- min w on whole container (responsive breaks)
+- Turns?
+- Coin flip?
+
+DECK BUILDER
+- order deck builder card list by type
+- Filter search
+- Tags
 */
 
 const extraDeckTypes = [
@@ -47,27 +52,41 @@ const extraDeckTypes = [
 
 const defaultGameState: GameState = {
   code: null,
-  player1: null,
-  player2: null,
-  deck1: null,
-  deck2: null,
-  cards1: {
-    deck: [],
-    hand: [],
-    field: Array(11).fill(null),
-    graveyard: [],
-    banished: [],
-    extra: [],
-    zones: Array(2).fill(null),
+  players: {
+    player1: null,
+    player2: null,
   },
-  cards2: {
-    deck: [],
-    hand: [],
-    field: Array(11).fill(null),
-    graveyard: [],
-    banished: [],
-    extra: [],
-    zones: Array(2).fill(null),
+  decks: {
+    player1: null,
+    player2: null,
+  },
+  lifePoints: {
+    player1: 8000,
+    player2: 8000,
+  },
+  cards: {
+    player1: {
+      deck: [],
+      hand: [],
+      field: Array(11).fill(null),
+      graveyard: [],
+      banished: [],
+      extra: [],
+      zones: Array(2).fill(null),
+      tokens: [],
+      attached: [],
+    },
+    player2: {
+      deck: [],
+      hand: [],
+      field: Array(11).fill(null),
+      graveyard: [],
+      banished: [],
+      extra: [],
+      zones: Array(2).fill(null),
+      tokens: [],
+      attached: [],
+    },
   },
 }
 const deckStore = useDeckStore()
@@ -98,7 +117,7 @@ const createGame = async () => {
   gameState.value = defaultGameState
   gameCode.value = Math.floor(Math.random() * 10001) // Random number between 0 and 10000
   gameState.value.code = gameCode.value
-  gameState.value.player1 = userStore.user ?? null
+  gameState.value.players.player1 = userStore.user ?? null
   try {
     const docRef = await addDoc(collection(db, 'games'), gameState.value)
     console.log('Document written with ID: ', docRef.id)
@@ -120,13 +139,19 @@ const leaveGame = () => {
 const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
   return decks.value
     .find((deck) => deck.id === deckId.value)
-    ?.cards.map((cardId: number) => allCards.value.find((card) => card.id === cardId))
+    ?.cards.map((cardId: number) => {
+      const card = allCards.value.find((card) => card.id === cardId)
+      if (card) {
+        return { ...card, uid: uuidv4() }
+      }
+      return undefined
+    })
     .filter(Boolean) as YugiohCard[]
 })
 
 const cardsInNormalDeck = computed(() =>
   cardsInDeck.value
-    .filter((card) => !extraDeckTypes.includes(card.type))
+    .filter((card) => !extraDeckTypes.includes(card.type) && card.type !== 'Token')
     .map((card) => ({
       ...card,
       faceDown: true,
@@ -141,12 +166,23 @@ const cardsInExtraDeck = computed(() =>
     })),
 )
 
+const tokensInDeck = computed(() => {
+  return cardsInDeck.value
+    .filter((card) => card.type === 'Token')
+    .map((card) => ({
+      ...card,
+      faceDown: true,
+    }))
+})
+
 const setDeck = (id: string) => {
-  if (!player.value) return
   deckId.value = id
-  gameState.value[deck.value].deck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
-  gameState.value[deck.value].extra = cardsInExtraDeck.value
-  gameState.value[deckKey.value] = id
+  gameState.value.cards[playerKey.value].deck = cardsInNormalDeck.value.sort(
+    () => Math.random() - 0.5,
+  )
+  gameState.value.cards[playerKey.value].tokens = tokensInDeck.value
+  gameState.value.cards[playerKey.value].extra = cardsInExtraDeck.value
+  gameState.value.decks[playerKey.value] = id
   updateGame()
 }
 
@@ -161,12 +197,12 @@ const joinGame = async () => {
   if (querySnapshot.docs.length > 0) {
     gameId.value = querySnapshot.docs[0].id
     const gameData = querySnapshot.docs[0].data() as GameState
-    if (gameData.player1?.id === userStore.user?.id) {
-      deckId.value = gameData.deck1 ?? undefined
-    } else if (gameData.player2?.id === userStore.user?.id) {
-      deckId.value = gameData.deck2 ?? undefined
-    } else if (!gameData.player2) {
-      gameData.player2 = userStore.user ?? null
+    if (gameData.players.player1?.id === userStore.user?.id) {
+      deckId.value = gameData.decks.player1 ?? undefined
+    } else if (gameData.players.player2?.id === userStore.user?.id) {
+      deckId.value = gameData.decks.player2 ?? undefined
+    } else if (!gameData.players.player2) {
+      gameData.players.player2 = userStore.user ?? null
       await updateDoc(doc(db, 'games', gameId.value), { ...gameData })
     }
     subscribe()
@@ -184,17 +220,16 @@ const subscribe = () => {
 }
 
 const player = computed(() => {
-  if (gameState.value.player1?.id === userStore.user?.id) {
+  if (gameState.value.players.player1?.id === userStore.user?.id) {
     return 'player1'
-  } else if (gameState.value.player2?.id === userStore.user?.id) {
+  } else if (gameState.value.players.player2?.id === userStore.user?.id) {
     return 'player2'
   }
   return null
 })
-const deck: ComputedRef<'cards1' | 'cards2'> = computed(() =>
-  player.value === 'player2' ? 'cards2' : 'cards1',
+const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
+  player.value === 'player2' ? 'player2' : 'player1',
 )
-const deckKey = computed(() => (player.value === 'player1' ? 'deck1' : 'deck2'))
 </script>
 <template>
   <!-- JOIN/CREATE GAME -->
@@ -238,7 +273,7 @@ const deckKey = computed(() => (player.value === 'player1' ? 'deck1' : 'deck2'))
 
   <!-- PICK DECK -->
   <div
-    v-if="gameId && !gameState[deckKey]"
+    v-if="gameId && !gameState.decks[playerKey]"
     class="m-4 flex w-min min-w-80 flex-col items-start rounded-md border-1 border-gray-300 p-4 active:bg-gray-600"
   >
     <h3 class="text-2xl">Pick your deck</h3>
@@ -266,7 +301,7 @@ const deckKey = computed(() => (player.value === 'player1' ? 'deck1' : 'deck2'))
     <field-side
       v-if="gameId"
       v-model="gameState"
-      :deck="deck === 'cards2' ? 'cards1' : 'cards2'"
+      :player="playerKey === 'player2' ? 'player1' : 'player2'"
       :viewer="player === null"
       @update="updateGame"
       class="mb-2 rotate-180"
@@ -275,7 +310,7 @@ const deckKey = computed(() => (player.value === 'player1' ? 'deck1' : 'deck2'))
     <field-side
       v-if="gameId"
       v-model="gameState"
-      :deck="deck ?? 'cards1'"
+      :player="playerKey"
       :interactive="player !== null"
       :viewer="player === null"
       @update="updateGame"
