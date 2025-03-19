@@ -53,87 +53,95 @@ watch(
       />
       LP</span
     >
-    <div class="flex items-center gap-0.5 text-xs font-bold md:gap-1">
-      <div class="flex flex-col items-center gap-0.5 lg:gap-1">
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(50)"
-        >
-          +
-        </button>
-        <p>50</p>
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(-50)"
-        >
-          -
-        </button>
-      </div>
-      <div class="flex flex-col items-center gap-0.5 lg:gap-1">
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(100)"
-        >
-          +
-        </button>
-        <p>100</p>
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(-100)"
-        >
-          -
-        </button>
-      </div>
-      <div class="flex flex-col items-center gap-0.5 lg:gap-1">
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(500)"
-        >
-          +
-        </button>
-        <p>500</p>
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(-500)"
-        >
-          -
-        </button>
-      </div>
-      <div class="flex flex-col items-center gap-0.5 lg:gap-1">
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(1000)"
-        >
-          +
-        </button>
-        <p>1k</p>
-        <button
-          class="h-4 w-4 rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-          @click="changeLifePointsInput(-1000)"
-        >
-          -
-        </button>
-      </div>
-    </div>
-    <div class="flex items-center">
-      <button
-        class="h-4 w-4 rounded-full border-1 border-gray-300 bg-red-600 text-center leading-1 text-black active:bg-red-300 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-        @click="changeLifePoints(-1)"
+    <div
+      class="flex w-full flex-col items-center justify-around gap-2 opacity-0"
+      :class="{ 'hover:opacity-100': reverse }"
+    >
+      <div
+        class="flex items-center gap-0.5 text-xs font-bold md:gap-1"
+        :class="{ 'pointer-events-none': !reverse }"
       >
-        -
-      </button>
-      <input
-        class="mx-2 w-12 text-center text-lg"
-        type="number"
-        step="50"
-        v-model="lifePointsInput"
-      />
-      <button
-        class="h-4 w-4 rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
-        @click="changeLifePoints(1)"
-      >
-        +
-      </button>
+        <div class="flex flex-col items-center gap-0.5 lg:gap-1">
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(50)"
+          >
+            +
+          </button>
+          <p>50</p>
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(-50)"
+          >
+            -
+          </button>
+        </div>
+        <div class="flex flex-col items-center gap-0.5 lg:gap-1">
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(100)"
+          >
+            +
+          </button>
+          <p>100</p>
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(-100)"
+          >
+            -
+          </button>
+        </div>
+        <div class="flex flex-col items-center gap-0.5 lg:gap-1">
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(500)"
+          >
+            +
+          </button>
+          <p>500</p>
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(-500)"
+          >
+            -
+          </button>
+        </div>
+        <div class="flex flex-col items-center gap-0.5 lg:gap-1">
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(1000)"
+          >
+            +
+          </button>
+          <p>1k</p>
+          <button
+            class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-gray-400 leading-1 text-black active:bg-gray-200 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+            @click="changeLifePointsInput(-1000)"
+          >
+            -
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center">
+        <button
+          class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-red-600 text-center leading-1 text-black active:bg-red-300 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+          @click="changeLifePoints(-1)"
+        >
+          -
+        </button>
+        <input
+          class="mx-2 w-12 text-center text-lg"
+          type="number"
+          step="50"
+          v-model="lifePointsInput"
+        />
+        <button
+          class="h-4 w-4 cursor-pointer rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+          @click="changeLifePoints(1)"
+        >
+          +
+        </button>
+      </div>
     </div>
     <span
       v-if="reverse"

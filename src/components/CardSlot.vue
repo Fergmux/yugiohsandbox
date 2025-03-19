@@ -28,6 +28,7 @@ const props = defineProps<{
   controls?: boolean
   counters?: number
   name?: string
+  rotate?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'action', name: string): void
@@ -59,9 +60,9 @@ const topCard = computed(() => props.card || cardList.value[0])
 const cardAtk = computed({
   get: () => topCard.value?.newAttack || topCard.value?.atk,
   set: (value) => {
-    console.log(value, 'valueeeeee')
     if (topCard.value) {
       topCard.value.newAttack = value
+      emit('update')
     }
   },
 })
@@ -71,6 +72,7 @@ const cardDef = computed({
   set: (value) => {
     if (topCard.value) {
       topCard.value.newDefence = value
+      emit('update')
     }
   },
 })
@@ -81,6 +83,7 @@ const cardDef = computed({
     <div
       v-if="name"
       class="absolute top-1/2 left-1/2 w-full -translate-x-1/2 -translate-y-1/2 text-center text-xl font-bold text-gray-400 opacity-70"
+      :class="{ 'rotate-180': rotate }"
     >
       {{ name }}
     </div>
@@ -94,7 +97,10 @@ const cardDef = computed({
       />
     </template>
     <div class="relative h-full w-full">
-      <div class="absolute z-[110] flex h-full flex-col flex-wrap items-center">
+      <div
+        class="absolute z-[110] flex h-full flex-col flex-wrap items-center"
+        :class="{ 'rotate-180': rotate }"
+      >
         <div
           v-for="counter in counters"
           :key="counter"
@@ -113,6 +119,7 @@ const cardDef = computed({
           type="number"
           class="mr-2 max-w-12 bg-black text-center"
           @click.stop
+          :style="{ transform: rotate ? 'rotate(180deg)' : '' }"
           :class="
             topCard.newAttack
               ? topCard.newAttack < topCard.atk
@@ -128,6 +135,7 @@ const cardDef = computed({
           v-if="cardDef"
           type="number"
           class="max-w-12 bg-black text-center"
+          :style="{ transform: rotate ? 'rotate(180deg)' : '' }"
           @click.stop
           :class="
             topCard.newDefence
@@ -157,7 +165,11 @@ const cardDef = computed({
           </div>
         </div>
 
-        <p v-if="hint" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+        <p
+          v-if="hint"
+          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+          :class="{ 'rotate-180': rotate }"
+        >
           {{ hint }}
         </p>
         <div v-if="actions" class="absolute bottom-0 flex w-full justify-center">

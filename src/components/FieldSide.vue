@@ -465,6 +465,8 @@ const showCards = computed(() => {
   const cards = revealDeck.value ? [...revealedCards, ...getCards('deck')] : revealedCards
   return cards.filter(Boolean) as YugiohCard[]
 })
+
+const rotate = computed(() => !i.value)
 </script>
 <template>
   <!-- PLAYER -->
@@ -479,6 +481,7 @@ const showCards = computed(() => {
           :cards="opponentCards.banished"
           :hint="opponentCards.banished.length"
           @click.right.prevent="inspectCards('banished', opponentPlayerKey)"
+          :rotate
         />
         <life-points
           :life-points="gameState.lifePoints[opponentPlayerKey]"
@@ -516,6 +519,7 @@ const showCards = computed(() => {
           @action="(evt) => i && handleAction(evt, 'zones', 0)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
           @update="debouncedUpdateGame"
+          :rotate
         />
         <!-- TOKENS -->
         <card-slot
@@ -526,6 +530,7 @@ const showCards = computed(() => {
           @click.right.prevent="iv && inspectCards('tokens')"
           @click.stop="i && (selectedCard ? moveCard('tokens') : drawCard('tokens'))"
           :selected-index="i && selectedCardLocation === 'tokens' && selectedCardIndex"
+          :rotate
         />
         <!-- EXTRA 1 -->
         <card-slot
@@ -559,6 +564,7 @@ const showCards = computed(() => {
           @action="(evt) => handleAction(evt, 'zones', 1)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
           @update="debouncedUpdateGame"
+          :rotate
         />
         <life-points
           :life-points="gameState.lifePoints[props.player]"
@@ -581,6 +587,7 @@ const showCards = computed(() => {
           :actions="i && selectedCard ? ['face-down', 'face-up'] : []"
           @action="(evt) => i && handleBanishedAction(evt)"
           :selected-index="i && selectedCardLocation === 'banished' && selectedCardIndex"
+          :rotate
         />
       </template>
 
@@ -610,6 +617,7 @@ const showCards = computed(() => {
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
         @update="debouncedUpdateGame"
+        :rotate
       />
       <!-- GRAVEYARD -->
       <card-slot
@@ -625,6 +633,7 @@ const showCards = computed(() => {
             : selectCard(getCard('graveyard', 0), 'graveyard', 0))
         "
         @click.right.prevent="inspectCards('graveyard')"
+        :rotate
       />
       <!-- EXTRA DECK -->
       <card-slot
@@ -635,6 +644,7 @@ const showCards = computed(() => {
         @click.right.prevent="iv && inspectCards('extra')"
         @click.stop="i && (selectedCard ? moveCard('extra') : inspectCards('extra'))"
         :selected-index="i && selectedCardLocation === 'extra' && selectedCardIndex"
+        :rotate
       />
       <!-- BOTTOM ROW -->
       <card-slot
@@ -662,6 +672,7 @@ const showCards = computed(() => {
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
         @update="debouncedUpdateGame"
+        :rotate
       />
       <!-- DECK -->
       <card-slot
@@ -674,6 +685,7 @@ const showCards = computed(() => {
         :actions="i && deckActions"
         @action="(evt) => i && handleDeckAction(evt)"
         :selected-index="i && selectedCardLocation === 'deck' && selectedCardIndex"
+        :rotate
       />
     </div>
     <div @click="i && moveCard('hand')" class="mt-4 flex min-h-40 w-full justify-center">

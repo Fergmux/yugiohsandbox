@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CoinFlip from '@/components/CoinFlip.vue'
 import FieldSide from '@/components/FieldSide.vue'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
@@ -18,13 +19,12 @@ import {
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 import type { ComputedRef, Ref } from 'vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 /*
 TODO:
 PLAYSPACE
-- Turns?
-- Coin flip?
+- game log
 
 DECK BUILDER
 - order deck builder card list by type
@@ -45,6 +45,8 @@ const extraDeckTypes = [
 
 const defaultGameState: GameState = {
   code: null,
+  coinFlip: null,
+  turn: 0,
   players: {
     player1: null,
     player2: null,
@@ -128,6 +130,50 @@ const leaveGame = () => {
   deckId.value = undefined
   unsubscribe()
 }
+
+type CoinFlipComponent = {
+  flip: (desiredSide?: 'heads' | 'tails') => void
+}
+
+const coinRef = ref<CoinFlipComponent | null>(null)
+const flipCoin = (result: 'heads' | 'tails') => {
+  const count = gameState.value.coinFlip?.[1] ?? 0
+  gameState.value.coinFlip = [result, count + 1]
+  console.log('flipCoin', result)
+  updateGame()
+}
+watch(
+  () => gameState.value.coinFlip,
+  (coinFlip, oldCoinFlip) => {
+    if (coinFlip && oldCoinFlip && coinFlip[1] !== oldCoinFlip[1]) {
+      coinRef.value?.flip(coinFlip[0])
+    }
+  },
+)
+
+const turn = computed(() => gameState.value.turn)
+const setTurn = (turn: number) => {
+  gameState.value.turn = turn
+  updateGame()
+}
+// Handle spacebar press to increment turn
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.code === 'Space' && gameId.value) {
+    event.preventDefault()
+    const newTurn = (turn.value + 1) % 12
+    setTurn(newTurn)
+  }
+}
+
+// Add event listener when component is mounted
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+// Remove event listener when component is unmounted
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
 
 const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
   return decks.value
@@ -262,6 +308,9 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
     >
       Copy Link
     </button>
+
+    <br />
+    <coin-flip ref="coinRef" class="mx-auto mt-2" @flip="flipCoin" />
   </div>
 
   <!-- PICK DECK -->
@@ -285,28 +334,74 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
     </div>
     <p v-else>No decks yet</p>
   </div>
+
   <!-- WHOLE PLAYSPACE -->
-  <div
-    v-if="gameId && (deckId || player === null)"
-    class="mx-auto my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl"
-  >
-    <!-- OPPONENT -->
-    <field-side
-      v-if="gameId"
-      v-model="gameState"
-      :player="playerKey === 'player2' ? 'player1' : 'player2'"
-      :viewer="player === null"
-      @update="updateGame"
-      class="mb-2 rotate-180"
-    />
-    <!-- PLAYER -->
-    <field-side
-      v-if="gameId"
-      v-model="gameState"
-      :player="playerKey"
-      :interactive="player !== null"
-      :viewer="player === null"
-      @update="updateGame"
-    />
+  <div v-if="gameId && (deckId || player === null)" class="flex items-center justify-center gap-2">
+    <div class="flex flex-col gap-2 text-lg text-white">
+      <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="gameState.turn = 0">
+        Opponent's turn
+      </p>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 0 }" @click="setTurn(0)">
+        Draw phase
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 1 }" @click="setTurn(1)">
+        Standby phase
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 2 }" @click="setTurn(2)">
+        Main phase 1
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 3 }" @click="setTurn(3)">
+        Battle phase
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 4 }" @click="setTurn(4)">
+        Main phase 2
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">
+        End phase
+      </div>
+    </div>
+    <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]">
+      <!-- OPPONENT -->
+      <field-side
+        v-if="gameId"
+        v-model="gameState"
+        :player="playerKey === 'player2' ? 'player1' : 'player2'"
+        :viewer="player === null"
+        @update="updateGame"
+        class="mb-2 rotate-180"
+      />
+      <!-- PLAYER -->
+      <field-side
+        v-if="gameId"
+        v-model="gameState"
+        :player="playerKey"
+        :interactive="player !== null"
+        :viewer="player === null"
+        @update="updateGame"
+      />
+    </div>
+    <div class="flex flex-col gap-2 text-lg text-white">
+      <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn >= 6 }" @click="setTurn(6)">
+        Your turn
+      </p>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 6 }" @click="setTurn(6)">
+        Draw phase
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 7 }" @click="setTurn(7)">
+        Standby phase
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 8 }" @click="setTurn(8)">
+        Main phase 1
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 9 }" @click="setTurn(9)">
+        Battle phase
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 10 }" @click="setTurn(10)">
+        Main phase 2
+      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 11 }" @click="setTurn(11)">
+        End phase
+      </div>
+    </div>
   </div>
 </template>

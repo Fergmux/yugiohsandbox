@@ -50,6 +50,8 @@ export interface ExtraZone {
 
 export interface GameState {
   code: number | null
+  coinFlip?: ['heads' | 'tails', number] | null
+  turn: number
   players: {
     player1: User | null
     player2: User | null
