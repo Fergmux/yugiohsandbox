@@ -23,11 +23,6 @@ import { useRoute } from 'vue-router'
 /*
 TODO:
 PLAYSPACE
-
--- MUST HAVES --
-
--- NICE TO HAVES --
-- Textbox for atk/def
 - Turns?
 - Coin flip?
 

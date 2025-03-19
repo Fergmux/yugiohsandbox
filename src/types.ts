@@ -13,6 +13,8 @@ export interface YugiohCard {
   name: string
   desc: string
   type: string
+  atk: number
+  def: number
   card_images: CardImage[]
   faceDown?: boolean
   defence?: boolean

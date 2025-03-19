@@ -32,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'action', name: string): void
   (e: 'increment', count: number): void
+  (e: 'update'): void
 }>()
 const cardList = computed(() => props.cards ?? [props.card])
 
@@ -52,6 +53,27 @@ const getClassStyle = (card: YugiohCard, index: number) => {
     },
   }
 }
+
+const topCard = computed(() => props.card || cardList.value[0])
+
+const cardAtk = computed({
+  get: () => topCard.value?.newAttack || topCard.value?.atk,
+  set: (value) => {
+    console.log(value, 'valueeeeee')
+    if (topCard.value) {
+      topCard.value.newAttack = value
+    }
+  },
+})
+
+const cardDef = computed({
+  get: () => topCard.value?.newDefence || topCard.value?.def,
+  set: (value) => {
+    if (topCard.value) {
+      topCard.value.newDefence = value
+    }
+  },
+})
 </script>
 
 <template>
@@ -81,6 +103,43 @@ const getClassStyle = (card: YugiohCard, index: number) => {
           {{ counter }}
         </div>
       </div>
+
+      <p
+        v-if="topCard && !topCard.faceDown && (cardAtk || cardDef)"
+        class="absolute top-2/3 left-1/2 z-[120] flex -translate-x-1/2 -translate-y-1/2 text-center font-bold"
+      >
+        <input
+          v-if="cardAtk"
+          type="number"
+          class="mr-2 max-w-12 bg-black text-center"
+          @click.stop
+          :class="
+            topCard.newAttack
+              ? topCard.newAttack < topCard.atk
+                ? 'text-red-400'
+                : 'text-green-400'
+              : 'text-white'
+          "
+          :disabled="!controls"
+          v-model="cardAtk"
+        />
+
+        <input
+          v-if="cardDef"
+          type="number"
+          class="max-w-12 bg-black text-center"
+          @click.stop
+          :class="
+            topCard.newDefence
+              ? topCard.newDefence < topCard.def
+                ? 'text-red-400'
+                : 'text-green-400'
+              : 'text-white'
+          "
+          :disabled="!controls"
+          v-model="cardDef"
+        />
+      </p>
 
       <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
         <div v-if="controls" class="absolute top-0 right-0 flex w-min">

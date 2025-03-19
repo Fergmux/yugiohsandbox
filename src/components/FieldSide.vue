@@ -8,7 +8,7 @@ import { onMounted, onBeforeUnmount } from 'vue'
 import { computed, ref } from 'vue'
 import LifePoints from '@/components/LifePoints.vue'
 import { nextTick } from 'vue'
-import { zip } from 'lodash'
+import { zip, debounce } from 'lodash'
 
 type CardLocation = keyof BoardSide | 'attached'
 
@@ -39,6 +39,8 @@ const gameState = computed({
 const updateGame = async () => {
   emit('update')
 }
+
+const debouncedUpdateGame = debounce(updateGame, 1000)
 
 const extraZones = computed(() =>
   gameState.value.cards[props.player].zones.map((zone, index) =>
@@ -272,8 +274,12 @@ const addCardToDestination = (
   destination: keyof BoardSide,
   currentLocation: keyof BoardSide,
   index?: number,
-  options?: { faceDown?: boolean; defence?: boolean },
+  options?: { faceDown?: boolean; defence?: boolean; newAttack?: number; newDefence?: number },
 ) => {
+  if (destination !== 'field' && destination !== 'zones') {
+    // If it's leaving the field rest the atk/def modifiers
+    options = { ...options, newAttack: undefined, newDefence: undefined }
+  }
   // if there's an index, move the card to the target location
   if (index != undefined) {
     const target = getCard(destination, index)
@@ -482,7 +488,7 @@ const showCards = computed(() => {
         <card-slot
           :card="extraZones[0]"
           :cards="[
-            getCard('zones', 0),
+            extraZones[0],
             ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 0)?.uid) ?? []),
           ]"
           :name="'Extra Monster Zone'"
@@ -509,6 +515,7 @@ const showCards = computed(() => {
           :counters="extraZones[0]?.counters"
           @action="(evt) => i && handleAction(evt, 'zones', 0)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
+          @update="debouncedUpdateGame"
         />
         <!-- TOKENS -->
         <card-slot
@@ -518,15 +525,13 @@ const showCards = computed(() => {
           :hint="getCards('tokens').length"
           @click.right.prevent="iv && inspectCards('tokens')"
           @click.stop="i && (selectedCard ? moveCard('tokens') : drawCard('tokens'))"
-          :actions="i && ['search']"
-          @action="i && inspectCards('tokens')"
           :selected-index="i && selectedCardLocation === 'tokens' && selectedCardIndex"
         />
         <!-- EXTRA 1 -->
         <card-slot
           :card="extraZones[1]"
           :cards="[
-            getCard('zones', 1),
+            extraZones[1],
             ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 1)?.uid) ?? []),
           ]"
           :name="'Extra Monster Zone'"
@@ -553,6 +558,7 @@ const showCards = computed(() => {
           :counters="extraZones[1]?.counters"
           @action="(evt) => handleAction(evt, 'zones', 1)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
+          @update="debouncedUpdateGame"
         />
         <life-points
           :life-points="gameState.lifePoints[props.player]"
@@ -603,6 +609,7 @@ const showCards = computed(() => {
         :counters="card?.counters"
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
+        @update="debouncedUpdateGame"
       />
       <!-- GRAVEYARD -->
       <card-slot
@@ -654,6 +661,7 @@ const showCards = computed(() => {
         :counters="card?.counters"
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
+        @update="debouncedUpdateGame"
       />
       <!-- DECK -->
       <card-slot
