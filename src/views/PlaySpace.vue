@@ -25,9 +25,10 @@ TODO:
 PLAYSPACE
 
 -- MUST HAVES --
-- Attach cards
+- attach cards to extra monster zone
 
 -- NICE TO HAVES --
+- select attached card highlight
 - Textbox for atk/def
 - min w on whole container (responsive breaks)
 - Turns?

@@ -57,7 +57,7 @@ const getS3ImageUrl = (cardId: number): string =>
         }"
         class="absolute m-auto max-h-full -translate-x-1/2"
         :style="{
-          left: `calc(50% + ${index / 2}px)`,
+          left: `calc(50% + ${(index / 2) * (60 / cardList.length)}px)`,
           zIndex: 100 - index,
           // transform: `translateX(calc(-50% - ${cardList.length * 1}px))`,
         }"

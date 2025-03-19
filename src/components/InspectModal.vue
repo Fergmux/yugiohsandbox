@@ -10,6 +10,7 @@ const props = defineProps<{
   selectedIndex?: number
   showCards?: YugiohCard[] | undefined
   inspectedCardsLocation?: keyof BoardSide
+  cardIndex?: number
 }>()
 
 const cardList = computed(
@@ -43,6 +44,29 @@ const handleKeyUp = (e: KeyboardEvent) => {
   }
 }
 
+const isSelected = (index: number) => {
+  if (!Array.isArray(props.cards) && props.selectedIndex && props.cardIndex) {
+    return props.selectedIndex === props.cardIndex
+  }
+  if (
+    Array.isArray(props.cards) &&
+    props.inspectedCardsLocation === 'attached' &&
+    props.selectedIndex &&
+    props.cardIndex &&
+    index === 0
+  ) {
+    return props.selectedIndex === props.cardIndex
+  }
+
+  return (
+    index ===
+    (props.inspectedCardsLocation === 'attached' ? props.selectedIndex! + 1 : props.selectedIndex!)
+  )
+}
+
+const selectCard = (index: number) =>
+  Array.isArray(props.cards) ? emit('select', index) : emit('select', props.cardIndex!)
+
 const drawCard = (destination: keyof BoardSide, index: number, card: YugiohCard) => {
   emit('draw', destination, index, !revealedCardIds.value.includes(card.uid))
 }
@@ -71,10 +95,10 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
                 ? (selectedCard = card)
                 : revealedCards.add(card)
             "
-            @click.stop="emit('select', index)"
+            @click.stop="selectCard(index)"
             @dragstart.prevent=""
             :class="{
-              'border-4 border-yellow-200': index === selectedIndex,
+              'border-4 border-yellow-200': isSelected(index),
             }"
           />
           <div class="absolute bottom-0 flex w-full flex-wrap-reverse justify-center gap-2">

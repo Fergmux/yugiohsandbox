@@ -7,6 +7,7 @@ import type { Ref } from 'vue'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { computed, ref } from 'vue'
 import LifePoints from '@/components/LifePoints.vue'
+import { nextTick } from 'vue'
 
 type CardLocation = keyof BoardSide | 'attached'
 
@@ -71,7 +72,9 @@ const isSelected = (location: keyof BoardSide, index: number) =>
 
 const getActions = (location: keyof BoardSide, index: number) => {
   if (selectedCard.value) {
-    return getCard(location, index) ? ['attach'] : ['set', 'defence']
+    const targetCard = getCard(location, index)
+    const actions = targetCard?.uid !== selectedCard.value?.uid ? ['attach'] : []
+    return targetCard ? actions : ['set', 'defence']
   } else {
     return getCard(location, index) ? ['flip', 'position'] : []
   }
@@ -99,6 +102,36 @@ const selectCard = (card?: YugiohCard | null, location?: CardLocation, index?: n
     selectedCard.value = card
     selectedCardLocation.value = location
     selectedCardIndex.value = index
+  }
+}
+
+const selectInspectedCard = (index: number) => {
+  if (inspectedCardsLocation.value === 'attached') {
+    if (index === 0) {
+      const card = Array.isArray(inspectedCards.value)
+        ? inspectedCards.value[0]
+        : inspectedCards.value
+      selectCard(
+        card,
+        'field',
+        getCards('field').findIndex((c) => c?.uid === card?.uid),
+      )
+    } else {
+      const card = Array.isArray(inspectedCards.value)
+        ? inspectedCards.value[index]
+        : inspectedCards.value
+      selectCard(
+        card,
+        'attached',
+        getCards('attached').findIndex((c) => c?.uid === card?.uid),
+      )
+    }
+  } else {
+    selectCard(
+      Array.isArray(inspectedCards.value) ? inspectedCards.value[index] : inspectedCards.value,
+      inspectedCardsLocation.value,
+      index,
+    )
   }
 }
 
@@ -180,49 +213,45 @@ const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown
   if (inspectedCardsLocation.value === 'attached') {
     newIndex = getCards('attached').findIndex((c) => c?.uid === card?.uid)
   }
-  debugger
   selectCard(card, inspectedCardsLocation.value, newIndex)
   moveCard(destination, undefined, { faceDown })
-  inspectCard(
-    Array.isArray(inspectedCards.value) ? inspectedCards.value[0] : (inspectedCards.value ?? null),
-    'field',
-  )
-}
-
-const removeSelectedCard = () => {
-  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
-  // if it's on the field or zones, replace with null
-  if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
-    cards.value[selectedCardLocation.value].splice(selectedCardIndex.value, 1, null)
+  if (inspectedCardsLocation.value === 'attached') {
+    inspectCard(
+      Array.isArray(inspectedCards.value)
+        ? inspectedCards.value[0]
+        : (inspectedCards.value ?? null),
+      'field',
+    )
   } else {
-    // otherwise, remove the card from its location
-    cards.value[selectedCardLocation.value].splice(selectedCardIndex.value, 1)
+    inspectCards(inspectedCardsLocation.value)
   }
 }
 
-const moveCard = (
-  destination?: keyof BoardSide,
+const removeCard = (location: keyof BoardSide, index: number) => {
+  if (!location || index === undefined) return
+  // if it's on the field or zones, replace with null
+  if (location === 'field' || location === 'zones') {
+    cards.value[location].splice(index, 1, null)
+  } else {
+    // otherwise, remove the card from its location
+    cards.value[location].splice(index, 1)
+  }
+}
+
+const addCardToDestination = (
+  card: YugiohCard,
+  destination: keyof BoardSide,
+  currentLocation: keyof BoardSide,
   index?: number,
-  options?: { faceDown?: boolean; defence?: boolean } = {},
+  options?: { faceDown?: boolean; defence?: boolean },
 ) => {
-  // Check selected card is valid
-  debugger
-  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
-  const card = getCard(selectedCardLocation.value, selectedCardIndex.value)
-  if (!card || !destination) return
-
-  if (destination === 'tokens' && card.type !== 'Token') return
-  if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return
-
-  removeSelectedCard()
-
   // if there's an index, move the card to the target location
   if (index != undefined) {
     const target = getCard(destination, index)
     if (target === null) {
       // if the target is null, replace it with the card (field/zones)
       const orientationOptions =
-        selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones'
+        currentLocation === 'field' || currentLocation === 'zones'
           ? {}
           : { faceDown: false, defence: false }
       getCards(destination)[index] = {
@@ -263,6 +292,36 @@ const moveCard = (
       })
     }
   }
+}
+
+const moveCard = (
+  destination?: keyof BoardSide,
+  index?: number,
+  options?: { faceDown?: boolean; defence?: boolean } = {},
+) => {
+  // Check selected card is valid
+  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
+  const card = getCard(selectedCardLocation.value, selectedCardIndex.value)
+  if (!card || !destination) return
+
+  if (destination === 'tokens' && card.type !== 'Token') return
+  if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return
+
+  removeCard(selectedCardLocation.value, selectedCardIndex.value)
+
+  const attachedCards = getCards('attached').filter(
+    (c) => c?.attached === card?.uid,
+  ) as YugiohCard[]
+  if (destination !== 'field' && destination !== 'zones' && attachedCards.length) {
+    attachedCards.forEach((c) => {
+      removeCard(
+        'attached',
+        attachedCards.findIndex((c) => c?.uid === card?.uid),
+      )
+      addCardToDestination(c, destination, 'attached', undefined, options)
+    })
+  }
+  addCardToDestination(card, destination, selectedCardLocation.value, index, options)
   resetSelectedCard()
   updateGame()
   return true
@@ -292,7 +351,18 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
       break
     case 'attach':
       if (!selectedCard.value) return
-      selectedCard.value.attached = getCard('field', index)?.uid
+      const cardsAttachedToSelected = getCards('attached').filter(
+        (c) => c?.attached === selectedCard.value?.uid,
+      )
+      const destinationCard = getCard(destination, index)?.uid
+      if (cardsAttachedToSelected) {
+        cardsAttachedToSelected.map((c) => {
+          if (c) {
+            c.attached = destinationCard
+          }
+        })
+      }
+      selectedCard.value.attached = destinationCard
       moveCard('attached')
       break
   }
@@ -341,9 +411,9 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
   updateGame()
 }
 
-const closeInspectModal = () => {
+const closeInspectModal = async () => {
   revealDeck.value = false
-  debugger
+  await nextTick()
   inspectCard(null, null)
 }
 
@@ -379,6 +449,10 @@ const showCards = computed(() => {
         <!-- EXTRA 0 -->
         <card-slot
           :card="extraZones[0]"
+          :cards="[
+            getCard('zones', 0),
+            ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 0)?.uid) ?? []),
+          ]"
           :name="'Extra Monster Zone'"
           @click="i && zoneIsFree(0) && handleFieldClick(0, 'zones')"
           @click.right.prevent="
@@ -411,6 +485,10 @@ const showCards = computed(() => {
         <!-- EXTRA 1 -->
         <card-slot
           :card="extraZones[1]"
+          :cards="[
+            getCard('zones', 1),
+            ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 1)?.uid) ?? []),
+          ]"
           :name="'Extra Monster Zone'"
           @click="i && zoneIsFree(1) && handleFieldClick(1, 'zones')"
           @click.right.prevent="
@@ -470,6 +548,14 @@ const showCards = computed(() => {
           inspectCard(getCard('field', index), 'field')
         "
         :selected="i && isSelected('field', index)"
+        :selected-index="
+          i &&
+          selectedCardLocation === 'attached' &&
+          selectedCard?.attached === getCard('field', index)?.uid &&
+          selectedCardIndex !== undefined
+            ? selectedCardIndex + 1
+            : undefined
+        "
         :actions="i && getActions('field', index)"
         :hint="iv && getCard('field', index)?.faceDown ? getCard('field', index)?.name : undefined"
         :controls="i && !!getCard('field', index)"
@@ -507,6 +593,11 @@ const showCards = computed(() => {
         v-for="index in bottomRow"
         :key="index"
         :card="getCard('field', index)"
+        :cards="[
+          getCard('field', index),
+          ...(getCards('attached').filter((c) => c?.attached === getCard('field', index)?.uid) ??
+            []),
+        ]"
         :name="'Spell & Trap Card Zone'"
         class="bg-teal-600"
         @click.stop="i && handleFieldClick(index)"
@@ -515,6 +606,14 @@ const showCards = computed(() => {
           inspectCard(getCard('field', index), 'field')
         "
         :selected="i && isSelected('field', index)"
+        :selected-index="
+          i &&
+          selectedCardLocation === 'attached' &&
+          selectedCard?.attached === getCard('field', index)?.uid &&
+          selectedCardIndex !== undefined
+            ? selectedCardIndex + 1
+            : undefined
+        "
         :actions="i && getActions('field', index)"
         :hint="iv && getCard('field', index)?.faceDown ? getCard('field', index)?.name : undefined"
         :controls="i && !!getCard('field', index)"
@@ -535,7 +634,7 @@ const showCards = computed(() => {
         :selected-index="i && selectedCardLocation === 'deck' && selectedCardIndex"
       />
     </div>
-    <div @click="i && moveCard('hand')" class="mt-4 flex min-h-80 w-full justify-center">
+    <div @click="i && moveCard('hand')" class="mt-4 flex min-h-40 w-full justify-center">
       <div v-for="(card, index) in getCards('hand')" :key="`${card?.id}+${index}`" class="relative">
         <img
           v-if="card"
@@ -578,17 +677,22 @@ const showCards = computed(() => {
       :show-cards="showCards"
       :inspected-cards-location="inspectedCardsLocation"
       :selected-index="
-        selectedCardLocation === inspectedCardsLocation ? selectedCardIndex : undefined
+        selectedCardLocation === inspectedCardsLocation ||
+        (selectedCardLocation === 'field' && inspectedCardsLocation === 'attached')
+          ? selectedCardIndex
+          : undefined
+      "
+      :card-index="
+        inspectedCardsLocation === 'field' || inspectedCardsLocation === 'attached'
+          ? getCards('field').findIndex(
+              (c) =>
+                c?.uid ===
+                (Array.isArray(inspectedCards) ? inspectedCards[0]?.uid : inspectedCards?.uid),
+            )
+          : undefined
       "
       @close="closeInspectModal"
-      @select="
-        (index) =>
-          selectCard(
-            Array.isArray(inspectedCards) ? inspectedCards[index] : inspectedCards,
-            inspectedCardsLocation,
-            index,
-          )
-      "
+      @select="selectInspectedCard"
       @draw="drawFromInspected"
     />
   </div>
