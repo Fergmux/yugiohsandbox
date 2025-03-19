@@ -8,13 +8,16 @@ import { onMounted, onBeforeUnmount } from 'vue'
 import { computed, ref } from 'vue'
 import LifePoints from '@/components/LifePoints.vue'
 import { nextTick } from 'vue'
+import { zip } from 'lodash'
 
 type CardLocation = keyof BoardSide | 'attached'
+
+type Player = 'player1' | 'player2'
 
 // Handle game state synchronisation
 const props = defineProps<{
   modelValue: GameState
-  player: 'player1' | 'player2'
+  player: Player
   interactive?: boolean
   viewer?: boolean
 }>()
@@ -43,22 +46,14 @@ const extraZones = computed(() =>
   ),
 )
 
-// Random constants
-const topRow = Array(6)
-  .fill(0)
-  .map((_, i) => i)
-const bottomRow = Array(5)
-  .fill(0)
-  .map((_, i) => i + 6)
-
-const updateLifePoints = (value: number, player: 'player1' | 'player2') => {
+const updateLifePoints = (value: number, player: Player) => {
   gameState.value.lifePoints[player] += value
   updateGame()
 }
 
 // Utility functions
 
-const getCardData = (key: 'player1' | 'player2') => gameState.value.cards[key]
+const getCardData = (key: Player) => gameState.value.cards[key]
 const cards = computed(() => getCardData(props.player))
 const opponentCards = computed(() => getCardData(opponentPlayerKey.value))
 const opponentPlayerKey = computed(() => (props.player === 'player1' ? 'player2' : 'player1'))
@@ -80,6 +75,14 @@ const getActions = (location: keyof BoardSide, index: number) => {
   }
 }
 
+const topRow = computed(() => getCards('field').slice(0, 6))
+const bottomRowIndexes = Array(5)
+  .fill(0)
+  .map((_, i) => i + 6)
+const bottomRow = computed(
+  () => zip(getCards('field').slice(6), bottomRowIndexes) as [YugiohCard, number][],
+)
+
 const deckActions = computed(() =>
   selectedCard.value ? ['shuffle-in', 'place-top', 'place-bottom'] : ['shuffle', 'search'],
 )
@@ -93,6 +96,32 @@ const inspectedCardsLocation: Ref<CardLocation | undefined> = ref()
 const selectedCardLocation: Ref<CardLocation | undefined> = ref()
 const selectedCardIndex: Ref<number | undefined> = ref()
 const revealDeck = ref(false)
+
+const cardIndex = computed(() => {
+  const fieldIndex = getCards('field').findIndex(
+    (c) =>
+      c?.uid ===
+      (Array.isArray(inspectedCards.value)
+        ? inspectedCards.value[0]?.uid
+        : inspectedCards.value?.uid),
+  )
+
+  const zoneIndex = getCards('zones').findIndex(
+    (c) =>
+      c?.uid ===
+      (Array.isArray(inspectedCards.value)
+        ? inspectedCards.value[0]?.uid
+        : inspectedCards.value?.uid),
+  )
+
+  return inspectedCardsLocation.value === 'field' ||
+    inspectedCardsLocation.value === 'zones' ||
+    inspectedCardsLocation.value === 'attached'
+    ? fieldIndex === -1
+      ? zoneIndex
+      : fieldIndex
+    : undefined
+})
 
 const selectCard = (card?: YugiohCard | null, location?: CardLocation, index?: number) => {
   if (!card || !location) return
@@ -111,11 +140,11 @@ const selectInspectedCard = (index: number) => {
       const card = Array.isArray(inspectedCards.value)
         ? inspectedCards.value[0]
         : inspectedCards.value
-      selectCard(
-        card,
-        'field',
-        getCards('field').findIndex((c) => c?.uid === card?.uid),
-      )
+      const fieldIndex = getCards('field').findIndex((c) => c?.uid === card?.uid)
+      const index =
+        fieldIndex === -1 ? getCards('zones').findIndex((c) => c?.uid === card?.uid) : fieldIndex
+      const location = fieldIndex === -1 ? 'zones' : 'field'
+      selectCard(card, location, index)
     } else {
       const card = Array.isArray(inspectedCards.value)
         ? inspectedCards.value[index]
@@ -175,7 +204,7 @@ const inspectCard = (card: YugiohCard | null, location: keyof BoardSide | null) 
   inspectedCardsLocation.value = attachedCards.length ? 'attached' : (location ?? undefined)
 }
 
-const inspectCards = (location?: CardLocation, playerKey?: 'player1' | 'player2') => {
+const inspectCards = (location?: CardLocation, playerKey?: Player) => {
   if (!location) return
   const cards = getCardData(playerKey ?? props.player)[location]
   inspectedCards.value = cards ? (cards.filter(Boolean) as YugiohCard[]) : undefined
@@ -400,6 +429,9 @@ const handleBanishedAction = (action: string) => {
     case 'face-down':
       moveCard('banished', 0, { faceDown: true })
       break
+    case 'face-up':
+      moveCard('banished', 0, { faceDown: false })
+      break
   }
 }
 
@@ -461,6 +493,14 @@ const showCards = computed(() => {
           "
           class="bg-blue-800"
           :selected="isSelected('zones', 0)"
+          :selected-index="
+            i &&
+            selectedCardLocation === 'attached' &&
+            selectedCard?.attached === extraZones[0]?.uid &&
+            selectedCardIndex !== undefined
+              ? selectedCardIndex + 1
+              : undefined
+          "
           :actions="zoneIsFree(0) ? getActions('zones', 0) : []"
           :hint="
             (viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined
@@ -497,6 +537,14 @@ const showCards = computed(() => {
           "
           class="bg-blue-800"
           :selected="isSelected('zones', 1)"
+          :selected-index="
+            i &&
+            selectedCardLocation === 'attached' &&
+            selectedCard?.attached === extraZones[1]?.uid &&
+            selectedCardIndex !== undefined
+              ? selectedCardIndex + 1
+              : undefined
+          "
           :actions="i && zoneIsFree(1) ? getActions('zones', 1) : []"
           :hint="
             (viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined
@@ -524,7 +572,7 @@ const showCards = computed(() => {
           "
           @click.right.prevent="inspectCards('banished')"
           :hint="getCards('banished').length"
-          :actions="i && selectedCard ? ['face-down'] : []"
+          :actions="i && selectedCard ? ['face-down', 'face-up'] : []"
           @action="(evt) => i && handleBanishedAction(evt)"
           :selected-index="i && selectedCardLocation === 'banished' && selectedCardIndex"
         />
@@ -532,34 +580,27 @@ const showCards = computed(() => {
 
       <!-- TOP ROW -->
       <card-slot
-        v-for="index in topRow"
+        v-for="(card, index) in topRow"
         :key="index"
         :name="index ? 'Monster Card Zone' : 'Field Card Zone'"
-        :card="getCard('field', index)"
-        :cards="[
-          getCard('field', index),
-          ...(getCards('attached').filter((c) => c?.attached === getCard('field', index)?.uid) ??
-            []),
-        ]"
+        :card="card"
+        :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
         :class="index === 0 ? 'bg-green-600' : 'bg-yellow-700'"
         @click.stop="i && handleFieldClick(index)"
-        @click.right.prevent="
-          (!getCard('field', index)?.faceDown || iv) &&
-          inspectCard(getCard('field', index), 'field')
-        "
+        @click.right.prevent="(!card?.faceDown || iv) && inspectCard(card, 'field')"
         :selected="i && isSelected('field', index)"
         :selected-index="
           i &&
           selectedCardLocation === 'attached' &&
-          selectedCard?.attached === getCard('field', index)?.uid &&
+          selectedCard?.attached === card?.uid &&
           selectedCardIndex !== undefined
             ? selectedCardIndex + 1
             : undefined
         "
         :actions="i && getActions('field', index)"
-        :hint="iv && getCard('field', index)?.faceDown ? getCard('field', index)?.name : undefined"
-        :controls="i && !!getCard('field', index)"
-        :counters="getCard('field', index)?.counters"
+        :hint="iv && card?.faceDown ? card?.name : undefined"
+        :controls="i && !!card"
+        :counters="card?.counters"
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
       />
@@ -590,34 +631,27 @@ const showCards = computed(() => {
       />
       <!-- BOTTOM ROW -->
       <card-slot
-        v-for="index in bottomRow"
+        v-for="[card, index] in bottomRow"
         :key="index"
-        :card="getCard('field', index)"
-        :cards="[
-          getCard('field', index),
-          ...(getCards('attached').filter((c) => c?.attached === getCard('field', index)?.uid) ??
-            []),
-        ]"
+        :card="card"
+        :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
         :name="'Spell & Trap Card Zone'"
         class="bg-teal-600"
         @click.stop="i && handleFieldClick(index)"
-        @click.right.prevent="
-          (!getCard('field', index)?.faceDown || iv) &&
-          inspectCard(getCard('field', index), 'field')
-        "
+        @click.right.prevent="(!card?.faceDown || iv) && inspectCard(card, 'field')"
         :selected="i && isSelected('field', index)"
         :selected-index="
           i &&
           selectedCardLocation === 'attached' &&
-          selectedCard?.attached === getCard('field', index)?.uid &&
+          selectedCard?.attached === card?.uid &&
           selectedCardIndex !== undefined
             ? selectedCardIndex + 1
             : undefined
         "
         :actions="i && getActions('field', index)"
-        :hint="iv && getCard('field', index)?.faceDown ? getCard('field', index)?.name : undefined"
-        :controls="i && !!getCard('field', index)"
-        :counters="getCard('field', index)?.counters"
+        :hint="iv && card?.faceDown ? card?.name : undefined"
+        :controls="i && !!card"
+        :counters="card?.counters"
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
       />
@@ -678,19 +712,12 @@ const showCards = computed(() => {
       :inspected-cards-location="inspectedCardsLocation"
       :selected-index="
         selectedCardLocation === inspectedCardsLocation ||
-        (selectedCardLocation === 'field' && inspectedCardsLocation === 'attached')
+        ((selectedCardLocation === 'field' || selectedCardLocation === 'zones') &&
+          inspectedCardsLocation === 'attached')
           ? selectedCardIndex
           : undefined
       "
-      :card-index="
-        inspectedCardsLocation === 'field' || inspectedCardsLocation === 'attached'
-          ? getCards('field').findIndex(
-              (c) =>
-                c?.uid ===
-                (Array.isArray(inspectedCards) ? inspectedCards[0]?.uid : inspectedCards?.uid),
-            )
-          : undefined
-      "
+      :card-index
       @close="closeInspectModal"
       @select="selectInspectedCard"
       @draw="drawFromInspected"

@@ -12,6 +12,7 @@ const actionIconMap: Record<string, string> = {
   set: 'download',
   defence: 'shield',
   'face-down': 'system_update_alt',
+  'face-up': 'open_in_browser',
   search: 'search',
   attach: 'attach_file',
 }
@@ -36,6 +37,21 @@ const cardList = computed(() => props.cards ?? [props.card])
 
 const getS3ImageUrl = (cardId: number): string =>
   `${import.meta.env.VITE_S3_BUCKET_URL}${cardId}.jpg`
+
+const getClassStyle = (card: YugiohCard, index: number) => {
+  const rotated = card.defence || cardList.value[0]?.defence
+  return {
+    class: {
+      'border-4 border-yellow-200': props.selected || index === props.selectedIndex,
+      'rotate-90': rotated,
+    },
+    style: {
+      left: rotated ? '50%' : `calc(50% + ${(index / 2) * (60 / cardList.value.length)}px)`,
+      top: rotated ? `calc(${(index / 2) * (60 / cardList.value.length)}px)` : undefined,
+      zIndex: 100 - index,
+    },
+  }
+}
 </script>
 
 <template>
@@ -51,16 +67,8 @@ const getS3ImageUrl = (cardId: number): string =>
         v-if="card"
         :key="card.id"
         :src="getS3ImageUrl(card.faceDown ? 0 : card.id)"
-        :class="{
-          'border-4 border-yellow-200': selected || index === selectedIndex,
-          'rotate-90': card.defence,
-        }"
+        v-bind="getClassStyle(card, index)"
         class="absolute m-auto max-h-full -translate-x-1/2"
-        :style="{
-          left: `calc(50% + ${(index / 2) * (60 / cardList.length)}px)`,
-          zIndex: 100 - index,
-          // transform: `translateX(calc(-50% - ${cardList.length * 1}px))`,
-        }"
       />
     </template>
     <div class="relative h-full w-full">

@@ -19,6 +19,8 @@ export interface YugiohCard {
   counters?: number
   revealed?: boolean
   attached?: string
+  newAttack?: number
+  newDefence?: number
 }
 
 export interface Deck {

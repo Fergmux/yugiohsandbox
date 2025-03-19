@@ -117,7 +117,7 @@ watch(
     </div>
     <div class="flex items-center">
       <button
-        class="h-4 w-4 rounded-full border-1 border-gray-300 bg-red-600 text-center leading-1 text-black lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+        class="h-4 w-4 rounded-full border-1 border-gray-300 bg-red-600 text-center leading-1 text-black active:bg-red-300 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
         @click="changeLifePoints(-1)"
       >
         -
@@ -129,7 +129,7 @@ watch(
         v-model="lifePointsInput"
       />
       <button
-        class="h-4 w-4 rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black lg:h-5 lg:w-5 xl:h-6 xl:w-6"
+        class="h-4 w-4 rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300 lg:h-5 lg:w-5 xl:h-6 xl:w-6"
         @click="changeLifePoints(1)"
       >
         +

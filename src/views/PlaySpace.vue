@@ -25,12 +25,9 @@ TODO:
 PLAYSPACE
 
 -- MUST HAVES --
-- attach cards to extra monster zone
 
 -- NICE TO HAVES --
-- select attached card highlight
 - Textbox for atk/def
-- min w on whole container (responsive breaks)
 - Turns?
 - Coin flip?
 
@@ -296,7 +293,7 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
   <!-- WHOLE PLAYSPACE -->
   <div
     v-if="gameId && (deckId || player === null)"
-    class="mx-auto my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)]"
+    class="mx-auto my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl"
   >
     <!-- OPPONENT -->
     <field-side
