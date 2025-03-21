@@ -16,6 +16,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
+import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 import type { ComputedRef, Ref } from 'vue'
@@ -43,10 +44,13 @@ const extraDeckTypes = [
   'XYZ Pendulum Effect Monster',
 ]
 
+const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']
+
 const defaultGameState: GameState = {
   code: null,
   coinFlip: null,
   turn: 0,
+  gameLog: [],
   players: {
     player1: null,
     player2: null,
@@ -115,7 +119,6 @@ const createGame = async () => {
   gameState.value.players.player1 = userStore.user ?? null
   try {
     const docRef = await addDoc(collection(db, 'games'), gameState.value)
-    console.log('Document written with ID: ', docRef.id)
     gameId.value = docRef.id
   } catch (e) {
     console.error('Error adding document: ', e)
@@ -139,7 +142,7 @@ const coinRef = ref<CoinFlipComponent | null>(null)
 const flipCoin = (result: 'heads' | 'tails') => {
   const count = gameState.value.coinFlip?.[1] ?? 0
   gameState.value.coinFlip = [result, count + 1]
-  console.log('flipCoin', result)
+  log(`flipped a coin`)
   updateGame()
 }
 watch(
@@ -151,15 +154,29 @@ watch(
   },
 )
 
+const log = (action: string) => {
+  const text = `${userStore.user?.username} ${action}`
+  gameState.value.gameLog.push({ text, timestamp: new Date().getTime() })
+  updateGame()
+}
+
+const logRef = ref<HTMLDivElement | null>(null)
+const textChat = ref('')
+const showChat = ref(false)
+const sendChat = () => {
+  if (!textChat.value) return
+  log(`: ${textChat.value}`)
+  textChat.value = ''
+}
 const turn = computed(() => gameState.value.turn)
 const setTurn = (turn: number) => {
   gameState.value.turn = turn
+  log(`set turn to ${turnNameMap[turn % 6]}`)
   updateGame()
 }
 // Handle spacebar press to increment turn
 const handleKeyDown = (event: KeyboardEvent) => {
   if (event.code === 'Space' && gameId.value) {
-    event.preventDefault()
     const newTurn = (turn.value + 1) % 12
     setTurn(newTurn)
   }
@@ -225,10 +242,10 @@ const setDeck = (id: string) => {
   updateGame()
 }
 
-const updateGame = async () => {
+const updateGame = debounce(async () => {
   if (!gameId.value) return
   await updateDoc(doc(db, 'games', gameId.value), gameState.value)
-}
+}, 100)
 
 const joinGame = async () => {
   const q = query(collection(db, 'games'), where('code', '==', Number(gameCode.value)))
@@ -253,8 +270,8 @@ const joinGame = async () => {
 const subscribe = () => {
   if (!gameId.value) return
   unsubscribe = onSnapshot(doc(db, 'games', gameId.value), (doc) => {
-    console.log('Current data: ', doc.data())
     gameState.value = doc.data() as GameState
+    logRef.value?.scrollTo({ top: logRef.value.scrollHeight, behavior: 'smooth' })
   })
 }
 
@@ -271,6 +288,40 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
 )
 </script>
 <template>
+  <div v-if="gameId" class="fixed bottom-0 left-0 z-[200] max-w-[20vw] bg-[rgba(0,0,0,0.5)]">
+    <div class="cursor-pointer" @click="showChat = !showChat">
+      <span class="material-symbols-outlined">{{
+        showChat ? 'arrow_drop_down' : 'arrow_drop_up'
+      }}</span>
+    </div>
+    <div>
+      <div
+        class="overflow-y-scroll"
+        ref="logRef"
+        :class="{ 'h-[20vh]': showChat, 'h-14': !showChat }"
+      >
+        <p
+          v-for="(log, index) in gameState.gameLog"
+          :key="log.timestamp"
+          :class="{ 'bg-gray-800': index % 2 === 0 }"
+          class="px-2 py-px"
+        >
+          {{ log.text }}
+        </p>
+      </div>
+      <div class="flex">
+        <input
+          v-model="textChat"
+          @keyup.enter="sendChat"
+          @keydown.space.stop
+          class="m-1 basis-4/5 rounded-md border-1 border-gray-300 p-1"
+        />
+        <button @click="sendChat" class="m-1 basis-8 rounded-md border-1 border-gray-300 p-1">
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
   <!-- JOIN/CREATE GAME -->
   <div v-if="!gameId" class="m-auto flex w-max flex-col items-center">
     <div>
@@ -378,6 +429,7 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
         :interactive="player !== null"
         :viewer="player === null"
         @update="updateGame"
+        @log="log"
       />
     </div>
     <div class="flex flex-col gap-2 text-lg text-white">

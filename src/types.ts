@@ -21,8 +21,8 @@ export interface YugiohCard {
   counters?: number
   revealed?: boolean
   attached?: string
-  newAttack?: number
-  newDefence?: number
+  newAttack?: number | null
+  newDefence?: number | null
 }
 
 export interface Deck {
@@ -52,6 +52,10 @@ export interface GameState {
   code: number | null
   coinFlip?: ['heads' | 'tails', number] | null
   turn: number
+  gameLog: {
+    text: string
+    timestamp: number
+  }[]
   players: {
     player1: User | null
     player2: User | null

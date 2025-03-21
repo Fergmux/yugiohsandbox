@@ -33,7 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'action', name: string): void
   (e: 'increment', count: number): void
-  (e: 'update'): void
+  (e: 'update', name: string, stat?: 'attack' | 'defence'): void
 }>()
 const cardList = computed(() => props.cards ?? [props.card])
 
@@ -62,7 +62,7 @@ const cardAtk = computed({
   set: (value) => {
     if (topCard.value) {
       topCard.value.newAttack = value
-      emit('update')
+      emit('update', topCard.value.name, 'attack')
     }
   },
 })
@@ -72,7 +72,7 @@ const cardDef = computed({
   set: (value) => {
     if (topCard.value) {
       topCard.value.newDefence = value
-      emit('update')
+      emit('update', topCard.value.name, 'defence')
     }
   },
 })
@@ -90,7 +90,7 @@ const cardDef = computed({
     <template v-for="(card, index) in cardList" :key="card?.id">
       <img
         v-if="card"
-        :key="card.id"
+        :key="`${card.id}-${index}`"
         :src="getS3ImageUrl(card.faceDown ? 0 : card.id)"
         v-bind="getClassStyle(card, index)"
         class="absolute m-auto max-h-full -translate-x-1/2"
@@ -167,7 +167,7 @@ const cardDef = computed({
 
         <p
           v-if="hint"
-          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-200"
           :class="{ 'rotate-180': rotate }"
         >
           {{ hint }}

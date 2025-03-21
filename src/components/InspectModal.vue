@@ -22,6 +22,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'select', index: number): void
   (e: 'draw', destination: keyof BoardSide, index: number, faceDown?: boolean): void
+  (e: 'reveal'): void
 }>()
 
 const cardLength = computed(() => cardList.value?.length ?? 0)
@@ -63,7 +64,10 @@ const isSelected = (index: number) => {
     (props.inspectedCardsLocation === 'attached' ? props.selectedIndex! + 1 : props.selectedIndex!)
   )
 }
-
+const revealCard = (card: YugiohCard) => {
+  emit('reveal')
+  revealedCards.value.add(card)
+}
 const selectCard = (index: number) =>
   Array.isArray(props.cards) ? emit('select', index) : emit('select', props.cardIndex!)
 
@@ -93,7 +97,7 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
             @click.right.prevent="
               cardList?.length > 1 && (!card?.faceDown || revealedCardIds.includes(card.uid))
                 ? (selectedCard = card)
-                : revealedCards.add(card)
+                : revealCard(card)
             "
             @click.stop="selectCard(index)"
             @dragstart.prevent=""
@@ -148,9 +152,7 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
                 !showCardIds.includes(card.uid)
               "
               @click.stop="
-                revealedCardIds.includes(card.uid)
-                  ? revealedCards.delete(card)
-                  : revealedCards.add(card)
+                revealedCardIds.includes(card.uid) ? revealedCards.delete(card) : revealCard(card)
               "
               class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
