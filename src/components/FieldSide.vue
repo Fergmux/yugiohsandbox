@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import LifePoints from '@/components/LifePoints.vue'
 import { nextTick } from 'vue'
 import { zip, debounce } from 'lodash'
+import IconButton from './IconButton.vue'
 
 type CardLocation = keyof BoardSide | 'attached'
 
@@ -23,6 +24,7 @@ const props = defineProps<{
 }>()
 const i = computed(() => props.interactive || undefined)
 const iv = computed(() => i.value || props.viewer || undefined)
+const hideInspectControls = ref(false)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: GameState): void
@@ -265,7 +267,7 @@ const drawCard = (source: keyof BoardSide) => {
   if (!getCards(source).length) return
   const card = getCards(source).shift()
   if (!card) return
-  getCards('hand').push({ ...card, faceDown: false })
+  getCards('hand').push({ ...card, faceDown: true })
   log(`drew a card from ${zoneName(source)}`)
   updateGame()
 }
@@ -414,6 +416,12 @@ const logMoveCard = (
   moveCard(destination, index, options)
 }
 
+const flipCard = (card: YugiohCard) => {
+  card.faceDown = !card.faceDown
+  log(`flipped ${card.name} ${card.faceDown ? 'face down' : 'face up'}`)
+  updateGame()
+}
+
 const handleAction = (action: string, destination: keyof BoardSide, index: number) => {
   switch (action) {
     case 'set':
@@ -519,6 +527,7 @@ const handleIncrement = (count: number, location: keyof BoardSide, index: number
 
 const closeInspectModal = async () => {
   revealDeck.value = false
+  hideInspectControls.value = false
   await nextTick()
   inspectCard(null, null)
 }
@@ -528,6 +537,7 @@ const showCards = computed(() => {
     ...getCards('extra'),
     ...getCards('tokens'),
     ...getCards('field'),
+    ...getCards('hand'),
     ...extraZones.value,
   ]
   const cards = revealDeck.value ? [...revealedCards, ...getCards('deck')] : revealedCards
@@ -538,7 +548,7 @@ const rotate = computed(() => !i.value)
 </script>
 <template>
   <!-- PLAYER -->
-  <div class="h-1/2">
+  <div>
     <div class="grid grid-cols-7 gap-2">
       <!-- BANISHED/EXTRA -->
       <template v-if="i || (viewer && props.player === 'player1')">
@@ -548,7 +558,9 @@ const rotate = computed(() => !i.value)
           :name="'Banished Zone'"
           :cards="opponentCards.banished"
           :hint="opponentCards.banished.length"
-          @click.right.prevent="inspectCards('banished', opponentPlayerKey)"
+          @click.right.prevent="
+            (hideInspectControls = true) && inspectCards('banished', opponentPlayerKey)
+          "
           :rotate
         />
         <life-points
@@ -746,7 +758,10 @@ const rotate = computed(() => !i.value)
         :rotate
       />
     </div>
-    <div @click="i && logMoveCard('hand')" class="mt-4 flex min-h-40 w-full justify-center">
+    <div
+      @click="i && logMoveCard('hand')"
+      class="mt-4 flex h-[min(20vw,20vh)] w-full justify-center"
+    >
       <div v-for="(card, index) in getCards('hand')" :key="`${card?.id}+${index}`" class="relative">
         <img
           v-if="card"
@@ -762,23 +777,13 @@ const rotate = computed(() => !i.value)
           @click.right.prevent="(iv || card?.revealed) && inspectCard(card, 'hand')"
           @dragstart.prevent=""
         >
-          <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2">
-            <button
-              title="Reveal"
-              @click.stop="showToOpponent(index)"
-              class="m-1 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
-            >
-              <span class="material-symbols-outlined">
-                {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
-              </span>
-            </button>
-            <button
-              title="Give"
-              @click.stop="giveToOpponent(index)"
-              class="m-1 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
-            >
-              <span class="material-symbols-outlined"> volunteer_activism </span>
-            </button>
+          <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
+            <IconButton title="Reveal" @click.stop="showToOpponent(index)">
+              {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
+            </IconButton>
+            <IconButton title="Give" @click.stop="giveToOpponent(index)">
+              volunteer_activism
+            </IconButton>
           </div>
         </div>
       </div>
@@ -796,10 +801,12 @@ const rotate = computed(() => !i.value)
           : undefined
       "
       :card-index
+      :controls="i && !hideInspectControls"
       @close="closeInspectModal"
       @select="selectInspectedCard"
       @draw="drawFromInspected"
       @reveal="revealCard"
+      @flip="flipCard"
     />
   </div>
 </template>

@@ -25,9 +25,13 @@ import { useRoute } from 'vue-router'
 /*
 TODO:
 PLAYSPACE
-- game log
+New Features
+- Counters in other card locations?
+- Multi select????????
+- highlight card?
 
 DECK BUILDER
+- Deck builder inspect card actions
 - order deck builder card list by type
 - Filter search
 - Tags
@@ -288,7 +292,10 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
 )
 </script>
 <template>
-  <div v-if="gameId" class="fixed bottom-0 left-0 z-[200] max-w-[20vw] bg-[rgba(0,0,0,0.5)]">
+  <div
+    v-if="gameId && (deckId || player === null)"
+    class="fixed bottom-0 left-0 z-[200] max-w-[20vw] bg-[rgba(0,0,0,0.5)]"
+  >
     <div class="cursor-pointer" @click="showChat = !showChat">
       <span class="material-symbols-outlined">{{
         showChat ? 'arrow_drop_down' : 'arrow_drop_up'
@@ -387,10 +394,13 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
   </div>
 
   <!-- WHOLE PLAYSPACE -->
-  <div v-if="gameId && (deckId || player === null)" class="flex items-center justify-center gap-2">
-    <div class="flex flex-col gap-2 text-lg text-white">
+  <div
+    v-if="gameId && (deckId || player === null)"
+    class="mt-20 flex h-screen items-center justify-center gap-2"
+  >
+    <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="gameState.turn = 0">
-        Opponent's turn
+        {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}
       </p>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 0 }" @click="setTurn(0)">
         Draw phase
@@ -411,7 +421,8 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
         End phase
       </div>
     </div>
-    <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]">
+    <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
+    <div class="w-[70vh]">
       <!-- OPPONENT -->
       <field-side
         v-if="gameId"
@@ -430,11 +441,12 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
         :viewer="player === null"
         @update="updateGame"
         @log="log"
+        class="mb-20"
       />
     </div>
-    <div class="flex flex-col gap-2 text-lg text-white">
+    <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn >= 6 }" @click="setTurn(6)">
-        Your turn
+        {{ playerKey === 'player2' ? "Opponent's turn" : 'Your turn' }}
       </p>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 6 }" @click="setTurn(6)">
         Draw phase

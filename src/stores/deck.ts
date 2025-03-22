@@ -14,7 +14,7 @@ export const useDeckStore = defineStore('deck', () => {
   const getAllCards = async () => {
     if (allCards.value.length > 0) return
     try {
-      const response = await fetch(import.meta.env.VITE_YUGIOH_API_URL)
+      const response = await fetch(import.meta.env.VITE_YUGIOH_API_URL + '?misc=yes')
       const data = await response.json()
       allCards.value = data.data // API returns data in "data"
     } catch (error) {

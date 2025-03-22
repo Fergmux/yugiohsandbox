@@ -4,6 +4,7 @@ import { getS3ImageUrl } from '@/utils'
 import { useOptimalGrid } from '@/utils/useOptimalGrid'
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import InspectModal from './InspectModal.vue'
+import IconButton from './IconButton.vue'
 
 const props = defineProps<{
   cards?: YugiohCard[] | YugiohCard
@@ -11,6 +12,7 @@ const props = defineProps<{
   showCards?: YugiohCard[] | undefined
   inspectedCardsLocation?: keyof BoardSide
   cardIndex?: number
+  controls?: boolean
 }>()
 
 const cardList = computed(
@@ -23,6 +25,7 @@ const emit = defineEmits<{
   (e: 'select', index: number): void
   (e: 'draw', destination: keyof BoardSide, index: number, faceDown?: boolean): void
   (e: 'reveal'): void
+  (e: 'flip', card: YugiohCard): void
 }>()
 
 const cardLength = computed(() => cardList.value?.length ?? 0)
@@ -99,54 +102,55 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
                 ? (selectedCard = card)
                 : revealCard(card)
             "
-            @click.stop="selectCard(index)"
+            @click.stop="controls && selectCard(index)"
             @dragstart.prevent=""
             :class="{
               'border-4 border-yellow-200': isSelected(index),
             }"
           />
-          <div class="absolute bottom-0 flex w-full flex-wrap-reverse justify-center gap-2">
-            <button
+          <div class="absolute bottom-0 mb-2 flex w-full flex-wrap-reverse justify-center gap-2">
+            <IconButton
               v-if="
                 !(inspectedCardsLocation === 'attached' && index === 0) &&
                 inspectedCardsLocation !== 'hand' &&
+                controls &&
                 Array.isArray(cards)
               "
               title="Draw"
               @click.stop="drawCard('hand', index, card)"
-              class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
-              <span class="material-symbols-outlined">back_hand</span>
-            </button>
-            <button
+              back_hand
+            </IconButton>
+            <IconButton
               v-if="
                 !(inspectedCardsLocation === 'attached' && index === 0) &&
                 inspectedCardsLocation !== 'graveyard' &&
                 Array.isArray(cards) &&
+                controls &&
                 inspectedCardsLocation !== 'tokens'
               "
               title="Graveyard"
               @click.stop="drawCard('graveyard', index, card)"
-              class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
-              <span class="material-symbols-outlined">skull</span>
-            </button>
-            <button
+              skull
+            </IconButton>
+            <IconButton
               v-if="
                 !(inspectedCardsLocation === 'attached' && index === 0) &&
                 inspectedCardsLocation !== 'banished' &&
                 Array.isArray(cards) &&
+                controls &&
                 inspectedCardsLocation !== 'tokens'
               "
               title="Banish"
               @click.stop="drawCard('banished', index, card)"
-              class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
             >
-              <span class="material-symbols-outlined">block</span>
-            </button>
-            <button
+              block
+            </IconButton>
+            <IconButton
               v-if="
                 Array.isArray(cards) &&
+                controls &&
                 inspectedCardsLocation !== 'tokens' &&
                 revealedCardIds.includes(card.uid) &&
                 !showCardIds.includes(card.uid)
@@ -154,12 +158,17 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
               @click.stop="
                 revealedCardIds.includes(card.uid) ? revealedCards.delete(card) : revealCard(card)
               "
-              class="rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-1 text-black"
+              :title="revealedCardIds.includes(card.uid) ? 'Hide' : 'Show'"
             >
-              <span class="material-symbols-outlined">
-                {{ revealedCardIds.includes(card.uid) ? 'visibility_off' : 'visibility' }}
-              </span>
-            </button>
+              {{ revealedCardIds.includes(card.uid) ? 'visibility_off' : 'visibility' }}
+            </IconButton>
+            <IconButton
+              v-if="controls && Array.isArray(cards) && inspectedCardsLocation === 'banished'"
+              title="Flip"
+              @click.stop="emit('flip', card)"
+            >
+              flip
+            </IconButton>
           </div>
         </div>
       </div>

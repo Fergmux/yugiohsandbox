@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { YugiohCard } from '@/types'
 import { computed } from 'vue'
+import IconButton from './IconButton.vue'
 
 const actionIconMap: Record<string, string> = {
   flip: 'flip',
@@ -15,6 +16,21 @@ const actionIconMap: Record<string, string> = {
   'face-up': 'open_in_browser',
   search: 'search',
   attach: 'attach_file',
+}
+
+const actionTitleMap: Record<string, string> = {
+  flip: 'Flip',
+  position: 'Change position',
+  'shuffle-in': 'Shuffle in',
+  'place-top': 'Place on top',
+  'place-bottom': 'Place on bottom',
+  shuffle: 'Shuffle deck',
+  set: 'Set',
+  defence: 'Summon defence',
+  'face-down': 'Banish face down',
+  'face-up': 'Banish face up',
+  search: 'Search',
+  attach: 'Attach',
 }
 
 const props = defineProps<{
@@ -42,14 +58,20 @@ const getS3ImageUrl = (cardId: number): string =>
 
 const getClassStyle = (card: YugiohCard, index: number) => {
   const rotated = card.defence || cardList.value[0]?.defence
+  const modifier = 1.5
   return {
     class: {
       'border-4 border-yellow-200': props.selected || index === props.selectedIndex,
       'rotate-90': rotated,
     },
     style: {
-      left: rotated ? '50%' : `calc(50% + ${(index / 2) * (60 / cardList.value.length)}px)`,
-      top: rotated ? `calc(${(index / 2) * (60 / cardList.value.length)}px)` : undefined,
+      left: rotated
+        ? '50%'
+        : `calc(50% + min(${(index * modifier) / cardList.value.length}vw, ${(index * modifier) / cardList.value.length}vh))`,
+      // : `calc(50% + (${index / 2} * (min(5vh,5vw) / ${cardList.value.length}))}px)`,
+      top: rotated
+        ? `min(${(index * modifier) / cardList.value.length}vw, ${(index * modifier) / cardList.value.length}vh)`
+        : undefined,
       zIndex: 100 - index,
     },
   }
@@ -58,9 +80,12 @@ const getClassStyle = (card: YugiohCard, index: number) => {
 const topCard = computed(() => props.card || cardList.value[0])
 
 const cardAtk = computed({
-  get: () => topCard.value?.newAttack || topCard.value?.atk,
+  get: () => {
+    const atk = topCard.value?.newAttack || topCard.value?.atk
+    return atk != null ? Math.max(atk, 0) : atk
+  },
   set: (value) => {
-    if (topCard.value) {
+    if (topCard.value != null) {
       topCard.value.newAttack = value
       emit('update', topCard.value.name, 'attack')
     }
@@ -68,9 +93,12 @@ const cardAtk = computed({
 })
 
 const cardDef = computed({
-  get: () => topCard.value?.newDefence || topCard.value?.def,
+  get: () => {
+    const def = topCard.value?.newDefence || topCard.value?.def
+    return def != null ? Math.max(def, 0) : def
+  },
   set: (value) => {
-    if (topCard.value) {
+    if (topCard.value != null) {
       topCard.value.newDefence = value
       emit('update', topCard.value.name, 'defence')
     }
@@ -79,10 +107,10 @@ const cardDef = computed({
 </script>
 
 <template>
-  <div class="relative aspect-square border-1 border-gray-300">
+  <div class="relative aspect-square border-1 border-gray-300 p-px">
     <div
       v-if="name"
-      class="absolute top-1/2 left-1/2 w-full -translate-x-1/2 -translate-y-1/2 text-center text-xl font-bold text-gray-400 opacity-70"
+      class="absolute top-1/2 left-1/2 w-full -translate-x-1/2 -translate-y-1/2 text-center text-[min(1vh,1vw)] font-bold text-gray-400 opacity-70"
       :class="{ 'rotate-180': rotate }"
     >
       {{ name }}
@@ -98,71 +126,65 @@ const cardDef = computed({
     </template>
     <div class="relative h-full w-full">
       <div
-        class="absolute z-[110] flex h-full flex-col flex-wrap items-center"
+        class="absolute z-[110] flex h-full flex-col flex-wrap items-center gap-[min(0.25vh,0.25vw)]"
         :class="{ 'rotate-180': rotate }"
       >
         <div
           v-for="counter in counters"
           :key="counter"
-          class="m-1 size-7 rounded-full border-1 border-gray-300 bg-gray-600 text-center leading-6"
+          class="size-[min(2vh,2vw)] rounded-full border-1 border-gray-300 bg-gray-600 text-center text-[min(1vh,1vw)]"
         >
           {{ counter }}
         </div>
       </div>
 
-      <p
-        v-if="topCard && !topCard.faceDown && (cardAtk || cardDef)"
-        class="absolute top-2/3 left-1/2 z-[120] flex -translate-x-1/2 -translate-y-1/2 text-center font-bold"
+      <div
+        v-if="topCard != null && !topCard.faceDown && (cardAtk != null || cardDef != null)"
+        class="absolute top-3/5 left-1/2 z-[120] flex -translate-x-1/2 -translate-y-1/2 gap-2 text-center text-[min(0.75vh,0.75vw)] font-bold"
+        :style="{ transform: rotate ? 'rotate(180deg)' : '' }"
       >
-        <input
-          v-if="cardAtk"
-          type="number"
-          class="mr-2 max-w-12 bg-black text-center"
-          @click.stop
-          :style="{ transform: rotate ? 'rotate(180deg)' : '' }"
-          :class="
-            topCard.newAttack
-              ? topCard.newAttack < topCard.atk
-                ? 'text-red-400'
-                : 'text-green-400'
-              : 'text-white'
-          "
-          :disabled="!controls"
-          v-model="cardAtk"
-        />
-
-        <input
-          v-if="cardDef"
-          type="number"
-          class="max-w-12 bg-black text-center"
-          :style="{ transform: rotate ? 'rotate(180deg)' : '' }"
-          @click.stop
-          :class="
-            topCard.newDefence
-              ? topCard.newDefence < topCard.def
-                ? 'text-red-400'
-                : 'text-green-400'
-              : 'text-white'
-          "
-          :disabled="!controls"
-          v-model="cardDef"
-        />
-      </p>
+        <div v-if="cardAtk != null">
+          <p class="mx-auto w-min bg-black text-white">ATK</p>
+          <input
+            type="number"
+            class="max-w-[min(3vh,3vw)] bg-black text-center"
+            @click.stop
+            :class="
+              topCard.newAttack
+                ? topCard.newAttack < topCard.atk
+                  ? 'text-red-400'
+                  : 'text-green-400'
+                : 'text-white'
+            "
+            :disabled="!controls"
+            v-model="cardAtk"
+          />
+        </div>
+        <div v-if="cardDef != null" class="">
+          <p class="mx-auto w-min bg-black text-white">DEF</p>
+          <input
+            type="number"
+            class="max-w-[min(3vh,3vw)] bg-black text-center"
+            @click.stop
+            :class="
+              topCard.newDefence
+                ? topCard.newDefence < topCard.def
+                  ? 'text-red-400'
+                  : 'text-green-400'
+                : 'text-white'
+            "
+            :disabled="!controls"
+            v-model="cardDef"
+          />
+        </div>
+      </div>
 
       <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
-        <div v-if="controls" class="absolute top-0 right-0 flex w-min">
-          <div
-            class="material-symbols-outlined m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
-            @click.stop="emit('increment', -1)"
-          >
+        <div v-if="controls" class="absolute top-0 right-0 flex w-min gap-1">
+          <IconButton :scale="0.5" title="remove" @click.stop="emit('increment', -1)">
             remove
-          </div>
-          <div
-            class="material-symbols-outlined m-1 w-full cursor-pointer rounded-full border-1 border-gray-300 bg-gray-600 select-none active:bg-gray-300"
-            @click.stop="emit('increment', 1)"
-          >
-            add
-          </div>
+          </IconButton>
+          <IconButton :scale="0.5" title="add" @click.stop="emit('increment', 1)"> add </IconButton>
         </div>
 
         <p
@@ -172,17 +194,15 @@ const cardDef = computed({
         >
           {{ hint }}
         </p>
-        <div v-if="actions" class="absolute bottom-0 flex w-full justify-center">
-          <button
+        <div v-if="actions" class="absolute bottom-0 flex w-full justify-center gap-2">
+          <IconButton
             v-for="action in actions"
             :key="action"
             @click.stop="emit('action', action)"
-            class="m-2 rounded-full border-1 border-gray-300 bg-gray-400 p-2 leading-none text-black active:bg-gray-600"
+            :title="actionTitleMap[action]"
           >
-            <span class="material-symbols-outlined" :title="action">{{
-              actionIconMap[action]
-            }}</span>
-          </button>
+            {{ actionIconMap[action] }}
+          </IconButton>
         </div>
       </div>
     </div>
