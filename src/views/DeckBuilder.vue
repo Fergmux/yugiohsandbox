@@ -307,7 +307,6 @@ const { getAllCards, getDecks, addDeck, removeDeck, addCardToDeck, removeCardFro
 
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
-  // await Promise.all([getAllCards, getDecks])
   getAllCards()
   getDecks()
 })
@@ -443,7 +442,6 @@ const searchFilteredCards = computed<YugiohCard[]>(() =>
     .slice(0, searchLimit.value),
 ) // Limit suggestions to 30
 
-// - Tags
 const clickingOnCard = ref<number | null>(null)
 const clickOnCard = (cardId: number) => {
   clickingOnCard.value = cardId

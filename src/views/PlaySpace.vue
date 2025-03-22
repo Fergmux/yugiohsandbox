@@ -26,9 +26,17 @@ import { useRoute } from 'vue-router'
 TODO:
 PLAYSPACE
 New Features
+- Login password/username
+- Admin portal?
+
 - Counters in other card locations?
 - Multi select????????
 - highlight card?
+- redirect to path after login
+
+Deck Builder
+- Rename deck
+// - Tags
 */
 
 const extraDeckTypes = [
