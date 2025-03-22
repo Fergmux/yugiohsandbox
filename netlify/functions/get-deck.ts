@@ -19,7 +19,6 @@ const handler = async (event: { path: string }) => {
 
       // Run the query
       const response = await client.query(updateUserQuery)
-      console.log(response.data)
 
       return {
         statusCode: 200,

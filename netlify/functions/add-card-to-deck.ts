@@ -3,7 +3,6 @@ import { client, fql } from '../lib/client.js'
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
-    console.log(body)
 
     const addCardToDeckQuery = fql`
       let deck = decks.firstWhere(.id == ${body.deckId})
@@ -11,7 +10,6 @@ const handler = async (event: { body: string }) => {
         cards: ${body.cards}
       })`
     const response = await client.query(addCardToDeckQuery)
-    console.log(response.data)
 
     return {
       statusCode: 200,

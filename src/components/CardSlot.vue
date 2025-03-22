@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { YugiohCard } from '@/types'
+import { getS3ImageUrl } from '@/utils'
 import { computed } from 'vue'
 import IconButton from './IconButton.vue'
 
@@ -52,9 +53,6 @@ const emit = defineEmits<{
   (e: 'update', name: string, stat?: 'attack' | 'defence'): void
 }>()
 const cardList = computed(() => props.cards ?? [props.card])
-
-const getS3ImageUrl = (cardId: number): string =>
-  `${import.meta.env.VITE_S3_BUCKET_URL}${cardId}.jpg`
 
 const getClassStyle = (card: YugiohCard, index: number) => {
   const rotated = card.defence || cardList.value[0]?.defence

@@ -13,25 +13,11 @@ const handler = async (event: { path: string }) => {
       }
     }
 
-    console.log(name)
     if (name) {
       const getUserQuery = fql`users.firstWhere(.username == ${name})`
       const response = await client.query(getUserQuery)
-      console.log(response.data)
 
       if (!response.data) throw new Error('User not found')
-
-      // Variables can be used as arguments in an FQL query
-      // const collectionName = 'users'
-
-      // // Build query that uses the previous var and sub-query
-      // const upsertCollectionQuery = fql`users.create({
-      //   username: ${body.name},
-      // })`
-
-      // // Run the query
-      // const response = await client.query(upsertCollectionQuery)
-      // console.log(response.data)
 
       return {
         statusCode: 200,

@@ -3,13 +3,11 @@ import { client, fql } from '../lib/client.js'
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
-    console.log(body)
 
     const removeDeckQuery = fql`
       let deck = decks.firstWhere(.id == ${body.deckId})
       deck?.delete()`
     const response = await client.query(removeDeckQuery)
-    console.log(response.data)
 
     return {
       statusCode: 200,

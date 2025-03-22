@@ -154,7 +154,6 @@ const cardIndex = computed(() => {
 })
 
 const selectCard = (location?: CardLocation, index?: number) => {
-  // debugger
   if (location == null || index == null) return
   if (selectedCardLocation.value === location && selectedCardIndex.value === index) {
     resetSelectedCard()

@@ -19,7 +19,6 @@ const onAddUser = async () => {
     await addUser(userName.value)
   } catch (err) {
     if (err instanceof Error) {
-      console.log(err)
       errorMessage.value = err.message
     }
   }
@@ -31,7 +30,6 @@ const onGetUser = async () => {
     await getUser(userName.value)
   } catch (err) {
     if (err instanceof Error) {
-      console.log(err)
       errorMessage.value = err.message
     }
   }

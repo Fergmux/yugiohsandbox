@@ -13,7 +13,6 @@ const handler = async (event: { body: string }) => {
 
     // Run the query
     const response = await client.query(addDeckQuery)
-    console.log(response.data)
 
     return {
       statusCode: 200,

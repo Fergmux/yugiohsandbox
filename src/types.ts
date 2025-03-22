@@ -15,6 +15,20 @@ export interface YugiohCard {
   type: string
   atk: number
   def: number
+  frameType: string
+  race: string
+  level?: number
+  attribute?: string
+  banlist_info?: {
+    ban_goat: string
+    ban_ocg: string
+    ban_tcg: string
+  }
+  misc_info: {
+    formats: string[]
+    ocg_date: string
+    tcg_date: string
+  }[]
   card_images: CardImage[]
   faceDown?: boolean
   defence?: boolean

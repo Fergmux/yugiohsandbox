@@ -23,7 +23,6 @@ export const useUserStore = defineStore('user', () => {
       user.value = userData as User
       savedUsername.value = username
     } catch (err) {
-      console.log(err)
       throw err
     }
   }
@@ -36,7 +35,6 @@ export const useUserStore = defineStore('user', () => {
       user.value = userData as User
       savedUsername.value = username
     } catch (err) {
-      console.log(err)
       throw err
     }
   }

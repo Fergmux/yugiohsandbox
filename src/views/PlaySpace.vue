@@ -29,12 +29,6 @@ New Features
 - Counters in other card locations?
 - Multi select????????
 - highlight card?
-
-DECK BUILDER
-- Deck builder inspect card actions
-- order deck builder card list by type
-- Filter search
-- Tags
 */
 
 const extraDeckTypes = [
