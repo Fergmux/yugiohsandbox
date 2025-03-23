@@ -28,6 +28,8 @@ PLAYSPACE
 New Features
 - Login password/username
 - Admin portal?
+- User profile page?
+- Ensure mobile works?
 
 - highlight card?
 - Counters in other card locations?
@@ -295,38 +297,59 @@ const player = computed(() => {
 const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
   player.value === 'player2' ? 'player2' : 'player1',
 )
+const notesRef = ref<HTMLTextAreaElement | null>(null)
+const showNotes = ref(false)
 </script>
 <template>
+  <div v-if="gameId && (deckId || player === null)" class="fixed right-0 bottom-0 z-[200]">
+    <div
+      class="flex cursor-pointer justify-between bg-[rgba(0,0,0,0.5)]"
+      @click="showNotes = !showNotes"
+    >
+      <h3 class="text-xl">Notes</h3>
+      <span class="material-symbols-outlined">{{
+        showNotes ? 'arrow_drop_down' : 'arrow_drop_up'
+      }}</span>
+    </div>
+    <textarea
+      ref="notesRef"
+      class="w-[min(30vw,30vh)] bg-neutral-800 align-top"
+      :class="{ 'h-[min(20vw,20vh)]': showNotes, 'h-[min(5vw,5vh)]': !showNotes }"
+      @keydown.stop
+      @keyup.stop.escape="notesRef?.blur()"
+    />
+  </div>
   <div
     v-if="gameId && (deckId || player === null)"
-    class="fixed bottom-0 left-0 z-[200] max-w-[20vw] bg-[rgba(0,0,0,0.5)]"
+    class="fixed bottom-0 left-0 z-[200] max-w-[min(30vw,30vh)] bg-[rgba(0,0,0,0.5)]"
   >
-    <div class="cursor-pointer" @click="showChat = !showChat">
+    <div class="flex cursor-pointer justify-between" @click="showChat = !showChat">
+      <h3 class="text-xl">Game Log</h3>
       <span class="material-symbols-outlined">{{
         showChat ? 'arrow_drop_down' : 'arrow_drop_up'
       }}</span>
     </div>
     <div>
       <div
-        class="overflow-y-scroll"
         ref="logRef"
-        :class="{ 'h-[20vh]': showChat, 'h-14': !showChat }"
+        class="w-[min(30vw,30vh)] overflow-y-scroll"
+        :class="{ 'h-[min(20vw,20vh)]': showChat, 'h-[min(5vw,5vh)]': !showChat }"
       >
         <p
           v-for="(log, index) in gameState.gameLog"
           :key="log.timestamp"
-          :class="{ 'bg-gray-800': index % 2 === 0 }"
+          :class="{ 'bg-neutral-800': index % 2 === 0 }"
           class="px-2 py-px"
         >
           {{ log.text }}
         </p>
       </div>
-      <div class="flex">
+      <div v-if="showChat" class="flex">
         <input
           v-model="textChat"
           @keyup.enter="sendChat"
           @keydown.space.stop
-          class="m-1 basis-4/5 rounded-md border-1 border-gray-300 p-1"
+          class="m-1 w-4/5 basis-4/5 rounded-md border-1 border-gray-300 p-1"
         />
         <button @click="sendChat" class="m-1 basis-8 rounded-md border-1 border-gray-300 p-1">
           Send

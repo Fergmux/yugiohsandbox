@@ -4,7 +4,7 @@ const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const getUserQuery = fql`users.firstWhere(.username == ${body.username})`
+    const getUserQuery = fql`users.firstWhere(.username.toLowerCase() == ${body.username.toLowerCase()})`
     const userResponse = await client.query(getUserQuery)
     if (userResponse.data) throw new Error('User already exists')
 

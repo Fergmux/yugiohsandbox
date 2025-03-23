@@ -556,7 +556,7 @@ watch(searchQuery, () => {
 
 <template>
   <div class="p-8">
-    <div class="flex items-end justify-between">
+    <div class="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-end">
       <div class="flex flex-col items-start rounded-md border-1 border-gray-300 p-4">
         <h3 class="text-2xl">Decks</h3>
         <div class="mt-2 flex max-w-full flex-wrap gap-2" v-if="decks.length">
@@ -600,8 +600,11 @@ watch(searchQuery, () => {
       </div>
     </div>
 
-    <div v-if="selectedDeck && selectedDeckId" class="mt-4 flex items-start justify-between">
-      <div class="mr-4 basis-4/5 rounded-md border-1 border-gray-300 p-4">
+    <div
+      v-if="selectedDeck && selectedDeckId"
+      class="mt-4 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start"
+    >
+      <div class="basis-4/5 rounded-md border-1 border-gray-300 p-4">
         <input v-model="currentDeckName" class="text-3xl font-semibold" />
         <DeckSection
           :cards="cardsInNormalDeck"

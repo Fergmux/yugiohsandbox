@@ -14,7 +14,7 @@ const handler = async (event: { path: string }) => {
     }
 
     if (name) {
-      const getUserQuery = fql`users.firstWhere(.username == ${name})`
+      const getUserQuery = fql`users.firstWhere(.username.toLowerCase() == ${name.toLowerCase()})`
       const response = await client.query(getUserQuery)
 
       if (!response.data) throw new Error('User not found')

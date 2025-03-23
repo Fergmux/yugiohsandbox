@@ -24,14 +24,24 @@ const clickOnCard = (index: number) => {
 const unclick = () => {
   clickingOnCard.value = null
 }
+
+const showCards = ref(true)
+const toggleShowCards = () => {
+  showCards.value = !showCards.value
+}
 </script>
 
 <template>
   <div class="mt-4">
-    <h3 class="text-2xl font-semibold">
-      <slot /> <span v-if="max" class="font-normal"> - {{ cards?.length }}/{{ max }}</span>
-    </h3>
-    <div class="mt-2">
+    <div class="flex cursor-pointer justify-between" @click="toggleShowCards">
+      <h3 class="text-2xl font-semibold">
+        <slot /> <span v-if="max" class="font-normal"> - {{ cards?.length }}/{{ max }}</span>
+      </h3>
+      <span class="material-symbols-outlined">{{
+        showCards ? 'arrow_drop_down' : 'arrow_drop_up'
+      }}</span>
+    </div>
+    <div v-if="showCards" class="mt-2">
       <ul
         class="grid-cols-auto grid grid-cols-[repeat(auto-fill,minmax(100px,150px))] gap-2 lg:grid-cols-[repeat(auto-fill,minmax(100px,200px))] 2xl:grid-cols-[repeat(auto-fill,minmax(100px,250px))]"
       >
