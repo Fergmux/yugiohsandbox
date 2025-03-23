@@ -11,6 +11,7 @@ import FilterRangeSection from '@/components/FilterRangeSection.vue'
 import FilterDateRangeSection from '@/components/FilterDateRangeSection.vue'
 import DeckSection from '@/components/DeckSection.vue'
 import { reactive } from 'vue'
+import { debounce } from 'lodash'
 
 const extraDeckTypes = [
   'Fusion Monster',
@@ -303,7 +304,15 @@ const collapseAllFilters = () => {
 
 const deckStore = useDeckStore()
 const { decks, allCards, addingDeck, deletingDeck } = storeToRefs(deckStore)
-const { getAllCards, getDecks, addDeck, removeDeck, addCardToDeck, removeCardFromDeck } = deckStore
+const {
+  getAllCards,
+  getDecks,
+  addDeck,
+  removeDeck,
+  addCardToDeck,
+  removeCardFromDeck,
+  changeDeckName,
+} = deckStore
 
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
@@ -324,6 +333,25 @@ const addDeckAndSelect = async (name: string) => {
   deckName.value = ''
   setSelectedDeckId(deckId)
 }
+
+const currentDeckName = ref('')
+
+// Update currentDeckName when selectedDeck changes
+watch(selectedDeck, (newDeck) => {
+  if (newDeck) {
+    currentDeckName.value = newDeck.name
+  }
+})
+
+// Watch for changes to currentDeckName and update the deck with debounce
+watch(
+  currentDeckName,
+  debounce((newName: string) => {
+    if (selectedDeckId.value && selectedDeck.value) {
+      changeDeckName(selectedDeckId.value, newName)
+    }
+  }, 500),
+)
 
 const cardIdMap = computed(() =>
   allCards.value.reduce((acc, card) => {
@@ -447,9 +475,6 @@ const clickOnCard = (cardId: number) => {
   clickingOnCard.value = cardId
   const moveAudio = new Audio('/card_move.mp3')
   moveAudio.play()
-  setTimeout(() => {
-    clickingOnCard.value = null
-  }, 150)
 }
 
 watch(searchQuery, () => {
@@ -505,9 +530,7 @@ watch(searchQuery, () => {
 
     <div v-if="selectedDeck && selectedDeckId" class="mt-4 flex items-start justify-between">
       <div class="mr-4 basis-4/5 rounded-md border-1 border-gray-300 p-4">
-        <h2 class="text-3xl font-semibold">
-          {{ selectedDeck.name }}
-        </h2>
+        <input v-model="currentDeckName" class="text-3xl font-semibold" />
         <DeckSection
           :cards="cardsInNormalDeck"
           :max="60"
@@ -679,8 +702,8 @@ watch(searchQuery, () => {
             :key="card.id"
             @dragstart.prevent=""
             @click="addCardToDeck(selectedDeckId, card.id)"
-            @mousedown="clickOnCard(card.id)"
-            @mouseup="clickingOnCard = null"
+            @mousedown.left="clickOnCard(card.id)"
+            @mouseup.left="clickingOnCard = null"
             @click.right.prevent="selectCard(card)"
             class="cursor-pointer transition-transform duration-75"
             :class="{ 'scale-95': clickingOnCard === card.id }"

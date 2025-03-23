@@ -72,6 +72,17 @@ export const useDeckStore = defineStore('deck', () => {
     }
   }
 
+  const changeDeckName = async (deckId: string, name: string) => {
+    const deck = decks.value.find((deck) => deck.id === deckId)
+    if (deck) {
+      deck.name = name
+      fetch(`/.netlify/functions/edit-deck-name`, {
+        method: 'POST',
+        body: JSON.stringify({ deckId, name }),
+      })
+    }
+  }
+
   return {
     getAllCards,
     addDeck,
@@ -79,6 +90,7 @@ export const useDeckStore = defineStore('deck', () => {
     removeDeck,
     addCardToDeck,
     removeCardFromDeck,
+    changeDeckName,
     allCards,
     decks,
     addingDeck,

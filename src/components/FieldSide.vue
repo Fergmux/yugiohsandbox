@@ -121,8 +121,9 @@ const zoneIsFree = (index: number) => opponentCards.value.zones[index] === null
 
 // Selecting card
 const selectedCard: Ref<YugiohCard | undefined> = ref()
-const inspectedCards: Ref<YugiohCard[] | YugiohCard | undefined> = ref()
+const inspectedCard: Ref<YugiohCard | undefined> = ref()
 const inspectedCardsLocation: Ref<CardLocation | undefined> = ref()
+const inspectedCardsPlayerKey: Ref<Player | undefined> = ref()
 const selectedCardLocation: Ref<CardLocation | undefined> = ref()
 const selectedCardIndex: Ref<number | undefined> = ref()
 const revealDeck = ref(false)
@@ -233,17 +234,30 @@ const inspectCard = (card: YugiohCard | null, location: keyof BoardSide | null) 
   const attachedCards = getCards('attached').filter(
     (c) => c?.attached === card?.uid,
   ) as YugiohCard[]
-  inspectedCards.value =
-    attachedCards.length && card ? [card, ...attachedCards] : (card ?? undefined)
+  inspectedCard.value = card ?? undefined
   inspectedCardsLocation.value = attachedCards.length ? 'attached' : (location ?? undefined)
 }
 
 const inspectCards = (location?: CardLocation, playerKey?: Player) => {
   if (!location) return
-  const cards = getCardData(playerKey ?? props.player)[location]
-  inspectedCards.value = cards ? (cards.filter(Boolean) as YugiohCard[]) : undefined
   inspectedCardsLocation.value = location ?? undefined
+  inspectedCardsPlayerKey.value = playerKey ?? props.player
 }
+
+const inspectedCards = computed(() => {
+  if (inspectedCard.value) {
+    const attachedCards = getCards('attached').filter(
+      (c) => c?.attached === inspectedCard.value?.uid,
+    )
+    return attachedCards.length && inspectedCard.value
+      ? ([inspectedCard.value, ...attachedCards].filter(Boolean) as YugiohCard[])
+      : inspectedCard.value
+  }
+  if (!inspectedCardsLocation.value || !inspectedCardsPlayerKey.value) return undefined
+  return getCardData(inspectedCardsPlayerKey.value)[inspectedCardsLocation.value].filter(
+    Boolean,
+  ) as YugiohCard[]
+})
 
 const showToOpponent = (index: number) => {
   const card = getCard('hand', index)
@@ -436,9 +450,7 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
     case 'flip':
       const cardToFlip = getCard(destination, index)
       if (!cardToFlip) return
-      cardToFlip.faceDown = !cardToFlip.faceDown
-      log(`flipped ${cardToFlip.name} ${cardToFlip.faceDown ? 'face down' : 'face up'}`)
-      updateGame()
+      flipCard(cardToFlip)
       break
     case 'position':
       const cardToChange = getCard(destination, index)
@@ -465,7 +477,7 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
       }
       selectedCard.value.attached = destinationCardUid
       log(`attached ${selectedCard.value?.name} to ${destinationCard?.name}`)
-      moveCard('attached')
+      moveCard('attached', undefined, { faceDown: false })
       break
   }
 }
@@ -537,6 +549,7 @@ const showCards = computed(() => {
     ...getCards('tokens'),
     ...getCards('field'),
     ...getCards('hand'),
+    ...getCards('attached'),
     ...extraZones.value,
   ]
   const cards = revealDeck.value ? [...revealedCards, ...getCards('deck')] : revealedCards

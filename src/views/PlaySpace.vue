@@ -35,7 +35,6 @@ New Features
 - redirect to path after login
 
 Deck Builder
-- Rename deck
 // - Tags
 */
 
@@ -351,7 +350,7 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
     </button>
   </div>
 
-  <!-- ROOM?LEAVE -->
+  <!-- ROOM LEAVE -->
   <div v-else class="m-auto w-fit text-center">
     <p class="text-lg">
       Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
@@ -376,10 +375,10 @@ const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
   <!-- PICK DECK -->
   <div
     v-if="gameId && !gameState.decks[playerKey]"
-    class="m-4 flex w-min min-w-80 flex-col items-start rounded-md border-1 border-gray-300 p-4 active:bg-gray-600"
+    class="m-4 mx-auto mt-8 flex w-max min-w-80 flex-col items-start rounded-md border-1 border-gray-300 p-4 active:bg-gray-600"
   >
-    <h3 class="text-2xl">Pick your deck</h3>
-    <div class="mt-2 flex max-w-full flex-wrap gap-2" v-if="decks.length">
+    <h3 class="mx-auto text-2xl">Pick your deck</h3>
+    <div class="mt-4 flex max-w-full flex-wrap gap-2" v-if="decks.length">
       <div
         v-for="deck in decks"
         :key="deck.id"

@@ -19,10 +19,6 @@ const clickOnCard = (index: number) => {
   clickingOnCard.value = index
   moveAudio.currentTime = 0
   moveAudio.play()
-  // Set a timeout to reset clickingOnCard to null after a short delay
-  setTimeout(() => {
-    clickingOnCard.value = null
-  }, 150) // 150ms matches the duration-75 transition
 }
 
 const unclick = () => {
@@ -50,8 +46,8 @@ const unclick = () => {
             @dragstart.prevent=""
             @click.right.prevent="emit('select', card)"
             @click="emit('remove', card.id)"
-            @mousedown="clickOnCard(index)"
-            @mouseup="unclick"
+            @mousedown.left="clickOnCard(index)"
+            @mouseup.left="unclick"
             :src="getS3ImageUrl(card.id)"
             :alt="card.name"
             class="w-full max-w-[300px] min-w-[100px]"
