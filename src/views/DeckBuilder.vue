@@ -419,7 +419,6 @@ const getS3ImageUrl = (cardId: number): string =>
 const searchQuery = ref('')
 
 const searchFilteredCards = computed<YugiohCard[]>(() => {
-  console.log('filter ran')
   return allCards.value
     .filter(
       (card) =>
@@ -481,6 +480,11 @@ const searchFilteredCards = computed<YugiohCard[]>(() => {
         ((!tcgReleaseDateMin.value || card.misc_info[0].tcg_date >= tcgReleaseDateMin.value) &&
           (!tcgReleaseDateMax.value || card.misc_info[0].tcg_date <= tcgReleaseDateMax.value)),
     )
+    .filter(
+      (card) =>
+        selectedArchetypes.value.length === 0 ||
+        selectedArchetypes.value.includes(card.archetype ?? ''),
+    )
     .sort((a, b) => {
       // Check if name matches search query
       const aNameMatch = a.name.toLowerCase().includes(searchQuery.value.toLowerCase())
@@ -503,6 +507,46 @@ const clickOnCard = (cardId: number) => {
   clickingOnCard.value = cardId
   const moveAudio = new Audio('/card_move.mp3')
   moveAudio.play()
+}
+
+// Compute card archetypes and their counts
+const archetypes = computed(() => {
+  const archetypeSet = new Set<string>()
+  allCards.value.forEach((card) => {
+    if (card.archetype) {
+      archetypeSet.add(card.archetype)
+    }
+  })
+  return archetypeSet
+})
+
+const archetypeSearch = ref('')
+const filteredArchetypes = computed(() => {
+  return Array.from(archetypes.value).filter(
+    (archetype) =>
+      archetypeSearch.value &&
+      archetype.toLowerCase().includes(archetypeSearch.value.toLowerCase()),
+  )
+})
+const selectedArchetypes = ref<string[]>([])
+const addArchetype = (archetype: string) => {
+  archetypeSearch.value = ''
+  selectedArchetypes.value.push(archetype)
+}
+const removeArchetype = (archetype: string) => {
+  selectedArchetypes.value = selectedArchetypes.value.filter((a) => a !== archetype)
+}
+const highlightedIndex = ref(-1)
+const navigateDropdown = (direction: number) => {
+  highlightedIndex.value += direction
+  if (highlightedIndex.value < 0) highlightedIndex.value = 0
+  if (highlightedIndex.value >= filteredArchetypes.value.length)
+    highlightedIndex.value = filteredArchetypes.value.length - 1
+}
+const selectHighlightedArchetype = () => {
+  if (highlightedIndex.value >= 0 && highlightedIndex.value < filteredArchetypes.value.length) {
+    addArchetype(filteredArchetypes.value[highlightedIndex.value])
+  }
 }
 
 watch(searchQuery, () => {
@@ -714,6 +758,46 @@ watch(searchQuery, () => {
           >
             TCG Release Date
           </FilterDateRangeSection>
+          <h3 class="text-left text-xl font-semibold">Archetypes</h3>
+          <div class="my-2">
+            <input
+              type="text"
+              v-model="archetypeSearch"
+              placeholder="Search for archetypes..."
+              class="w-full rounded-md border-1 border-gray-300 p-2"
+              @keydown.down.prevent="navigateDropdown(1)"
+              @keydown.up.prevent="navigateDropdown(-1)"
+              @keydown.enter.prevent="selectHighlightedArchetype"
+            />
+            <div v-if="filteredArchetypes.length" class="relative">
+              <ul
+                class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-300 bg-neutral-900 shadow-lg"
+              >
+                <li
+                  v-for="(archetype, index) in filteredArchetypes"
+                  :key="archetype"
+                  @click="addArchetype(archetype)"
+                  class="cursor-pointer px-4 py-2"
+                  :class="{
+                    'bg-neutral-600': highlightedIndex === index,
+                    'hover:bg-neutral-600': highlightedIndex !== index,
+                  }"
+                >
+                  {{ archetype }}
+                </li>
+              </ul>
+            </div>
+            <div v-if="selectedArchetypes.length" class="mt-2 flex flex-wrap gap-2">
+              <div
+                v-for="archetype in selectedArchetypes"
+                :key="archetype"
+                @click="removeArchetype(archetype)"
+                class="cursor-pointer rounded-md border-1 border-gray-300 p-2 text-sm"
+              >
+                <span>{{ archetype }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <input

@@ -15,6 +15,7 @@ export interface YugiohCard {
   type: string
   atk: number
   def: number
+  archetype?: string
   frameType: string
   race: string
   level?: number
