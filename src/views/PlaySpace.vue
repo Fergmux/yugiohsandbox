@@ -29,10 +29,14 @@ New Features
 - Login password/username
 - Admin portal?
 
+- highlight card?
 - Counters in other card locations?
 - Multi select????????
-- highlight card?
-- redirect to path after login
+- custom card?
+
+- Edit level
+- Edit attribute
+
 
 Deck Builder
 // - Tags

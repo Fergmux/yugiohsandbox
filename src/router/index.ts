@@ -6,7 +6,7 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/',
+      path: '/:gameCode?',
       name: 'login',
       component: LoginPage,
     },
@@ -37,7 +37,7 @@ router.beforeEach(async (to, from, next) => {
     await userStore.loginExisting()
   }
   if (!userStore.user && to.name !== 'login') {
-    next('/')
+    next({ name: 'login', params: to.name === 'play' ? { gameCode: to.params.gameCode } : {} })
   } else {
     next()
   }

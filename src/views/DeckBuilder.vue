@@ -115,6 +115,7 @@ const monsterRaces = [
   'Fairy',
   'Fiend',
   'Fish',
+  'Illusion',
   'Insect',
   'Machine',
   'Plant',
@@ -129,6 +130,7 @@ const monsterRaces = [
   'Winged Beast',
   'Wyrm',
   'Zombie',
+  'Other',
 ]
 const selectedMonsterTypes = ref<string[]>(monsterRaces)
 const selectAllMonsterTypes = () => {
@@ -211,6 +213,7 @@ const formatOptions = [
   'GOAT',
   'OCG GOAT',
   'Speed Duel',
+  'No Format',
 ]
 const selectedFormats = ref<string[]>(formatOptions)
 const selectAllFormats = () => {
@@ -222,10 +225,10 @@ const selectAllFormats = () => {
 }
 
 const levelMin = ref(0)
-const levelMax = ref(12)
+const levelMax = ref(13)
 const resetLevel = () => {
   levelMin.value = 0
-  levelMax.value = 12
+  levelMax.value = 13
 }
 
 const atkMin = ref(0)
@@ -415,8 +418,9 @@ const getS3ImageUrl = (cardId: number): string =>
 // CARD SEARCH //
 const searchQuery = ref('')
 
-const searchFilteredCards = computed<YugiohCard[]>(() =>
-  allCards.value
+const searchFilteredCards = computed<YugiohCard[]>(() => {
+  console.log('filter ran')
+  return allCards.value
     .filter(
       (card) =>
         card.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
@@ -426,10 +430,19 @@ const searchFilteredCards = computed<YugiohCard[]>(() =>
       frameTypeSearch.value.map((type) => type.toLowerCase()).includes(card.frameType),
     )
     .filter((card) => deckTypeSearch.value.includes(card.type))
-    .filter((card) => racesSearch.value.includes(card.race))
+    .filter(
+      (card) =>
+        racesSearch.value.includes(card.race) ||
+        (racesSearch.value.includes('Other') &&
+          ![...monsterRaces, ...spellRaces, ...trapRaces]
+            .filter((race) => race !== 'Other')
+            .includes(card.race)),
+    )
     .filter((card) => selectedAttributes.value.includes(card.attribute ?? '') || !card.attribute)
-    .filter((card) =>
-      card.misc_info[0].formats.some((format) => selectedFormats.value.includes(format)),
+    .filter(
+      (card) =>
+        card.misc_info[0].formats.some((format) => selectedFormats.value.includes(format)) ||
+        (card.misc_info[0].formats.length === 0 && selectedFormats.value.includes('No Format')),
     )
     .filter(
       (card) =>
@@ -440,9 +453,22 @@ const searchFilteredCards = computed<YugiohCard[]>(() =>
         selectedBanListsTcg.value.includes(card.banlist_info?.ban_tcg ?? '') ||
         (selectedBanListsTcg.value.includes('Allowed') && !card.banlist_info?.ban_tcg),
     )
-    .filter((card) => !card.level || (card.level >= levelMin.value && card.level <= levelMax.value))
-    .filter((card) => card.atk == null || (card.atk >= atkMin.value && card.atk <= atkMax.value))
-    .filter((card) => card.def == null || (card.def >= defMin.value && card.def <= defMax.value))
+    .filter(
+      (card) =>
+        card.level == null || (card.level >= levelMin.value && card.level <= levelMax.value),
+    )
+    .filter(
+      (card) =>
+        card.atk == null ||
+        card.atk === -1 ||
+        (card.atk >= atkMin.value && card.atk <= atkMax.value),
+    )
+    .filter(
+      (card) =>
+        card.def == null ||
+        card.def === -1 ||
+        (card.def >= defMin.value && card.def <= defMax.value),
+    )
     .filter(
       (card) =>
         !card.misc_info[0].ocg_date ||
@@ -467,8 +493,10 @@ const searchFilteredCards = computed<YugiohCard[]>(() =>
       // If both match or both don't match name, maintain original order
       return 0
     })
-    .slice(0, searchLimit.value),
-) // Limit suggestions to 30
+})
+
+// Limit suggestions to 30
+const limitedSearchResults = computed(() => searchFilteredCards.value.slice(0, searchLimit.value))
 
 const clickingOnCard = ref<number | null>(null)
 const clickOnCard = (cardId: number) => {
@@ -698,7 +726,7 @@ watch(searchQuery, () => {
         <!-- Autocomplete Suggestions -->
         <ul class="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
           <li
-            v-for="card in searchFilteredCards"
+            v-for="card in limitedSearchResults"
             :key="card.id"
             @dragstart.prevent=""
             @click="addCardToDeck(selectedDeckId, card.id)"
@@ -713,7 +741,7 @@ watch(searchQuery, () => {
           </li>
         </ul>
         <button
-          v-if="searchFilteredCards.length > 0 && searchFilteredCards.length % 30 === 0"
+          v-if="searchFilteredCards.length > limitedSearchResults.length"
           class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2"
           @click="searchLimit += 30"
         >

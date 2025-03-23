@@ -2,7 +2,10 @@
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
+const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 const { user } = storeToRefs(userStore)
 const { addUser, getUser, loginExisting } = userStore
@@ -28,6 +31,11 @@ const onGetUser = async () => {
   errorMessage.value = ''
   try {
     await getUser(userName.value)
+    if (route.params.gameCode) {
+      router.push({ name: 'play', params: { gameCode: route.params.gameCode } })
+    } else {
+      router.push({ path: '/deck' })
+    }
   } catch (err) {
     if (err instanceof Error) {
       errorMessage.value = err.message

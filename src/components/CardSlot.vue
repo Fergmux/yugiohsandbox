@@ -130,7 +130,7 @@ const cardDef = computed({
         <div
           v-for="counter in counters"
           :key="counter"
-          class="size-[min(2vh,2vw)] rounded-full border-1 border-gray-300 bg-gray-600 text-center text-[min(1vh,1vw)]"
+          class="size-[min(1.5vh,1.5vw)] rounded-full border-1 border-gray-300 bg-gray-600 text-center text-[min(0.85vh,0.85vw)]"
         >
           {{ counter }}
         </div>
@@ -179,10 +179,10 @@ const cardDef = computed({
 
       <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
         <div v-if="controls" class="absolute top-0 right-0 flex w-min gap-1">
-          <IconButton :scale="0.5" title="remove" @click.stop="emit('increment', -1)">
+          <IconButton :scale="0.6" title="remove" @click.stop="emit('increment', -1)">
             remove
           </IconButton>
-          <IconButton :scale="0.5" title="add" @click.stop="emit('increment', 1)"> add </IconButton>
+          <IconButton :scale="0.6" title="add" @click.stop="emit('increment', 1)"> add </IconButton>
         </div>
 
         <p
