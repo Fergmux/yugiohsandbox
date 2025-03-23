@@ -43,7 +43,7 @@ const toggleShowCards = () => {
     </div>
     <div v-if="showCards" class="mt-2">
       <ul
-        class="grid-cols-auto grid grid-cols-[repeat(auto-fill,minmax(100px,150px))] gap-2 lg:grid-cols-[repeat(auto-fill,minmax(100px,200px))] 2xl:grid-cols-[repeat(auto-fill,minmax(100px,250px))]"
+        class="grid-cols-auto grid grid-cols-[repeat(auto-fill,minmax(50px,100px))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(75px,125px))] md:grid-cols-[repeat(auto-fill,minmax(100px,150px))] lg:grid-cols-[repeat(auto-fill,minmax(100px,200px))] 2xl:grid-cols-[repeat(auto-fill,minmax(100px,250px))]"
       >
         <li
           v-for="(card, index) in cards"
