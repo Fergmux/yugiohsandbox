@@ -20,6 +20,11 @@ const router = createRouter({
       name: 'play',
       component: () => import('@/views/PlaySpace.vue'),
     },
+    {
+      path: '/playground',
+      name: 'playground',
+      component: () => import('@/views/PlayGround.vue'),
+    },
     // {
     //   path: '/about',
     //   name: 'about',

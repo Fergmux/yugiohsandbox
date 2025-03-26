@@ -42,6 +42,14 @@ New Features
 
 Deck Builder
 // - Tags
+
+Playground
+- Save state to DB
+- Click for options
+- bring to front/back
+- Copy
+- delete
+
 */
 
 const extraDeckTypes = [

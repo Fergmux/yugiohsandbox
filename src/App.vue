@@ -9,7 +9,7 @@ const userStore = useUserStore()
   <div>
     <!-- Autocomplete Search Box -->
     <div
-      class="mx-auto my-14 flex max-w-80 justify-between rounded-md border-1 border-gray-300 p-4 text-2xl font-semibold"
+      class="mx-auto my-14 flex w-fit justify-between gap-4 rounded-md border-1 border-gray-300 p-4 text-2xl font-semibold"
     >
       <button class="cursor-pointer" @click="router.push('/')">Login</button>
       <button class="cursor-pointer" v-if="userStore.user" @click="router.push('/deck')">
@@ -17,6 +17,9 @@ const userStore = useUserStore()
       </button>
       <button class="cursor-pointer" v-if="userStore.user" @click="router.push('/play')">
         Play
+      </button>
+      <button class="cursor-pointer" v-if="userStore.user" @click="router.push('/playground')">
+        Playground
       </button>
     </div>
     <router-view />
