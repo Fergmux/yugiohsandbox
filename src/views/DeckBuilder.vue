@@ -270,6 +270,7 @@ const resetTcgReleaseDate = () => {
 
 const resetFilters = () => {
   frameTypeSelected.value = frameTypeOptions
+  selectedCardTypes.value = cardTypeOptions
   deckTypeSelected.value = deckTypeOptions
   selectedMonsterTypes.value = monsterRaces
   selectedSpellRaces.value = spellRaces
@@ -395,7 +396,12 @@ const sortCardsByFrameTypeAndName = (a: YugiohCard, b: YugiohCard) => {
     return aIndex - bIndex
   }
 
-  // Then sort alphabetically within each frameType
+  // Sort by level/rank second (if both cards have a level/rank)
+  if (a.level !== undefined && b.level !== undefined) {
+    return a.level - b.level
+  }
+
+  // Then sort alphabetically by name
   return a.name.localeCompare(b.name)
 }
 
