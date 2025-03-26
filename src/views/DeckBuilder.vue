@@ -67,6 +67,16 @@ const selectAllDeckTypes = () => {
   }
 }
 
+const cardTypeOptions = [...extraDeckTypes, ...mainDeckTypes, ...otherDeckTypes]
+const selectedCardTypes = ref<string[]>(cardTypeOptions)
+const selectAllCardTypes = () => {
+  if (selectedCardTypes.value.length === cardTypeOptions.length) {
+    selectedCardTypes.value = []
+  } else {
+    selectedCardTypes.value = cardTypeOptions
+  }
+}
+
 const frameTypeOptions = [
   'Normal',
   'Effect',
@@ -279,6 +289,7 @@ const resetFilters = () => {
 const filterSections = reactive({
   frameType: true,
   deckType: true,
+  cardType: true,
   monsterType: true,
   spellType: true,
   trapType: true,
@@ -425,6 +436,7 @@ const searchFilteredCards = computed<YugiohCard[]>(() => {
         card.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
         card.desc.toLowerCase().includes(searchQuery.value.toLowerCase()),
     )
+    .filter((card) => selectedCardTypes.value.includes(card.type))
     .filter((card) =>
       frameTypeSearch.value.map((type) => type.toLowerCase()).includes(card.frameType),
     )
@@ -646,6 +658,14 @@ watch(searchQuery, () => {
             v-model="frameTypeSelected"
             v-model:hidden="filterSections.frameType"
             @select-all="selectAllFrameTypes"
+          >
+            Frame type
+          </FilterSection>
+          <FilterSection
+            :options="cardTypeOptions"
+            v-model="selectedCardTypes"
+            v-model:hidden="filterSections.cardType"
+            @select-all="selectAllCardTypes"
           >
             Card type
           </FilterSection>
