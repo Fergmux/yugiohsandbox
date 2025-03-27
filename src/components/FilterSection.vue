@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import FilterSectionWrapper from './FilterSectionWrapper.vue'
 import Selectlist from './SelectList.vue'
 
-defineProps<{
+const props = defineProps<{
   options: string[]
 }>()
 
@@ -9,21 +10,29 @@ const selected = defineModel<string[]>({ required: true })
 
 const hidden = defineModel('hidden', { default: true })
 
-const emit = defineEmits(['selectAll'])
+const selectAll = () => {
+  if (selected.value.length === props.options.length) {
+    selected.value = []
+  } else {
+    selected.value = props.options
+  }
+}
 </script>
 
 <template>
-  <div class="mt-4">
-    <div class="mb-2 flex items-center justify-between gap-2">
-      <h4 class="cursor-pointer text-xl font-semibold" @click="hidden = !hidden">
-        <slot />
-      </h4>
-      <button class="cursor-pointer" @click="emit('selectAll')">
-        {{ selected.length < options.length ? 'Select all' : 'Deselect all' }}
-      </button>
-    </div>
-    <div v-if="!hidden" class="mt-2">
-      <Selectlist v-model="selected" :options="options" />
-    </div>
-  </div>
+  <FilterSectionWrapper
+    :options="options"
+    :selected="selected.length"
+    :total="options.length"
+    @action="selectAll"
+    v-model="hidden"
+  >
+    <template #title>
+      <slot />
+    </template>
+    <template #action>
+      {{ selected.length !== options.length ? 'Select all' : 'Deselect all' }}
+    </template>
+    <Selectlist v-model="selected" :options="options" />
+  </FilterSectionWrapper>
 </template>

@@ -88,3 +88,75 @@ export interface GameState {
     player2: BoardSide
   }
 }
+
+export interface FilterSection {
+  title: string
+  options: FilterOption[]
+}
+
+export type FilterOption = string | FilterSection
+
+export const extraDeckTypes = [
+  'Fusion Monster',
+  'Link Monster',
+  'Pendulum Effect Fusion Monster',
+  'Synchro Monster',
+  'Synchro Pendulum Effect Monster',
+  'Synchro Tuner Monster',
+  'XYZ Monster',
+  'XYZ Pendulum Effect Monster',
+]
+
+export const mainDeckTypes = [
+  'Effect Monster',
+  'Flip Effect Monster',
+  'Flip Tuner Effect Monster',
+  'Gemini Monster',
+  'Normal Monster',
+  'Normal Tuner Monster',
+  'Pendulum Effect Monster',
+  'Pendulum Effect Ritual Monster',
+  'Pendulum Flip Effect Monster',
+  'Pendulum Normal Monster',
+  'Pendulum Tuner Effect Monster',
+  'Ritual Effect Monster',
+  'Ritual Monster',
+  'Spell Card',
+  'Spirit Monster',
+  'Toon Monster',
+  'Trap Card',
+  'Tuner Monster',
+  'Union Effect Monster',
+]
+export const otherDeckTypes = ['Skill Card', 'Token']
+
+export const fusionTypes = ['Fusion Monster', 'Pendulum Effect Fusion Monster']
+export const linkTypes = ['Link Monster']
+export const pendulumTypes = [
+  'Pendulum Effect Monster',
+  'Pendulum Effect Fusion Monster',
+  'Synchro Pendulum Effect Monster',
+  'Pendulum Effect Ritual Monster',
+  'Pendulum Flip Effect Monster',
+  'Pendulum Normal Monster',
+  'Pendulum Tuner Effect Monster',
+]
+export const synchroTypes = [
+  'Synchro Monster',
+  'Synchro Pendulum Effect Monster',
+  'Synchro Tuner Monster',
+]
+export const xyzTypes = ['XYZ Monster', 'XYZ Pendulum Effect Monster']
+export const normalTypes = ['Normal Monster', 'Normal Tuner Monster']
+export const effectTypes = [
+  'Effect Monster',
+  'Flip Effect Monster',
+  'Flip Tuner Effect Monster',
+  'Gemini Monster',
+  'Union Effect Monster',
+  'Spirit Monster',
+  'Toon Monster',
+]
+export const ritualTypes = ['Ritual Monster', 'Ritual Effect Monster']
+export const tunerTypes = ['Tuner Monster', 'Normal Tuner Monster']
+export const extraTunerTypes = ['Pendulum Tuner Effect Monster', 'Synchro Tuner Monster']

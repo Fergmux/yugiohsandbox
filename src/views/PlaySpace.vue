@@ -5,6 +5,7 @@ import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
 import type { GameState, YugiohCard } from '@/types'
+import { extraDeckTypes } from '@/types'
 import { useClipboard } from '@vueuse/core'
 import {
   addDoc,
@@ -42,26 +43,15 @@ New Features
 
 Deck Builder
 // - Tags
+// Format validation?
 
 Playground
-- Save state to DB
-- Click for options
-- bring to front/back
-- Copy
-- delete
-
+- select multiple cards
+- Click for options:
+-- bring to front/back
+-- Copy card
+-- delete card
 */
-
-const extraDeckTypes = [
-  'Fusion Monster',
-  'Link Monster',
-  'Pendulum Effect Fusion Monster',
-  'Synchro Monster',
-  'Synchro Pendulum Effect Monster',
-  'Synchro Tuner Monster',
-  'XYZ Monster',
-  'XYZ Pendulum Effect Monster',
-]
 
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']
 

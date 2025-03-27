@@ -2,80 +2,66 @@
 import InspectModal from '@/components/InspectModal.vue'
 import { useDeckStore } from '@/stores/deck'
 import type { YugiohCard } from '@/types'
+import {
+  extraDeckTypes,
+  mainDeckTypes,
+  otherDeckTypes,
+  fusionTypes,
+  linkTypes,
+  pendulumTypes,
+  synchroTypes,
+  xyzTypes,
+  normalTypes,
+  effectTypes,
+  ritualTypes,
+  tunerTypes,
+  extraTunerTypes,
+  type FilterOption,
+} from '@/types'
 import { ArrowPathIcon, PlusCircleIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { storeToRefs } from 'pinia'
 import type { ComputedRef } from 'vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import FilterSection from '@/components/FilterSection.vue'
+import FilterSectionsSection from '@/components/FilterSectionsSection.vue'
 import FilterRangeSection from '@/components/FilterRangeSection.vue'
 import FilterDateRangeSection from '@/components/FilterDateRangeSection.vue'
+import FilterSectionWrapper from '@/components/FilterSectionWrapper.vue'
 import DeckSection from '@/components/DeckSection.vue'
 import { reactive } from 'vue'
 import { debounce } from 'lodash'
 
-const extraDeckTypes = [
-  'Fusion Monster',
-  'Link Monster',
-  'Pendulum Effect Fusion Monster',
-  'Synchro Monster',
-  'Synchro Pendulum Effect Monster',
-  'Synchro Tuner Monster',
-  'XYZ Monster',
-  'XYZ Pendulum Effect Monster',
+const cardTypeSections: FilterOption[] = [
+  {
+    title: 'Main Deck',
+    options: [
+      { title: 'Normal Monsters', options: normalTypes },
+      { title: 'Effect Monsters', options: effectTypes },
+      { title: 'Ritual Monsters', options: ritualTypes },
+      { title: 'Tuner Monsters', options: tunerTypes },
+      'Spell Card',
+      'Trap Card',
+    ],
+  },
+  {
+    title: 'Extra Deck',
+    options: [
+      { title: 'Fusion Monsters', options: fusionTypes },
+      { title: 'Synchro Monsters', options: synchroTypes },
+      { title: 'XYZ Monsters', options: xyzTypes },
+      { title: 'Link Monsters', options: linkTypes },
+      { title: 'Pendulum Monsters', options: pendulumTypes },
+      { title: 'Tuner Monsters', options: extraTunerTypes },
+    ],
+  },
+  {
+    title: 'Other',
+    options: ['Token', 'Skill Card'],
+  },
 ]
-const mainDeckTypes = [
-  'Effect Monster',
-  'Flip Effect Monster',
-  'Flip Tuner Effect Monster',
-  'Gemini Monster',
-  'Normal Monster',
-  'Normal Tuner Monster',
-  'Pendulum Effect Monster',
-  'Pendulum Effect Ritual Monster',
-  'Pendulum Flip Effect Monster',
-  'Pendulum Normal Monster',
-  'Pendulum Tuner Effect Monster',
-  'Ritual Effect Monster',
-  'Ritual Monster',
-  'Spell Card',
-  'Spirit Monster',
-  'Toon Monster',
-  'Trap Card',
-  'Tuner Monster',
-  'Union Effect Monster',
-]
-const otherDeckTypes = ['Skill Card', 'Token']
-const deckTypeOptions = ['Extra Deck', 'Main Deck', 'Other']
-const deckTypeSelected = ref<string[]>(deckTypeOptions)
-const deckTypeSearch = computed(() =>
-  deckTypeSelected.value
-    .map((deckType) =>
-      deckType === 'Other'
-        ? otherDeckTypes
-        : deckType === 'Main Deck'
-          ? mainDeckTypes
-          : extraDeckTypes,
-    )
-    .flat(),
-)
-
-const selectAllDeckTypes = () => {
-  if (deckTypeSelected.value.length === deckTypeOptions.length) {
-    deckTypeSelected.value = []
-  } else {
-    deckTypeSelected.value = deckTypeOptions
-  }
-}
 
 const cardTypeOptions = [...extraDeckTypes, ...mainDeckTypes, ...otherDeckTypes]
 const selectedCardTypes = ref<string[]>(cardTypeOptions)
-const selectAllCardTypes = () => {
-  if (selectedCardTypes.value.length === cardTypeOptions.length) {
-    selectedCardTypes.value = []
-  } else {
-    selectedCardTypes.value = cardTypeOptions
-  }
-}
 
 const frameTypeOptions = [
   'Normal',
@@ -105,13 +91,6 @@ const frameTypeSearch = computed(() =>
     .map((frameType) => (frameType === 'Pendulum' ? pendulumFrameTypeOptions : frameType))
     .flat(),
 )
-const selectAllFrameTypes = () => {
-  if (frameTypeSelected.value.length === frameTypeOptions.length) {
-    frameTypeSelected.value = []
-  } else {
-    frameTypeSelected.value = frameTypeOptions
-  }
-}
 
 const monsterRaces = [
   'Aqua',
@@ -142,76 +121,24 @@ const monsterRaces = [
   'Zombie',
   'Other',
 ]
-const selectedMonsterTypes = ref<string[]>(monsterRaces)
-const selectAllMonsterTypes = () => {
-  if (selectedMonsterTypes.value.length === monsterRaces.length) {
-    selectedMonsterTypes.value = []
-  } else {
-    selectedMonsterTypes.value = monsterRaces
-  }
-}
+const spellRaces = ['Normal', 'Field', 'Equip', 'Quick-Play', 'Ritual', 'Continuous']
+const trapRaces = ['Normal', 'Counter', 'Continuous']
 
-const spellRaces = ['Normal', 'Field', 'Equip', 'Continuous', 'Quick-Play', 'Ritual']
-const selectedSpellRaces = ref<string[]>(spellRaces)
-const selectAllSpellRaces = () => {
-  if (selectedSpellRaces.value.length === spellRaces.length) {
-    selectedSpellRaces.value = []
-  } else {
-    selectedSpellRaces.value = spellRaces
-  }
-}
-
-const trapRaces = ['Normal', 'Continuous', 'Counter']
-const selectedTrapRaces = ref<string[]>(trapRaces)
-const selectAllTrapRaces = () => {
-  if (selectedTrapRaces.value.length === trapRaces.length) {
-    selectedTrapRaces.value = []
-  } else {
-    selectedTrapRaces.value = trapRaces
-  }
-}
-
-const racesSearch = computed(() => [
-  ...selectedMonsterTypes.value,
-  ...selectedSpellRaces.value,
-  ...selectedTrapRaces.value,
-])
+const raceSections: FilterOption[] = [
+  { title: 'Monster Cards', options: monsterRaces },
+  { title: 'Spell Cards', options: spellRaces },
+  { title: 'Trap Cards', options: trapRaces },
+]
+const raceOptions = [...monsterRaces, ...spellRaces, ...trapRaces]
+const selectedRaces = ref<string[]>(raceOptions)
 
 const attributeOptions = ['DARK', 'DIVINE', 'EARTH', 'FIRE', 'LIGHT', 'METAL', 'WATER', 'WIND']
 const selectedAttributes = ref<string[]>(attributeOptions)
-const selectAllAttributes = () => {
-  if (selectedAttributes.value.length === attributeOptions.length) {
-    selectedAttributes.value = []
-  } else {
-    selectedAttributes.value = attributeOptions
-  }
-}
 
 const banlistOptions = ['Forbidden', 'Limited', 'Allowed']
 const selectedBanListsGoat = ref<string[]>(banlistOptions)
 const selectedBanListsOcg = ref<string[]>(banlistOptions)
 const selectedBanListsTcg = ref<string[]>(banlistOptions)
-const selectAllBanListsGoat = () => {
-  if (selectedBanListsGoat.value.length === banlistOptions.length) {
-    selectedBanListsGoat.value = []
-  } else {
-    selectedBanListsGoat.value = banlistOptions
-  }
-}
-const selectAllBanListsOcg = () => {
-  if (selectedBanListsOcg.value.length === banlistOptions.length) {
-    selectedBanListsOcg.value = []
-  } else {
-    selectedBanListsOcg.value = banlistOptions
-  }
-}
-const selectAllBanListsTcg = () => {
-  if (selectedBanListsTcg.value.length === banlistOptions.length) {
-    selectedBanListsTcg.value = []
-  } else {
-    selectedBanListsTcg.value = banlistOptions
-  }
-}
 
 const formatOptions = [
   'Duel Links',
@@ -234,47 +161,49 @@ const selectAllFormats = () => {
   }
 }
 
-const levelMin = ref(0)
-const levelMax = ref(13)
+const defaultLevelRange = [0, 13] as [number, number]
+const levelMin = ref(defaultLevelRange[0])
+const levelMax = ref(defaultLevelRange[1])
 const resetLevel = () => {
-  levelMin.value = 0
-  levelMax.value = 13
+  levelMin.value = defaultLevelRange[0]
+  levelMax.value = defaultLevelRange[1]
 }
 
-const atkMin = ref(0)
-const atkMax = ref(5000)
+const defaultAtkRange = [0, 5000] as [number, number]
+const atkMin = ref(defaultAtkRange[0])
+const atkMax = ref(defaultAtkRange[1])
 const resetAtk = () => {
-  atkMin.value = 0
-  atkMax.value = 5000
+  atkMin.value = defaultAtkRange[0]
+  atkMax.value = defaultAtkRange[1]
 }
 
-const defMin = ref(0)
-const defMax = ref(5000)
+const defaultDefRange = [0, 5000] as [number, number]
+const defMin = ref(defaultDefRange[0])
+const defMax = ref(defaultDefRange[1])
 const resetDef = () => {
-  defMin.value = 0
-  defMax.value = 5000
+  defMin.value = defaultDefRange[0]
+  defMax.value = defaultDefRange[1]
 }
 
-const ocgReleaseDateMin = ref('')
-const ocgReleaseDateMax = ref('')
+const defaultOcgReleaseDateRange = ['', ''] as [string, string]
+const ocgReleaseDateMin = ref(defaultOcgReleaseDateRange[0])
+const ocgReleaseDateMax = ref(defaultOcgReleaseDateRange[1])
 const resetOcgReleaseDate = () => {
-  ocgReleaseDateMin.value = ''
-  ocgReleaseDateMax.value = ''
+  ocgReleaseDateMin.value = defaultOcgReleaseDateRange[0]
+  ocgReleaseDateMax.value = defaultOcgReleaseDateRange[1]
 }
-const tcgReleaseDateMin = ref('')
-const tcgReleaseDateMax = ref('')
+const defaultTcgReleaseDateRange = ['', ''] as [string, string]
+const tcgReleaseDateMin = ref(defaultTcgReleaseDateRange[0])
+const tcgReleaseDateMax = ref(defaultTcgReleaseDateRange[1])
 const resetTcgReleaseDate = () => {
-  tcgReleaseDateMin.value = ''
-  tcgReleaseDateMax.value = ''
+  tcgReleaseDateMin.value = defaultTcgReleaseDateRange[0]
+  tcgReleaseDateMax.value = defaultTcgReleaseDateRange[1]
 }
 
 const resetFilters = () => {
   frameTypeSelected.value = frameTypeOptions
   selectedCardTypes.value = cardTypeOptions
-  deckTypeSelected.value = deckTypeOptions
-  selectedMonsterTypes.value = monsterRaces
-  selectedSpellRaces.value = spellRaces
-  selectedTrapRaces.value = trapRaces
+  selectedRaces.value = raceOptions
   selectedAttributes.value = attributeOptions
   selectedBanListsGoat.value = banlistOptions
   selectedBanListsOcg.value = banlistOptions
@@ -285,15 +214,14 @@ const resetFilters = () => {
   resetDef()
   resetOcgReleaseDate()
   resetTcgReleaseDate()
+  resetArchetypes()
 }
 
 const filterSections = reactive({
   frameType: true,
   deckType: true,
   cardType: true,
-  monsterType: true,
-  spellType: true,
-  trapType: true,
+  race: true,
   attribute: true,
   banlistGoat: true,
   banlistOcg: true,
@@ -304,6 +232,7 @@ const filterSections = reactive({
   def: true,
   ocgReleaseDate: true,
   tcgReleaseDate: true,
+  archetype: true,
 })
 
 const collapsePriority = computed(() => {
@@ -421,6 +350,10 @@ const tokenCards = computed(() =>
   cardsInDeck.value?.filter((card) => card.type === 'Token').sort(sortCardsByFrameTypeAndName),
 )
 
+const getCardCountInDeck = (cardId: number) => {
+  return cardsInDeck.value?.filter((card) => card.id === cardId).length
+}
+
 // SELECT CARD //
 
 const selectedCard = ref<YugiohCard | null>(null)
@@ -446,15 +379,7 @@ const searchFilteredCards = computed<YugiohCard[]>(() => {
     .filter((card) =>
       frameTypeSearch.value.map((type) => type.toLowerCase()).includes(card.frameType),
     )
-    .filter((card) => deckTypeSearch.value.includes(card.type))
-    .filter(
-      (card) =>
-        racesSearch.value.includes(card.race) ||
-        (racesSearch.value.includes('Other') &&
-          ![...monsterRaces, ...spellRaces, ...trapRaces]
-            .filter((race) => race !== 'Other')
-            .includes(card.race)),
-    )
+    .filter((card) => selectedRaces.value.includes(card.race))
     .filter((card) => selectedAttributes.value.includes(card.attribute ?? '') || !card.attribute)
     .filter(
       (card) =>
@@ -522,9 +447,14 @@ const limitedSearchResults = computed(() => searchFilteredCards.value.slice(0, s
 
 const clickingOnCard = ref<number | null>(null)
 const clickOnCard = (cardId: number) => {
+  if (!selectedDeckId.value) return
   clickingOnCard.value = cardId
   const moveAudio = new Audio('/card_move.mp3')
   moveAudio.play()
+  addCardToDeck(selectedDeckId.value, cardId)
+  setTimeout(() => {
+    clickingOnCard.value = null
+  }, 100)
 }
 
 // Compute card archetypes and their counts
@@ -565,6 +495,10 @@ const selectHighlightedArchetype = () => {
   if (highlightedIndex.value >= 0 && highlightedIndex.value < filteredArchetypes.value.length) {
     addArchetype(filteredArchetypes.value[highlightedIndex.value])
   }
+}
+
+const resetArchetypes = () => {
+  selectedArchetypes.value = []
 }
 
 watch(searchQuery, () => {
@@ -642,7 +576,6 @@ watch(searchQuery, () => {
         </DeckSection>
         <DeckSection
           :cards="tokenCards"
-          :max="0"
           @select="selectCard"
           @remove="removeCardFromDeck(selectedDeckId, $event)"
         >
@@ -650,9 +583,9 @@ watch(searchQuery, () => {
         </DeckSection>
       </div>
 
-      <div class="sticky top-2 mb-[100vh] min-w-80 basis-1/5 text-center">
-        <div class="mb-4 w-full rounded-md border-1 border-gray-300 p-2">
-          <div class="flex justify-between">
+      <div class="mb-[100vh] min-w-80 basis-1/5 text-center">
+        <div class="mb-4 w-full rounded-md border-1 border-gray-300 px-2 py-4">
+          <div class="mb-4 flex items-end justify-between">
             <button @click="collapseAllFilters" class="cursor-pointer">
               {{ collapsePriority ? 'Expand all' : 'Collapse all' }}
             </button>
@@ -663,54 +596,36 @@ watch(searchQuery, () => {
             :options="frameTypeOptions"
             v-model="frameTypeSelected"
             v-model:hidden="filterSections.frameType"
-            @select-all="selectAllFrameTypes"
           >
             Frame type
           </FilterSection>
-          <FilterSection
+          <!-- <FilterSection
             :options="cardTypeOptions"
             v-model="selectedCardTypes"
             v-model:hidden="filterSections.cardType"
             @select-all="selectAllCardTypes"
           >
             Card type
-          </FilterSection>
-          <FilterSection
-            :options="deckTypeOptions"
-            v-model="deckTypeSelected"
+          </FilterSection> -->
+          <FilterSectionsSection
+            :sections="cardTypeSections"
+            :depth="0"
+            v-model="selectedCardTypes"
             v-model:hidden="filterSections.deckType"
-            @select-all="selectAllDeckTypes"
           >
-            Deck
-          </FilterSection>
-          <FilterSection
-            :options="monsterRaces"
-            v-model="selectedMonsterTypes"
-            v-model:hidden="filterSections.monsterType"
-            @select-all="selectAllMonsterTypes"
+            Card type
+          </FilterSectionsSection>
+          <FilterSectionsSection
+            :sections="raceSections"
+            :depth="0"
+            v-model="selectedRaces"
+            v-model:hidden="filterSections.race"
           >
-            Monster type
-          </FilterSection>
-          <FilterSection
-            :options="spellRaces"
-            v-model="selectedSpellRaces"
-            v-model:hidden="filterSections.spellType"
-            @select-all="selectAllSpellRaces"
-          >
-            Spell type
-          </FilterSection>
-          <FilterSection
-            :options="trapRaces"
-            v-model="selectedTrapRaces"
-            v-model:hidden="filterSections.trapType"
-            @select-all="selectAllTrapRaces"
-          >
-            Trap type
-          </FilterSection>
+            Type
+          </FilterSectionsSection>
           <FilterSection
             :options="attributeOptions"
             v-model="selectedAttributes"
-            @select-all="selectAllAttributes"
             v-model:hidden="filterSections.attribute"
           >
             Attribute
@@ -720,6 +635,7 @@ watch(searchQuery, () => {
             v-model:max="levelMax"
             @reset="resetLevel"
             v-model:hidden="filterSections.level"
+            :default-range="defaultLevelRange"
           >
             Level
           </FilterRangeSection>
@@ -728,6 +644,7 @@ watch(searchQuery, () => {
             v-model:max="atkMax"
             @reset="resetAtk"
             v-model:hidden="filterSections.atk"
+            :default-range="defaultAtkRange"
           >
             Attack
           </FilterRangeSection>
@@ -736,6 +653,7 @@ watch(searchQuery, () => {
             v-model:max="defMax"
             @reset="resetDef"
             v-model:hidden="filterSections.def"
+            :default-range="defaultDefRange"
           >
             Defense
           </FilterRangeSection>
@@ -750,7 +668,6 @@ watch(searchQuery, () => {
           <FilterSection
             :options="banlistOptions"
             v-model="selectedBanListsGoat"
-            @select-all="selectAllBanListsGoat"
             v-model:hidden="filterSections.banlistGoat"
           >
             GOAT Banlist
@@ -758,7 +675,6 @@ watch(searchQuery, () => {
           <FilterSection
             :options="banlistOptions"
             v-model="selectedBanListsOcg"
-            @select-all="selectAllBanListsOcg"
             v-model:hidden="filterSections.banlistOcg"
           >
             OCG Banlist
@@ -766,7 +682,6 @@ watch(searchQuery, () => {
           <FilterSection
             :options="banlistOptions"
             v-model="selectedBanListsTcg"
-            @select-all="selectAllBanListsTcg"
             v-model:hidden="filterSections.banlistTcg"
           >
             TCG Banlist
@@ -776,6 +691,7 @@ watch(searchQuery, () => {
             v-model:max="ocgReleaseDateMax"
             @reset="resetOcgReleaseDate"
             v-model:hidden="filterSections.ocgReleaseDate"
+            :default-range="defaultOcgReleaseDateRange"
           >
             OCG Release Date
           </FilterDateRangeSection>
@@ -784,11 +700,16 @@ watch(searchQuery, () => {
             v-model:max="tcgReleaseDateMax"
             @reset="resetTcgReleaseDate"
             v-model:hidden="filterSections.tcgReleaseDate"
+            :default-range="defaultTcgReleaseDateRange"
           >
             TCG Release Date
           </FilterDateRangeSection>
-          <h3 class="text-left text-xl font-semibold">Archetypes</h3>
-          <div class="my-2">
+          <FilterSectionWrapper
+            v-model="filterSections.archetype"
+            :selected="selectedArchetypes.length"
+            @action="resetArchetypes"
+          >
+            <template #title>Archetypes</template>
             <input
               type="text"
               v-model="archetypeSearch"
@@ -821,12 +742,13 @@ watch(searchQuery, () => {
                 v-for="archetype in selectedArchetypes"
                 :key="archetype"
                 @click="removeArchetype(archetype)"
-                class="cursor-pointer rounded-md border-1 border-gray-300 p-2 text-sm"
+                class="flex cursor-pointer items-center gap-1 rounded-md border-1 border-gray-300 p-2 text-sm"
               >
+                <span class="material-symbols-outlined !text-sm">close</span>
                 <span>{{ archetype }}</span>
               </div>
             </div>
-          </div>
+          </FilterSectionWrapper>
         </div>
 
         <input
@@ -837,29 +759,37 @@ watch(searchQuery, () => {
         />
 
         <!-- Autocomplete Suggestions -->
-        <ul class="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-          <li
-            v-for="card in limitedSearchResults"
-            :key="card.id"
-            @dragstart.prevent=""
-            @click="addCardToDeck(selectedDeckId, card.id)"
-            @mousedown.left="clickOnCard(card.id)"
-            @mouseup.left="clickingOnCard = null"
-            @click.right.prevent="selectCard(card)"
-            class="cursor-pointer transition-transform duration-75"
-            :class="{ 'scale-95': clickingOnCard === card.id }"
+        <div class="no-scrollbar sticky top-2 h-screen overflow-y-scroll">
+          <ul class="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
+            <li
+              v-for="card in limitedSearchResults"
+              :key="card.id"
+              @dragstart.prevent=""
+              @click="clickOnCard(card.id)"
+              @click.right.prevent="selectCard(card)"
+              class="cursor-pointer transition-transform duration-75"
+              :class="{ 'scale-95': clickingOnCard === card.id }"
+            >
+              <div>
+                <span v-if="!getCardCountInDeck(card.id)" class="text-lg text-white">&#8194;</span>
+                <span v-for="i in getCardCountInDeck(card.id)" :key="i" class="text-lg text-white"
+                  >•</span
+                >
+              </div>
+              <div>
+                <img :src="getS3ImageUrl(card.id)" :alt="card.name" class="w-32" />
+                <p>{{ card.name }}</p>
+              </div>
+            </li>
+          </ul>
+          <button
+            v-if="searchFilteredCards.length > limitedSearchResults.length"
+            class="my-4 cursor-pointer rounded-md border-1 border-gray-300 p-2"
+            @click="searchLimit += 30"
           >
-            <img :src="getS3ImageUrl(card.id)" :alt="card.name" class="w-32" />
-            <p>{{ card.name }}</p>
-          </li>
-        </ul>
-        <button
-          v-if="searchFilteredCards.length > limitedSearchResults.length"
-          class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2"
-          @click="searchLimit += 30"
-        >
-          Load more
-        </button>
+            Load more
+          </button>
+        </div>
       </div>
     </div>
     <inspect-modal v-if="selectedCard" :cards="[selectedCard]" @close="selectCard(null)" />

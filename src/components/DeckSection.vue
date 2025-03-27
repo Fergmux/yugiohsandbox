@@ -5,7 +5,7 @@ import { ref } from 'vue'
 
 defineProps<{
   cards?: YugiohCard[]
-  max: number
+  max?: number
 }>()
 
 const emit = defineEmits<{
@@ -15,14 +15,14 @@ const emit = defineEmits<{
 
 const moveAudio = new Audio('/card_move.mp3')
 const clickingOnCard = ref<number | null>(null)
-const clickOnCard = (index: number) => {
-  clickingOnCard.value = index
+const clickOnCard = (cardId: number) => {
+  clickingOnCard.value = cardId
   moveAudio.currentTime = 0
   moveAudio.play()
-}
-
-const unclick = () => {
-  clickingOnCard.value = null
+  emit('remove', cardId)
+  setTimeout(() => {
+    clickingOnCard.value = null
+  }, 100)
 }
 
 const showCards = ref(true)
@@ -33,13 +33,16 @@ const toggleShowCards = () => {
 
 <template>
   <div class="mt-4">
-    <div class="flex cursor-pointer justify-between" @click="toggleShowCards">
-      <h3 class="text-2xl font-semibold">
-        <slot /> <span v-if="max" class="font-normal"> - {{ cards?.length }}/{{ max }}</span>
-      </h3>
+    <div class="flex cursor-pointer items-center gap-2" @click="toggleShowCards">
       <span class="material-symbols-outlined">{{
         showCards ? 'arrow_drop_down' : 'arrow_drop_up'
       }}</span>
+      <h3 class="text-2xl font-semibold">
+        <slot />
+        <span class="font-normal">
+          - {{ cards?.length }}<template v-if="max"> / {{ max }}</template></span
+        >
+      </h3>
     </div>
     <div v-if="showCards" class="mt-2">
       <ul
@@ -48,16 +51,14 @@ const toggleShowCards = () => {
         <li
           v-for="(card, index) in cards"
           v-memo="[card.id, clickingOnCard]"
-          :key="`${card.id}${index}`"
+          :key="`${card.id}+${index}`"
           class="flex cursor-pointer justify-center transition-transform duration-75"
-          :style="{ transform: `scale(${clickingOnCard === index ? 0.95 : 1})` }"
+          :style="{ transform: `scale(${clickingOnCard === card.id ? 0.95 : 1})` }"
         >
           <img
             @dragstart.prevent=""
             @click.right.prevent="emit('select', card)"
-            @click="emit('remove', card.id)"
-            @mousedown.left="clickOnCard(index)"
-            @mouseup.left="unclick"
+            @click="clickOnCard(card.id)"
             :src="getS3ImageUrl(card.id)"
             :alt="card.name"
             class="w-full max-w-[300px] min-w-[100px]"
