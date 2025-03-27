@@ -31,6 +31,8 @@ New Features
 - Admin portal?
 - User profile page?
 - Ensure mobile works?
+- move from fauna to firebase
+- put firebase into edge functions
 
 - highlight card?
 - Counters in other card locations?
