@@ -1,17 +1,35 @@
 <script setup lang="ts">
+import type { ComputedRef } from 'vue'
+// Fetch all cards and decks on component mount
+import {
+  computed,
+  onMounted,
+  ref,
+  useTemplateRef,
+  watch,
+} from 'vue'
+
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore'
+import _debounce from 'lodash/debounce'
+import { storeToRefs } from 'pinia'
+import { v4 as uuidv4 } from 'uuid'
+
 import InspectModal from '@/components/InspectModal.vue'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import type { YugiohCard } from '@/types'
-import { extraDeckTypes, otherDeckTypes } from '@/types'
+import {
+  extraDeckTypes,
+  otherDeckTypes,
+} from '@/types'
 import { getS3ImageUrl } from '@/utils'
 import { useDraggable } from '@vueuse/core'
-import { collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
-import _debounce from 'lodash/debounce'
-import { storeToRefs } from 'pinia'
-import { v4 as uuidv4 } from 'uuid'
-import type { ComputedRef } from 'vue'
-import { computed, ref, useTemplateRef, watch } from 'vue'
 
 const deckStore = useDeckStore()
 const { decks, allCards } = storeToRefs(deckStore)
@@ -36,9 +54,6 @@ const playgroundState = ref<playgroundState>({
   cardLocations: {},
 })
 
-// Fetch all cards and decks on component mount
-import { onMounted } from 'vue'
-
 onMounted(async () => {
   await deckStore.getAllCards()
   await deckStore.getDecks()
@@ -51,6 +66,11 @@ const selectedDeckId = ref<string | null>(null)
 const selectedDeck = computed(() => decks.value.find((deck) => deck.id === selectedDeckId.value))
 const fetchCompleted = ref(false)
 watch(selectedDeckId, async () => {
+  // Clear caches
+  cardStyles.value.clear()
+  draggableInstances.value.clear()
+  cardRefs.value.clear()
+
   await getPlaygroundState()
   fetchCompleted.value = true
 })
@@ -154,12 +174,105 @@ const cardStyles = ref<Map<string, string>>(new Map())
 // Create a map to store the draggable instances
 const draggableInstances = ref<Map<string, ReturnType<typeof useDraggable>>>(new Map())
 
+// Selection rectangle state
+const isSelecting = ref(false)
+const selectionStart = ref({ x: 0, y: 0 })
+const selectionEnd = ref({ x: 0, y: 0 })
+const selectedCards = ref<string[]>([])
+
+// Selection rectangle computed properties
+const selectionRect = computed(() => {
+  const left = Math.min(selectionStart.value.x, selectionEnd.value.x)
+  const top = Math.min(selectionStart.value.y, selectionEnd.value.y)
+  const width = Math.abs(selectionEnd.value.x - selectionStart.value.x)
+  const height = Math.abs(selectionEnd.value.y - selectionStart.value.y)
+
+  return { left, top, width, height }
+})
+
+// Check if a card is within the selection rectangle
+const isCardInSelection = (uid: string) => {
+  const cardLocation = playgroundState.value.cardLocations[uid]
+  if (!cardLocation) return false
+
+  const cardWidth = (playgroundState.value.cardSize * window.innerWidth) / 100
+  const cardHeight = cardWidth * 1.45 // Approximate card aspect ratio
+
+  const cardRect = {
+    left: cardLocation.x,
+    top: cardLocation.y,
+    right: cardLocation.x + cardWidth,
+    bottom: cardLocation.y + cardHeight,
+  }
+
+  const selRect = {
+    left: selectionRect.value.left,
+    top: selectionRect.value.top,
+    right: selectionRect.value.left + selectionRect.value.width,
+    bottom: selectionRect.value.top + selectionRect.value.height,
+  }
+
+  // Check for intersection
+  return !(
+    cardRect.left > selRect.right ||
+    cardRect.right < selRect.left ||
+    cardRect.top > selRect.bottom ||
+    cardRect.bottom < selRect.top
+  )
+}
+
+// Handle mouse events for selection rectangle
+const startSelection = (event: MouseEvent) => {
+  // Only start selection on left click and not on cards
+  if (event.button !== 0 || (event.target as HTMLElement).closest('.card-element')) return
+
+  const containerRect = container.value?.getBoundingClientRect()
+  if (!containerRect) return
+
+  isSelecting.value = true
+  selectionStart.value = {
+    x: event.clientX - containerRect.left,
+    y: event.clientY - containerRect.top,
+  }
+  selectionEnd.value = { ...selectionStart.value }
+
+  // Clear selection when starting a new selection
+  selectedCards.value = []
+}
+
+const updateSelection = (event: MouseEvent) => {
+  if (!isSelecting.value) return
+
+  const containerRect = container.value?.getBoundingClientRect()
+  if (!containerRect) return
+
+  selectionEnd.value = {
+    x: event.clientX - containerRect.left,
+    y: event.clientY - containerRect.top,
+  }
+
+  // Update selected cards in real-time as the selection rectangle changes
+  selectedCards.value = Object.keys(playgroundState.value.cardLocations).filter(isCardInSelection)
+}
+
+const endSelection = () => {
+  if (!isSelecting.value) return
+
+  // We don't need to update selectedCards here anymore since it's already updated in updateSelection
+  isSelecting.value = false
+}
+
+// Clear selection
+const clearSelection = () => {
+  selectedCards.value = []
+}
+
 // Initialize draggable for each card
 const initDraggable = (uid: string, index: number) => {
   const cardRef = cardRefs.value.get(uid)
   if (!cardRef) return ''
 
-  // If we already have an instance for this card, return its style
+  // If we already have an instance for this card, return its current style
   if (draggableInstances.value.has(uid)) {
     return draggableInstances.value.get(uid)?.style || ''
   }
@@ -197,16 +310,50 @@ const initDraggable = (uid: string, index: number) => {
 
       // Update the z-index for this card
       playgroundState.value.cardLocations[uid].z = highestZ + 1
+
+      // If this card is part of a selection, bring all selected cards to front
+      if (selectedCards.value.includes(uid)) {
+        selectedCards.value.forEach((selectedUid, i) => {
+          if (selectedUid !== uid) {
+            playgroundState.value.cardLocations[selectedUid].z = highestZ + 2 + i
+          }
+        })
+      }
+
       updateState()
     },
     onMove: (event) => {
+      // Calculate the movement delta
+      const deltaX = event.x - playgroundState.value.cardLocations[uid].x
+      const deltaY = event.y - playgroundState.value.cardLocations[uid].y
+
+      // Update the position of the current card
       playgroundState.value.cardLocations[uid].x = event.x
       playgroundState.value.cardLocations[uid].y = event.y
+
+      // If this card is part of a selection, move all selected cards
+      if (selectedCards.value.includes(uid)) {
+        selectedCards.value.forEach((selectedUid) => {
+          if (selectedUid !== uid) {
+            // Move other selected cards by the same delta
+            playgroundState.value.cardLocations[selectedUid].x += deltaX
+            playgroundState.value.cardLocations[selectedUid].y += deltaY
+
+            // Update the draggable instance position
+            const selectedInstance = draggableInstances.value.get(selectedUid)
+            if (selectedInstance) {
+              selectedInstance.position.x = playgroundState.value.cardLocations[selectedUid].x
+              selectedInstance.position.y = playgroundState.value.cardLocations[selectedUid].y
+            }
+          }
+        })
+      }
+
       updateState()
     },
   })
 
-  // @ts-expect-error - Type mismatch is expected here but works at runtime
+  // Store the instance
   draggableInstances.value.set(uid, instance)
   return instance.style.value
 }
@@ -237,8 +384,8 @@ const resetCardPositions = () => {
         mainDeckX += 10 // Increment for the next main deck card
       }
 
-      instance.x = xPosition
-      instance.y = yPosition
+      instance.position.x = xPosition
+      instance.position.y = yPosition
 
       // Update the stored positions
       if (playgroundState.value.cardLocations[uid]) {
@@ -248,6 +395,9 @@ const resetCardPositions = () => {
       }
     }
   })
+
+  // Clear selection
+  clearSelection()
   updateState()
 }
 </script>
@@ -300,18 +450,45 @@ const resetCardPositions = () => {
               >
                 <span class="material-symbols-outlined text-sm"> refresh </span>
               </button>
+              <button
+                class="flex size-8 items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="clearSelection"
+              >
+                <span class="material-symbols-outlined text-sm"> clear </span>
+              </button>
             </div>
           </div>
-          <div ref="container" class="relative h-screen rounded-lg border border-gray-300">
+          <div
+            ref="container"
+            class="relative h-screen rounded-lg border border-gray-300"
+            @mousedown="startSelection"
+            @mousemove="updateSelection"
+            @mouseup="endSelection"
+            @mouseleave="endSelection"
+          >
+            <!-- Selection rectangle -->
+            <div
+              v-if="isSelecting"
+              class="bg-opacity-30 absolute border-2 border-blue-500 bg-blue-200"
+              :style="{
+                left: `${selectionRect.left}px`,
+                top: `${selectionRect.top}px`,
+                width: `${selectionRect.width}px`,
+                height: `${selectionRect.height}px`,
+                pointerEvents: 'none',
+              }"
+            ></div>
+
             <template v-if="cardsInDeck && cardsInDeck.length > 0">
               <div
                 v-for="(card, index) in cardsInDeck"
                 :key="card.uid"
                 :ref="(el) => cardRefs.set(card.uid, el as HTMLElement)"
-                :style="`${cardStyles.get(card.uid) || initDraggable(card.uid, index)}; z-index: ${
+                :style="`${draggableInstances.get(card.uid)?.style || initDraggable(card.uid, index)}; z-index: ${
                   playgroundState.cardLocations[card.uid]?.z || index + 1
                 }`"
-                class="absolute cursor-move"
+                class="card-element absolute cursor-move"
+                :class="{ 'selected-card': selectedCards.includes(card.uid) }"
                 @click.right.prevent="inspectedCard = card"
               >
                 <img
@@ -322,7 +499,12 @@ const resetCardPositions = () => {
                   "
                   :style="`width: ${playgroundState.cardSize}vw`"
                   :alt="card.name"
+                  class="select-none"
                 />
+                <div
+                  v-if="selectedCards.includes(card.uid)"
+                  class="pointer-events-none absolute inset-0 border-4 border-blue-500"
+                ></div>
               </div>
             </template>
           </div>
