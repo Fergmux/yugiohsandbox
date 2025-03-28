@@ -12,13 +12,15 @@ const emit = defineEmits(['reset'])
 const min = defineModel<number>('min', { required: true })
 const max = defineModel<number>('max', { required: true })
 
-const hidden = defineModel('hidden', { default: true })
+const shown = defineModel('shown', { default: true })
+const locked = defineModel('locked', { default: false })
 </script>
 
 <template>
   <FilterSectionWrapper
     @action="emit('reset')"
-    v-model="hidden"
+    v-model:shown="shown"
+    v-model:locked="locked"
     :range="[min, max]"
     :default-range="defaultRange"
   >

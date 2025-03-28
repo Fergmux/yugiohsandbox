@@ -1,35 +1,49 @@
 <script setup lang="ts">
+import type {
+  ComputedRef,
+  Ref,
+} from 'vue'
+import {
+  computed,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue'
+
+import { debounce } from 'lodash'
+import { storeToRefs } from 'pinia'
+
+import DeckSection from '@/components/DeckSection.vue'
+import FilterDateRangeSection from '@/components/filters/FilterDateRangeSection.vue'
+import FilterRangeSection from '@/components/filters/FilterRangeSection.vue'
+import FilterSection from '@/components/filters/FilterSection.vue'
+import FilterSectionsSection from '@/components/filters/FilterSectionsSection.vue'
+import FilterSectionWrapper from '@/components/filters/FilterSectionWrapper.vue'
 import InspectModal from '@/components/InspectModal.vue'
 import { useDeckStore } from '@/stores/deck'
 import type { YugiohCard } from '@/types'
 import {
-  extraDeckTypes,
-  mainDeckTypes,
-  otherDeckTypes,
-  fusionTypes,
-  linkTypes,
-  pendulumTypes,
-  synchroTypes,
-  xyzTypes,
-  normalTypes,
   effectTypes,
-  ritualTypes,
-  tunerTypes,
+  extraDeckTypes,
   extraTunerTypes,
   type FilterOption,
+  fusionTypes,
+  linkTypes,
+  mainDeckTypes,
+  normalTypes,
+  otherDeckTypes,
+  pendulumTypes,
+  ritualTypes,
+  synchroTypes,
+  tunerTypes,
+  xyzTypes,
 } from '@/types'
-import { ArrowPathIcon, PlusCircleIcon, TrashIcon } from '@heroicons/vue/24/outline'
-import { storeToRefs } from 'pinia'
-import type { ComputedRef } from 'vue'
-import { computed, onMounted, ref, watch } from 'vue'
-import FilterSection from '@/components/FilterSection.vue'
-import FilterSectionsSection from '@/components/FilterSectionsSection.vue'
-import FilterRangeSection from '@/components/FilterRangeSection.vue'
-import FilterDateRangeSection from '@/components/FilterDateRangeSection.vue'
-import FilterSectionWrapper from '@/components/FilterSectionWrapper.vue'
-import DeckSection from '@/components/DeckSection.vue'
-import { reactive } from 'vue'
-import { debounce } from 'lodash'
+import {
+  ArrowPathIcon,
+  PlusCircleIcon,
+  TrashIcon,
+} from '@heroicons/vue/24/outline'
 
 const cardTypeSections: FilterOption[] = [
   {
@@ -51,7 +65,7 @@ const cardTypeSections: FilterOption[] = [
       { title: 'XYZ Monsters', options: xyzTypes },
       { title: 'Link Monsters', options: linkTypes },
       { title: 'Pendulum Monsters', options: pendulumTypes },
-      { title: 'Tuner Monsters', options: extraTunerTypes },
+      { title: 'Extra Tuner Monsters', options: extraTunerTypes },
     ],
   },
   {
@@ -173,6 +187,7 @@ const defaultAtkRange = [0, 5000] as [number, number]
 const atkMin = ref(defaultAtkRange[0])
 const atkMax = ref(defaultAtkRange[1])
 const resetAtk = () => {
+  if (filterSectionsLocked.atk) return
   atkMin.value = defaultAtkRange[0]
   atkMax.value = defaultAtkRange[1]
 }
@@ -181,6 +196,7 @@ const defaultDefRange = [0, 5000] as [number, number]
 const defMin = ref(defaultDefRange[0])
 const defMax = ref(defaultDefRange[1])
 const resetDef = () => {
+  if (filterSectionsLocked.def) return
   defMin.value = defaultDefRange[0]
   defMax.value = defaultDefRange[1]
 }
@@ -189,6 +205,7 @@ const defaultOcgReleaseDateRange = ['', ''] as [string, string]
 const ocgReleaseDateMin = ref(defaultOcgReleaseDateRange[0])
 const ocgReleaseDateMax = ref(defaultOcgReleaseDateRange[1])
 const resetOcgReleaseDate = () => {
+  if (filterSectionsLocked.ocgReleaseDate) return
   ocgReleaseDateMin.value = defaultOcgReleaseDateRange[0]
   ocgReleaseDateMax.value = defaultOcgReleaseDateRange[1]
 }
@@ -196,19 +213,90 @@ const defaultTcgReleaseDateRange = ['', ''] as [string, string]
 const tcgReleaseDateMin = ref(defaultTcgReleaseDateRange[0])
 const tcgReleaseDateMax = ref(defaultTcgReleaseDateRange[1])
 const resetTcgReleaseDate = () => {
+  if (filterSectionsLocked.tcgReleaseDate) return
   tcgReleaseDateMin.value = defaultTcgReleaseDateRange[0]
   tcgReleaseDateMax.value = defaultTcgReleaseDateRange[1]
 }
+// Helper function to reset filter sections with locked items
+function resetLockedFilterSection(
+  sections: FilterOption[],
+  allOptions: string[],
+  selectedValues: Ref<string[]>,
+  lockedSectionsMap: Record<string, boolean>,
+) {
+  // Get all types from locked sections
+  const lockedTypes: string[] = []
+
+  // Helper function to collect types from sections
+  const getTypesFromSection = (section: FilterOption): string[] => {
+    if (typeof section === 'string') return [section]
+    return section.options.flatMap((opt) =>
+      typeof opt === 'string' ? opt : getTypesFromSection(opt),
+    )
+  }
+
+  // Process sections recursively to find locked sections
+  const processLockedSections = (sections: FilterOption[], path: string = '0') => {
+    sections.forEach((section, index) => {
+      if (typeof section === 'string') return
+
+      const currentPath = `${path}.${index}`
+
+      // Check if this section is locked
+      if (lockedSectionsMap[currentPath]) {
+        // If locked, add all its types
+        lockedTypes.push(...getTypesFromSection(section))
+      } else if (section.options && section.options.length > 0) {
+        // If not locked, recursively check its children
+        processLockedSections(section.options, currentPath)
+      }
+    })
+  }
+
+  // Start the recursive processing
+  processLockedSections(sections)
+
+  // Reset only unlocked types
+  const unlockedTypes = allOptions.filter((type) => !lockedTypes.includes(type))
+
+  // Keep selected locked types and add all unlocked types
+  selectedValues.value = [
+    ...selectedValues.value.filter((type) => lockedTypes.includes(type)),
+    ...unlockedTypes,
+  ]
+}
 
 const resetFilters = () => {
-  frameTypeSelected.value = frameTypeOptions
-  selectedCardTypes.value = cardTypeOptions
-  selectedRaces.value = raceOptions
-  selectedAttributes.value = attributeOptions
-  selectedBanListsGoat.value = banlistOptions
-  selectedBanListsOcg.value = banlistOptions
-  selectedBanListsTcg.value = banlistOptions
-  selectedFormats.value = formatOptions
+  // Check if cardType filter is locked
+  if (!filterSectionsLocked.cardType) {
+    selectedCardTypes.value = cardTypeOptions
+  } else {
+    resetLockedFilterSection(
+      cardTypeSections,
+      cardTypeOptions,
+      selectedCardTypes,
+      filterSectionsLocked.cardType,
+    )
+  }
+
+  // Handle race filter
+  if (!filterSectionsLocked.race) {
+    selectedRaces.value = raceOptions
+  } else {
+    resetLockedFilterSection(raceSections, raceOptions, selectedRaces, filterSectionsLocked.race)
+  }
+
+  // if (
+  //   !filterSectionsLocked.race ||
+  //   (typeof filterSectionsLocked.race === 'object' && !filterSectionsLocked.race[0])
+  // )
+  //   selectedRaces.value = raceOptions
+  if (!filterSectionsLocked.frameType) frameTypeSelected.value = frameTypeOptions
+  if (!filterSectionsLocked.attribute) selectedAttributes.value = attributeOptions
+  if (!filterSectionsLocked.banlistGoat) selectedBanListsGoat.value = banlistOptions
+  if (!filterSectionsLocked.banlistOcg) selectedBanListsOcg.value = banlistOptions
+  if (!filterSectionsLocked.banlistTcg) selectedBanListsTcg.value = banlistOptions
+  if (!filterSectionsLocked.format) selectedFormats.value = formatOptions
   resetLevel()
   resetAtk()
   resetDef()
@@ -217,32 +305,115 @@ const resetFilters = () => {
   resetArchetypes()
 }
 
-const filterSections = reactive({
-  frameType: true,
-  deckType: true,
-  cardType: true,
-  race: true,
-  attribute: true,
-  banlistGoat: true,
-  banlistOcg: true,
-  banlistTcg: true,
-  format: true,
-  level: true,
-  atk: true,
-  def: true,
-  ocgReleaseDate: true,
-  tcgReleaseDate: true,
-  archetype: true,
+const filterSectionsShown = reactive({
+  frameType: false,
+  cardType: {} as Record<string, boolean>,
+  race: {} as Record<string, boolean>,
+  attribute: false,
+  banlistGoat: false,
+  banlistOcg: false,
+  banlistTcg: false,
+  format: false,
+  level: false,
+  atk: false,
+  def: false,
+  ocgReleaseDate: false,
+  tcgReleaseDate: false,
+  archetype: false,
+})
+type shownKey = keyof typeof filterSectionsShown
+
+const filterSectionsLocked = reactive({
+  frameType: false,
+  cardType: {} as Record<string, boolean>,
+  race: {} as Record<string, boolean>,
+  attribute: false,
+  banlistGoat: false,
+  banlistOcg: false,
+  banlistTcg: false,
+  format: false,
+  level: false,
+  atk: false,
+  def: false,
+  ocgReleaseDate: false,
+  tcgReleaseDate: false,
+  archetype: false,
 })
 
+const isNestedSection = (k: shownKey): k is 'cardType' | 'race' => k === 'cardType' || k === 'race'
+const isBooleanSection = (k: shownKey): k is Exclude<shownKey, 'cardType' | 'race'> =>
+  !isNestedSection(k)
+
+const unlockAllFilters = () => {
+  Object.keys(filterSectionsLocked).forEach((key) => {
+    const typedKey = key as shownKey
+
+    // Type guard to check if the key is for a nested section
+
+    if (isNestedSection(typedKey)) {
+      // For nested sections, we use an empty record
+      filterSectionsLocked[typedKey] = {}
+    } else {
+      // For simple boolean sections
+      filterSectionsLocked[typedKey] = false
+    }
+  })
+}
 const collapsePriority = computed(() => {
-  return Object.values(filterSections).some((value) => value === true)
+  return Object.values(filterSectionsShown).some((value) => {
+    // If any section is shown, return true (collapse priority)
+    if (value === true) return true
+    // If any nested section is shown, return true (collapse priority)
+    if (typeof value === 'object' && Object.values(value).some((v) => v)) return true
+    return false
+  })
 })
+const collapseNestedSection = (
+  sections: FilterOption[],
+  collapse: boolean,
+): Record<string, boolean> => {
+  const depthObject: Record<string, boolean> = {}
+
+  // Function to process each section at different depths
+  const processDepths = (options: FilterOption[], currentPath: string = '0') => {
+    // Use the depth string directly as the key
+    depthObject[currentPath] = !collapse // Set to false if collapsing, true if expanding
+
+    // Process nested options
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i]
+      if (typeof option !== 'string' && option.options) {
+        // Create a new path by appending the current index to the path
+        const newPath = `${currentPath}.${i}`
+        processDepths(option.options, newPath)
+      }
+    }
+  }
+
+  // Start processing from the root
+  processDepths(sections)
+
+  return depthObject
+}
 
 const collapseAllFilters = () => {
-  const collapse = !collapsePriority.value
-  Object.keys(filterSections).forEach((key) => {
-    filterSections[key as keyof typeof filterSections] = collapse
+  // If collapsePriority is true, we want to collapse everything
+  // If collapsePriority is false, we want to expand everything
+  const shouldCollapse = collapsePriority.value
+
+  Object.keys(filterSectionsShown).forEach((key: string) => {
+    const typedKey = key as shownKey
+    // Apply the function to the appropriate section
+    if (isNestedSection(typedKey) && key === 'cardType') {
+      filterSectionsShown[typedKey] = collapseNestedSection(cardTypeSections, shouldCollapse)
+    } else if (isNestedSection(typedKey) && key === 'race') {
+      filterSectionsShown[typedKey] = collapseNestedSection(raceSections, shouldCollapse)
+    } else if (isBooleanSection(typedKey)) {
+      // For other filter sections, just set the boolean value
+      // If shouldCollapse is true, set to false (collapsed)
+      // If shouldCollapse is false, set to true (expanded)
+      filterSectionsShown[typedKey] = !shouldCollapse
+    }
   })
 }
 
@@ -498,14 +669,15 @@ const selectHighlightedArchetype = () => {
 }
 
 const resetArchetypes = () => {
-  selectedArchetypes.value = []
+  if (!filterSectionsLocked.archetype) {
+    selectedArchetypes.value = []
+  }
 }
 
 watch(searchQuery, () => {
   searchLimit.value = 30
 })
 </script>
-
 <template>
   <div class="p-8">
     <div class="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-end">
@@ -585,48 +757,66 @@ watch(searchQuery, () => {
 
       <div class="mb-[100vh] min-w-80 basis-1/5 text-center">
         <div class="mb-4 w-full rounded-md border-1 border-gray-300 px-2 py-4">
-          <div class="mb-4 flex items-end justify-between">
-            <button @click="collapseAllFilters" class="cursor-pointer">
-              {{ collapsePriority ? 'Expand all' : 'Collapse all' }}
-            </button>
-            <h3 class="text-2xl font-semibold">Filters</h3>
-            <button @click="resetFilters" class="cursor-pointer">Reset filters</button>
+          <div class="mb-4 flex items-center justify-between">
+            <div class="flex cursor-pointer gap-1" @click="collapseAllFilters">
+              <button
+                class="material-symbols-outlined cursor-pointer"
+                :title="collapsePriority ? 'Collapse all' : 'Expand all'"
+              >
+                {{ collapsePriority ? 'collapse_all' : 'expand_all' }}
+              </button>
+              <h3 class="text-2xl font-semibold">Filters</h3>
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="unlockAllFilters"
+                class="material-symbols-outlined cursor-pointer"
+                title="Unlock all"
+              >
+                lock_open
+              </button>
+              <button
+                @click="resetFilters"
+                class="material-symbols-outlined cursor-pointer"
+                title="Reset all"
+              >
+                refresh
+              </button>
+            </div>
           </div>
           <FilterSection
             :options="frameTypeOptions"
             v-model="frameTypeSelected"
-            v-model:hidden="filterSections.frameType"
+            v-model:shown="filterSectionsShown.frameType"
+            v-model:locked="filterSectionsLocked.frameType"
           >
             Frame type
           </FilterSection>
-          <!-- <FilterSection
-            :options="cardTypeOptions"
-            v-model="selectedCardTypes"
-            v-model:hidden="filterSections.cardType"
-            @select-all="selectAllCardTypes"
-          >
-            Card type
-          </FilterSection> -->
           <FilterSectionsSection
             :sections="cardTypeSections"
-            :depth="0"
+            :depth="'0'"
             v-model="selectedCardTypes"
-            v-model:hidden="filterSections.deckType"
+            v-model:shown="filterSectionsShown.cardType"
+            v-model:locked="filterSectionsLocked.cardType"
+            title="Card type"
           >
             Card type
           </FilterSectionsSection>
           <FilterSectionsSection
             :sections="raceSections"
-            :depth="0"
+            :depth="'0'"
             v-model="selectedRaces"
-            v-model:hidden="filterSections.race"
+            v-model:shown="filterSectionsShown.race"
+            v-model:locked="filterSectionsLocked.race"
+            title="Race"
           >
             Type
           </FilterSectionsSection>
           <FilterSection
             :options="attributeOptions"
             v-model="selectedAttributes"
-            v-model:hidden="filterSections.attribute"
+            v-model:shown="filterSectionsShown.attribute"
+            v-model:locked="filterSectionsLocked.attribute"
           >
             Attribute
           </FilterSection>
@@ -634,7 +824,8 @@ watch(searchQuery, () => {
             v-model:min="levelMin"
             v-model:max="levelMax"
             @reset="resetLevel"
-            v-model:hidden="filterSections.level"
+            v-model:shown="filterSectionsShown.level"
+            v-model:locked="filterSectionsLocked.level"
             :default-range="defaultLevelRange"
           >
             Level
@@ -643,7 +834,8 @@ watch(searchQuery, () => {
             v-model:min="atkMin"
             v-model:max="atkMax"
             @reset="resetAtk"
-            v-model:hidden="filterSections.atk"
+            v-model:shown="filterSectionsShown.atk"
+            v-model:locked="filterSectionsLocked.atk"
             :default-range="defaultAtkRange"
           >
             Attack
@@ -652,7 +844,8 @@ watch(searchQuery, () => {
             v-model:min="defMin"
             v-model:max="defMax"
             @reset="resetDef"
-            v-model:hidden="filterSections.def"
+            v-model:shown="filterSectionsShown.def"
+            v-model:locked="filterSectionsLocked.def"
             :default-range="defaultDefRange"
           >
             Defense
@@ -661,28 +854,32 @@ watch(searchQuery, () => {
             :options="formatOptions"
             v-model="selectedFormats"
             @select-all="selectAllFormats"
-            v-model:hidden="filterSections.format"
+            v-model:shown="filterSectionsShown.format"
+            v-model:locked="filterSectionsLocked.format"
           >
             Format
           </FilterSection>
           <FilterSection
             :options="banlistOptions"
             v-model="selectedBanListsGoat"
-            v-model:hidden="filterSections.banlistGoat"
+            v-model:shown="filterSectionsShown.banlistGoat"
+            v-model:locked="filterSectionsLocked.banlistGoat"
           >
             GOAT Banlist
           </FilterSection>
           <FilterSection
             :options="banlistOptions"
             v-model="selectedBanListsOcg"
-            v-model:hidden="filterSections.banlistOcg"
+            v-model:shown="filterSectionsShown.banlistOcg"
+            v-model:locked="filterSectionsLocked.banlistOcg"
           >
             OCG Banlist
           </FilterSection>
           <FilterSection
             :options="banlistOptions"
             v-model="selectedBanListsTcg"
-            v-model:hidden="filterSections.banlistTcg"
+            v-model:shown="filterSectionsShown.banlistTcg"
+            v-model:locked="filterSectionsLocked.banlistTcg"
           >
             TCG Banlist
           </FilterSection>
@@ -690,7 +887,8 @@ watch(searchQuery, () => {
             v-model:min="ocgReleaseDateMin"
             v-model:max="ocgReleaseDateMax"
             @reset="resetOcgReleaseDate"
-            v-model:hidden="filterSections.ocgReleaseDate"
+            v-model:shown="filterSectionsShown.ocgReleaseDate"
+            v-model:locked="filterSectionsLocked.ocgReleaseDate"
             :default-range="defaultOcgReleaseDateRange"
           >
             OCG Release Date
@@ -699,15 +897,18 @@ watch(searchQuery, () => {
             v-model:min="tcgReleaseDateMin"
             v-model:max="tcgReleaseDateMax"
             @reset="resetTcgReleaseDate"
-            v-model:hidden="filterSections.tcgReleaseDate"
+            v-model:shown="filterSectionsShown.tcgReleaseDate"
+            v-model:locked="filterSectionsLocked.tcgReleaseDate"
             :default-range="defaultTcgReleaseDateRange"
           >
             TCG Release Date
           </FilterDateRangeSection>
           <FilterSectionWrapper
-            v-model="filterSections.archetype"
+            v-model="filterSectionsShown.archetype"
             :selected="selectedArchetypes.length"
             @action="resetArchetypes"
+            v-model:locked="filterSectionsLocked.archetype"
+            v-model:shown="filterSectionsShown.archetype"
           >
             <template #title>Archetypes</template>
             <input

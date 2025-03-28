@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FilterSectionWrapper from './FilterSectionWrapper.vue'
+import FilterSectionWrapper from '../filters/FilterSectionWrapper.vue'
 
 defineProps<{
   minLabel?: string
@@ -12,15 +12,17 @@ const emit = defineEmits(['reset'])
 const min = defineModel<string>('min', { required: true })
 const max = defineModel<string>('max', { required: true })
 
-const hidden = defineModel('hidden', { default: true })
+const shown = defineModel('shown', { default: true })
+const locked = defineModel('locked', { default: false })
 </script>
 
 <template>
   <FilterSectionWrapper
     @action="emit('reset')"
-    v-model="hidden"
+    v-model:shown="shown"
     :default-range="defaultRange"
     :range="[min, max]"
+    :locked="locked"
   >
     <template #title>
       <slot />

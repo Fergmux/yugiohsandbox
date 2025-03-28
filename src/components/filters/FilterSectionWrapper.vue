@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { type Ref } from 'vue'
+
 defineProps<{
   selected?: number
   total?: number
   depth?: number
   range?: [number | string, number | string]
   defaultRange?: [number | string, number | string]
+  hasLockedChildren?: boolean
 }>()
 
-const hidden = defineModel('hidden', { default: true })
+const shown = defineModel('shown', { default: true })
+const locked: Ref<boolean | Record<number, boolean>> = defineModel('locked', { default: false })
 
 const emit = defineEmits<{
   (e: 'action'): void
@@ -19,12 +23,12 @@ const emit = defineEmits<{
     <div class="mb-2 flex items-center justify-between gap-2">
       <div class="flex items-center">
         <span class="material-symbols-outlined">{{
-          hidden ? 'arrow_drop_up' : 'arrow_drop_down'
+          shown ? 'arrow_drop_down' : 'arrow_drop_up'
         }}</span>
         <h4
+          @click="shown = !shown"
           class="flex cursor-pointer flex-wrap items-baseline text-xl font-semibold"
-          @click="hidden = !hidden"
-          :style="depth !== undefined ? { fontSize: `${1.25 - depth * 0.15}rem` } : {}"
+          :style="depth !== undefined ? { fontSize: `${1.25 - depth * 0.1}rem` } : {}"
         >
           <slot name="title" />
           <span
@@ -50,13 +54,23 @@ const emit = defineEmits<{
           >
             {{ range[0] }} - {{ range[1] }}
           </span>
+          <span
+            class="material-symbols-outlined self-center"
+            @click.stop="locked = !locked"
+            :class="{
+              'text-neutral-100': locked,
+              'text-yellow-200': hasLockedChildren && !locked,
+            }"
+          >
+            {{ locked ? 'lock' : 'lock_open' }}
+          </span>
         </h4>
       </div>
       <button class="cursor-pointer" @click="emit('action')">
         <slot name="action">Reset</slot>
       </button>
     </div>
-    <div v-if="!hidden" class="mt-2 ml-4">
+    <div v-if="shown" class="mt-2 ml-4">
       <slot />
     </div>
   </div>

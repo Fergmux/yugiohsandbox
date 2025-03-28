@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import Selectlist from '@/components/SelectList.vue'
+
 import FilterSectionWrapper from './FilterSectionWrapper.vue'
-import Selectlist from './SelectList.vue'
 
 const props = defineProps<{
   options: string[]
@@ -8,9 +9,11 @@ const props = defineProps<{
 
 const selected = defineModel<string[]>({ required: true })
 
-const hidden = defineModel('hidden', { default: true })
+const shown = defineModel('shown', { default: true })
+const locked = defineModel('locked', { default: false })
 
 const selectAll = () => {
+  if (locked.value) return
   if (selected.value.length === props.options.length) {
     selected.value = []
   } else {
@@ -25,11 +28,10 @@ const selectAll = () => {
     :selected="selected.length"
     :total="options.length"
     @action="selectAll"
-    v-model="hidden"
+    v-model:shown="shown"
+    v-model:locked="locked"
   >
-    <template #title>
-      <slot />
-    </template>
+    <template #title> <slot /></template>
     <template #action>
       {{ selected.length !== options.length ? 'Select all' : 'Deselect all' }}
     </template>

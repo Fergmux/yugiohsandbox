@@ -1,12 +1,7 @@
 <script setup lang="ts">
-import CoinFlip from '@/components/CoinFlip.vue'
-import FieldSide from '@/components/FieldSide.vue'
-import { db } from '@/firebase/client'
-import { useDeckStore } from '@/stores/deck'
-import { useUserStore } from '@/stores/user'
-import type { GameState, YugiohCard } from '@/types'
-import { extraDeckTypes } from '@/types'
-import { useClipboard } from '@vueuse/core'
+import type { ComputedRef, Ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+
 import {
   addDoc,
   collection,
@@ -20,9 +15,17 @@ import {
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
-import type { ComputedRef, Ref } from 'vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+
+import CoinFlip from '@/components/CoinFlip.vue'
+import FieldSide from '@/components/FieldSide.vue'
+import { db } from '@/firebase/client'
+import { useDeckStore } from '@/stores/deck'
+import { useUserStore } from '@/stores/user'
+import type { GameState, YugiohCard } from '@/types'
+import { extraDeckTypes } from '@/types'
+import { useClipboard } from '@vueuse/core'
+
 /*
 TODO:
 PLAYSPACE
@@ -46,6 +49,7 @@ New Features
 Deck Builder
 // - Tags
 // Format validation?
+// Lock filter
 
 Playground
 - select multiple cards
