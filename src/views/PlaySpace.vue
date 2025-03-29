@@ -64,8 +64,10 @@ Deck Builder
 // Lock filter
 
 Playground
-- select multiple cards
+- Draw square/line
+- Text box
 - Click for options:
+- snap to closest card
 -- bring to front/back
 -- Copy card
 -- delete card

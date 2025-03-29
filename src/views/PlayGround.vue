@@ -250,7 +250,8 @@ const cardRefs = ref<Map<string, HTMLElement | null>>(new Map())
 const cardStyles = ref<Map<string, string>>(new Map())
 
 // Create a map to store the draggable instances
-const draggableInstances = ref<Map<string, ReturnType<typeof useDraggable>>>(new Map())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const draggableInstances = ref<Map<string, any>>(new Map())
 
 // Selection rectangle state
 const isSelecting = ref(false)
@@ -354,7 +355,7 @@ const updateSelection = (event: MouseEvent) => {
   selectedCards.value = Object.keys(playgroundState.value.cardLocations).filter(isCardInSelection)
 }
 
-const endSelection = (event: MouseEvent) => {
+const endSelection = () => {
   // End panning if it was active
   if (isPanning.value) {
     endPanning()
