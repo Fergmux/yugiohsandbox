@@ -180,6 +180,9 @@ const selectionStart = ref({ x: 0, y: 0 })
 const selectionEnd = ref({ x: 0, y: 0 })
 const selectedCards = ref<string[]>([])
 
+// Track if a card is being dragged
+const isDragging = ref(false)
+
 // Selection rectangle computed properties
 const selectionRect = computed(() => {
   const left = Math.min(selectionStart.value.x, selectionEnd.value.x)
@@ -267,6 +270,35 @@ const clearSelection = () => {
   selectedCards.value = []
 }
 
+// Handle card selection
+const toggleCardSelection = (uid: string, event: MouseEvent) => {
+  // Prevent default to avoid triggering other events
+  event.preventDefault()
+
+  // Don't select if we're currently dragging
+  if (isDragging.value) return
+
+  // If shift key is pressed, add/remove the card from the current selection
+  if (event.shiftKey) {
+    if (selectedCards.value.includes(uid)) {
+      // Remove the card from selection
+      selectedCards.value = selectedCards.value.filter((id) => id !== uid)
+    } else {
+      // Add the card to selection
+      selectedCards.value.push(uid)
+    }
+  } else {
+    // If shift key is not pressed, select only this card
+    if (selectedCards.value.length === 1 && selectedCards.value[0] === uid) {
+      // If the card is already the only selected one, deselect it
+      selectedCards.value = []
+    } else {
+      // Otherwise, select only this card
+      selectedCards.value = [uid]
+    }
+  }
+}
+
 // Initialize draggable for each card
 const initDraggable = (uid: string, index: number) => {
   const cardRef = cardRefs.value.get(uid)
@@ -298,11 +330,20 @@ const initDraggable = (uid: string, index: number) => {
 
   const cardLocation = playgroundState.value.cardLocations[uid]
 
+  // Track initial position to detect actual movement
+  const initialPosition = { x: 0, y: 0 }
+  let hasMoved = false
+
   const instance = useDraggable(cardRef, {
     initialValue: { x: cardLocation.x, y: cardLocation.y },
     preventDefault: true,
     containerElement: container,
-    onStart: () => {
+    onStart: (position) => {
+      // Store initial position
+      initialPosition.x = position.x
+      initialPosition.y = position.y
+      hasMoved = false
+
       // Find the highest z-index and increment it for the current card
       const highestZ = Object.values(playgroundState.value.cardLocations)
         .map((loc) => loc.z)
@@ -323,9 +364,19 @@ const initDraggable = (uid: string, index: number) => {
       updateState()
     },
     onMove: (event) => {
-      // Calculate the movement delta
-      const deltaX = event.x - playgroundState.value.cardLocations[uid].x
-      const deltaY = event.y - playgroundState.value.cardLocations[uid].y
+      // Check if the card has actually moved a significant amount
+      const deltaX = Math.abs(event.x - initialPosition.x)
+      const deltaY = Math.abs(event.y - initialPosition.y)
+
+      // Consider it a drag if moved more than 3 pixels in any direction
+      if (deltaX > 3 || deltaY > 3) {
+        hasMoved = true
+        isDragging.value = true
+      }
+
+      // Calculate the movement delta from last position
+      const moveX = event.x - playgroundState.value.cardLocations[uid].x
+      const moveY = event.y - playgroundState.value.cardLocations[uid].y
 
       // Update the position of the current card
       playgroundState.value.cardLocations[uid].x = event.x
@@ -336,8 +387,8 @@ const initDraggable = (uid: string, index: number) => {
         selectedCards.value.forEach((selectedUid) => {
           if (selectedUid !== uid) {
             // Move other selected cards by the same delta
-            playgroundState.value.cardLocations[selectedUid].x += deltaX
-            playgroundState.value.cardLocations[selectedUid].y += deltaY
+            playgroundState.value.cardLocations[selectedUid].x += moveX
+            playgroundState.value.cardLocations[selectedUid].y += moveY
 
             // Update the draggable instance position
             const selectedInstance = draggableInstances.value.get(selectedUid)
@@ -350,6 +401,17 @@ const initDraggable = (uid: string, index: number) => {
       }
 
       updateState()
+    },
+    onEnd: () => {
+      // Only reset isDragging if the card actually moved
+      if (hasMoved) {
+        setTimeout(() => {
+          isDragging.value = false
+        }, 50)
+      } else {
+        // If the card didn't move, it's just a click, not a drag
+        isDragging.value = false
+      }
     },
   })
 
@@ -469,7 +531,7 @@ const resetCardPositions = () => {
             <!-- Selection rectangle -->
             <div
               v-if="isSelecting"
-              class="bg-opacity-30 absolute border-2 border-blue-500 bg-blue-200"
+              class="absolute border-2 border-blue-500 bg-blue-200 opacity-30"
               :style="{
                 left: `${selectionRect.left}px`,
                 top: `${selectionRect.top}px`,
@@ -489,6 +551,7 @@ const resetCardPositions = () => {
                 }`"
                 class="card-element absolute cursor-move"
                 :class="{ 'selected-card': selectedCards.includes(card.uid) }"
+                @click="toggleCardSelection(card.uid, $event)"
                 @click.right.prevent="inspectedCard = card"
               >
                 <img
