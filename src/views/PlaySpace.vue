@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import type { ComputedRef, Ref } from 'vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import type {
+  ComputedRef,
+  Ref,
+} from 'vue'
+import {
+  computed,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from 'vue'
 
 import {
   addDoc,
@@ -22,7 +31,10 @@ import FieldSide from '@/components/FieldSide.vue'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
-import type { GameState, YugiohCard } from '@/types'
+import type {
+  GameState,
+  YugiohCard,
+} from '@/types'
 import { extraDeckTypes } from '@/types'
 import { useClipboard } from '@vueuse/core'
 
@@ -57,6 +69,8 @@ Playground
 -- bring to front/back
 -- Copy card
 -- delete card
+-- Align left/right/top/bottom
+-- Rotate left/right
 */
 
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']

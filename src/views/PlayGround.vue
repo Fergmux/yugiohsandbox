@@ -4,6 +4,7 @@ import type { ComputedRef } from 'vue'
 import {
   computed,
   onMounted,
+  onUnmounted,
   ref,
   useTemplateRef,
   watch,
@@ -47,17 +48,90 @@ interface CardLocation {
 interface playgroundState {
   cardSize: number
   cardLocations: Record<string, CardLocation>
+  zoomLevel: number
 }
 
 const playgroundState = ref<playgroundState>({
   cardSize: 5,
   cardLocations: {},
+  zoomLevel: 1,
 })
 
 onMounted(async () => {
   await deckStore.getAllCards()
   await deckStore.getDecks()
+
+  // Wait for container to be available before adding event listener
+  watch(
+    () => container.value,
+    (newContainer) => {
+      if (newContainer) {
+        newContainer.addEventListener('wheel', handleZoom, { passive: false })
+      }
+    },
+    { immediate: true },
+  )
 })
+
+onUnmounted(() => {
+  if (container.value) {
+    container.value.removeEventListener('wheel', handleZoom)
+  }
+})
+
+// Handle zoom with mouse wheel when Ctrl/Cmd is pressed
+const handleZoom = (event: WheelEvent) => {
+  // Only zoom if Ctrl (Windows) or Cmd (Mac) key is pressed
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault()
+
+    // Determine zoom direction
+    const zoomDirection = event.deltaY < 0 ? 1 : -1
+
+    // Get mouse position relative to container for zoom origin
+    const containerRect = container.value?.getBoundingClientRect()
+    if (!containerRect) return
+
+    const mouseX = event.clientX - containerRect.left
+    const mouseY = event.clientY - containerRect.top
+
+    // Calculate new zoom level
+    const zoomFactor = 0.1
+    const oldZoom = playgroundState.value.zoomLevel
+    const newZoom = Math.max(0.5, Math.min(3, oldZoom + zoomDirection * zoomFactor))
+
+    // Update card positions based on zoom change
+    const zoomRatio = newZoom / oldZoom
+
+    // Update all card positions relative to mouse position
+    Object.keys(playgroundState.value.cardLocations).forEach((uid) => {
+      const card = playgroundState.value.cardLocations[uid]
+
+      // Calculate position relative to mouse
+      const dx = card.x - mouseX
+      const dy = card.y - mouseY
+
+      // Apply zoom transformation
+      card.x = mouseX + dx * zoomRatio
+      card.y = mouseY + dy * zoomRatio
+
+      // Update draggable instance if it exists
+      const instance = draggableInstances.value.get(uid)
+      if (instance) {
+        instance.position.x = card.x
+        instance.position.y = card.y
+      }
+    })
+
+    // Update zoom level
+    playgroundState.value.zoomLevel = newZoom
+
+    // Update card size based on zoom
+    playgroundState.value.cardSize = 5 * newZoom
+
+    updateState()
+  }
+}
 
 // Deck selection
 const selectedDeckId = ref<string | null>(null)
@@ -86,12 +160,16 @@ const getPlaygroundState = async () => {
   const docSnap = await getDoc(docRef)
   if (docSnap.exists()) {
     const stateData = docSnap.data() as playgroundState
-    playgroundState.value = stateData
+    playgroundState.value = {
+      ...stateData,
+      zoomLevel: stateData.zoomLevel || 1, // Ensure zoomLevel exists
+    }
   } else {
     // Create a new playground state document if it doesn't exist
     playgroundState.value = {
       cardSize: 5,
       cardLocations: {},
+      zoomLevel: 1,
     }
 
     // Create a new document in the playgrounds collection
@@ -183,6 +261,11 @@ const selectedCards = ref<string[]>([])
 // Track if a card is being dragged
 const isDragging = ref(false)
 
+// Pan functionality
+const isPanning = ref(false)
+const panStart = ref({ x: 0, y: 0 })
+const lastPanPosition = ref({ x: 0, y: 0 })
+
 // Selection rectangle computed properties
 const selectionRect = computed(() => {
   const left = Math.min(selectionStart.value.x, selectionEnd.value.x)
@@ -226,6 +309,13 @@ const isCardInSelection = (uid: string) => {
 
 // Handle mouse events for selection rectangle
 const startSelection = (event: MouseEvent) => {
+  // If right mouse button is pressed, start panning instead
+  if (event.button === 2) {
+    event.preventDefault()
+    startPanning(event)
+    return
+  }
+
   // Only start selection on left click and not on cards
   if (event.button !== 0 || (event.target as HTMLElement).closest('.card-element')) return
 
@@ -244,6 +334,12 @@ const startSelection = (event: MouseEvent) => {
 }
 
 const updateSelection = (event: MouseEvent) => {
+  // If panning, handle pan movement instead
+  if (isPanning.value) {
+    updatePanning(event)
+    return
+  }
+
   if (!isSelecting.value) return
 
   const containerRect = container.value?.getBoundingClientRect()
@@ -258,11 +354,76 @@ const updateSelection = (event: MouseEvent) => {
   selectedCards.value = Object.keys(playgroundState.value.cardLocations).filter(isCardInSelection)
 }
 
-const endSelection = () => {
+const endSelection = (event: MouseEvent) => {
+  // End panning if it was active
+  if (isPanning.value) {
+    endPanning()
+    return
+  }
+
   if (!isSelecting.value) return
 
   // We don't need to update selectedCards here anymore since it's already updated in updateSelection
   isSelecting.value = false
+}
+
+// Pan functionality
+const startPanning = (event: MouseEvent) => {
+  const containerRect = container.value?.getBoundingClientRect()
+  if (!containerRect) return
+
+  isPanning.value = true
+  panStart.value = {
+    x: event.clientX,
+    y: event.clientY,
+  }
+  lastPanPosition.value = { ...panStart.value }
+
+  // Add a class to change cursor during panning
+  if (container.value) {
+    container.value.classList.add('panning')
+  }
+}
+
+const updatePanning = (event: MouseEvent) => {
+  if (!isPanning.value) return
+
+  // Calculate the movement delta
+  const deltaX = event.clientX - lastPanPosition.value.x
+  const deltaY = event.clientY - lastPanPosition.value.y
+
+  // Update all card positions
+  Object.keys(playgroundState.value.cardLocations).forEach((uid) => {
+    const card = playgroundState.value.cardLocations[uid]
+
+    // Move the card by the delta
+    card.x += deltaX
+    card.y += deltaY
+
+    // Update the draggable instance if it exists
+    const instance = draggableInstances.value.get(uid)
+    if (instance) {
+      instance.position.x = card.x
+      instance.position.y = card.y
+    }
+  })
+
+  // Update the last position for the next movement
+  lastPanPosition.value = {
+    x: event.clientX,
+    y: event.clientY,
+  }
+
+  updateState()
+}
+
+const endPanning = () => {
+  isPanning.value = false
+
+  // Remove the panning cursor class
+  if (container.value) {
+    container.value.classList.remove('panning')
+  }
 }
 
 // Clear selection
@@ -458,6 +619,10 @@ const resetCardPositions = () => {
     }
   })
 
+  // Reset zoom level
+  playgroundState.value.zoomLevel = 1
+  playgroundState.value.cardSize = 5
+
   // Clear selection
   clearSelection()
   updateState()
@@ -522,11 +687,13 @@ const resetCardPositions = () => {
           </div>
           <div
             ref="container"
-            class="relative h-screen rounded-lg border border-gray-300"
+            :class="{ 'cursor-grabbing': isPanning }"
+            class="relative h-screen overflow-hidden rounded-lg border border-gray-300"
             @mousedown="startSelection"
             @mousemove="updateSelection"
             @mouseup="endSelection"
             @mouseleave="endSelection"
+            @contextmenu.prevent
           >
             <!-- Selection rectangle -->
             <div
@@ -549,7 +716,7 @@ const resetCardPositions = () => {
                 :style="`${draggableInstances.get(card.uid)?.style || initDraggable(card.uid, index)}; z-index: ${
                   playgroundState.cardLocations[card.uid]?.z || index + 1
                 }`"
-                class="card-element absolute cursor-move"
+                class="card-element absolute w-max cursor-move"
                 :class="{ 'selected-card': selectedCards.includes(card.uid) }"
                 @click="toggleCardSelection(card.uid, $event)"
                 @click.right.prevent="inspectedCard = card"
