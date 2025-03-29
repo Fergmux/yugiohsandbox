@@ -1,7 +1,11 @@
-import type { Deck, YugiohCard } from '@/types'
-import { defineStore } from 'pinia'
 import type { Ref } from 'vue'
 import { ref } from 'vue'
+
+import { defineStore } from 'pinia'
+
+import type { Deck } from '@/types/deck'
+import type { YugiohCard } from '@/types/yugiohCard'
+
 import { useUserStore } from './user'
 
 export const useDeckStore = defineStore('deck', () => {
@@ -10,6 +14,7 @@ export const useDeckStore = defineStore('deck', () => {
   const decks: Ref<Deck[]> = ref([])
   const addingDeck = ref(false)
   const deletingDeck: Ref<string | null> = ref(null)
+  const decksLoading = ref(false)
 
   const getAllCards = async () => {
     if (allCards.value.length > 0) return
@@ -34,10 +39,17 @@ export const useDeckStore = defineStore('deck', () => {
     return deck.id
   }
 
+  const ensureDecks = async () => {
+    if (decks.value.length > 0) return
+    await getDecks()
+  }
+
   const getDecks = async () => {
+    decksLoading.value = true
     const response = await fetch(`/.netlify/functions/get-decks/${userStore.user?.id}`)
     const deckData: Deck[] = await response.json()
     decks.value = deckData
+    decksLoading.value = false
   }
 
   const removeDeck = async (deckId: string) => {
@@ -87,6 +99,7 @@ export const useDeckStore = defineStore('deck', () => {
     getAllCards,
     addDeck,
     getDecks,
+    ensureDecks,
     removeDeck,
     addCardToDeck,
     removeCardFromDeck,
@@ -95,5 +108,6 @@ export const useDeckStore = defineStore('deck', () => {
     decks,
     addingDeck,
     deletingDeck,
+    decksLoading,
   }
 })

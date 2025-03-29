@@ -2,18 +2,20 @@
 import type { ComputedRef } from 'vue'
 import { computed } from 'vue'
 
-import Selectlist from '@/components/SelectList.vue'
-import {
-  type FilterOption,
-  type FilterSection,
-} from '@/types'
+import Selectlist from '@/components/filters/SelectList.vue'
+import { type FilterOption, type FilterSection } from '@/types/filters'
 
 import FilterSectionWrapper from './FilterSectionWrapper.vue'
 
-const props = defineProps<{
-  sections: FilterOption[]
-  depth: string // String of the form "index.index.index" representing the path to this section
-}>()
+const props = withDefaults(
+  defineProps<{
+    options: FilterOption[]
+    depth?: string // String of the form "index.index.index" representing the path to this section
+  }>(),
+  {
+    depth: '0',
+  },
+)
 
 const selected = defineModel<string[]>({ required: true })
 const shown = defineModel<boolean | Record<string, boolean>>('shown', { default: false })
@@ -100,7 +102,7 @@ const currentLock = computed({
 function selectAll() {
   if (currentLock.value) return
   // Get all possible options from all sections
-  const totalSectionStrings = getStringsFromSections(props.sections)
+  const totalSectionStrings = getStringsFromSections(props.options)
 
   // Check if all options are already selected
   const allSelected = totalSectionStrings.every((option) => selected.value.includes(option))
@@ -142,7 +144,7 @@ function selectAll() {
       })
     }
 
-    checkLockedSections(props.sections)
+    checkLockedSections(props.options)
     return { lockedOptions, lockedDeselectedOptions }
   }
 
@@ -153,29 +155,25 @@ function selectAll() {
     selected.value = lockedOptions
   } else {
     // Select all options except those that are locked and deselected
-    const optionsToSelect = totalSectionStrings.filter(
-      (option) => !lockedDeselectedOptions.includes(option),
-    )
+    const optionsToSelect = totalSectionStrings.filter((option) => !lockedDeselectedOptions.includes(option))
 
     selected.value = optionsToSelect
   }
 }
 
 const stringValues = computed(() => {
-  return props.sections.filter((section) => typeof section === 'string') as string[]
+  return props.options.filter((section) => typeof section === 'string') as string[]
 })
 
 const sectionValues = computed(() => {
-  return props.sections.filter((section) => typeof section !== 'string') as FilterSection[]
+  return props.options.filter((section) => typeof section !== 'string') as FilterSection[]
 })
 
 const selectedStrings = computed({
   get: () => stringValues.value.filter((value) => selected.value.includes(value)),
   set: (newValue) => {
     // Combine all selected strings from all sections
-    const allSectionStrings = Object.values(sectionComputedProps.value).flatMap(
-      (computed) => computed.value,
-    )
+    const allSectionStrings = Object.values(sectionComputedProps.value).flatMap((computed) => computed.value)
     selected.value = [...newValue, ...allSectionStrings]
   },
 })
@@ -201,9 +199,7 @@ const sectionComputedProps = computed(() => {
           // Get all strings from other sections
           const otherSections = sectionValues.value.filter((_, i) => i !== index)
           const otherSectionStrings = getStringsFromSections(otherSections)
-          const otherSelectedStrings = otherSectionStrings.filter((value) =>
-            selected.value.includes(value),
-          )
+          const otherSelectedStrings = otherSectionStrings.filter((value) => selected.value.includes(value))
           const removedStrings = section.options.filter(
             (value) => typeof value === 'string' && !newValue.includes(value),
           )
@@ -220,7 +216,7 @@ const sectionComputedProps = computed(() => {
   )
 })
 
-const totalStrings = computed(() => [...new Set(getStringsFromSections(props.sections))].length)
+const totalStrings = computed(() => [...new Set(getStringsFromSections(props.options))].length)
 const totalSelected = computed(() => [...new Set(selected.value)].length)
 </script>
 
@@ -247,7 +243,7 @@ const totalSelected = computed(() => [...new Set(selected.value)].length)
           ref="childSectionRef"
           :depth="props.depth ? `${props.depth}.${index}` : `${index}`"
           v-model="sectionComputedProps[index].value"
-          :sections="section.options"
+          :options="section.options"
           v-model:shown="shown"
           v-model:locked="locked"
         >

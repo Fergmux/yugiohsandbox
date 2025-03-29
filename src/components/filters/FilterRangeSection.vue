@@ -2,15 +2,12 @@
 import FilterSectionWrapper from './FilterSectionWrapper.vue'
 
 defineProps<{
-  minLabel?: string
-  maxLabel?: string
-  defaultRange?: [number, number]
+  options?: { min: number; max: number }
 }>()
 
 const emit = defineEmits(['reset'])
 
-const min = defineModel<number>('min', { required: true })
-const max = defineModel<number>('max', { required: true })
+const selected = defineModel<{ min: number; max: number }>({ required: true })
 
 const shown = defineModel('shown', { default: true })
 const locked = defineModel('locked', { default: false })
@@ -21,20 +18,28 @@ const locked = defineModel('locked', { default: false })
     @action="emit('reset')"
     v-model:shown="shown"
     v-model:locked="locked"
-    :range="[min, max]"
-    :default-range="defaultRange"
+    :range="selected"
+    :default-range="options"
   >
     <template #title>
       <slot />
     </template>
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-2">
-        <label>{{ minLabel || 'Min' }}:</label>
-        <input type="number" v-model="min" class="w-20 rounded-md border-1 border-gray-300 p-1" />
+        <label>Min:</label>
+        <input
+          type="number"
+          v-model="selected.min"
+          class="w-20 rounded-md border-1 border-gray-300 p-1"
+        />
       </div>
       <div class="flex items-center gap-2">
-        <label>{{ maxLabel || 'Max' }}:</label>
-        <input type="number" v-model="max" class="w-20 rounded-md border-1 border-gray-300 p-1" />
+        <label>Max:</label>
+        <input
+          type="number"
+          v-model="selected.max"
+          class="w-20 rounded-md border-1 border-gray-300 p-1"
+        />
       </div>
     </div>
   </FilterSectionWrapper>

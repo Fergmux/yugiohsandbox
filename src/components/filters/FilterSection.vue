@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Selectlist from '@/components/SelectList.vue'
+import Selectlist from '@/components/filters/SelectList.vue'
 
 import FilterSectionWrapper from './FilterSectionWrapper.vue'
 

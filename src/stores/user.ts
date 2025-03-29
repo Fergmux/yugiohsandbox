@@ -1,12 +1,15 @@
-import type { User } from '@/types'
-import { useStorage } from '@vueuse/core'
-import { defineStore } from 'pinia'
 import type { Ref } from 'vue'
 import { ref } from 'vue'
+
+import { defineStore } from 'pinia'
+
+import type { User } from '@/types/user'
+import { useStorage } from '@vueuse/core'
 
 export const useUserStore = defineStore('user', () => {
   const user: Ref<User | undefined> = ref()
   const savedUsername = useStorage('username', '')
+  const loadingUser = ref(false)
 
   const loginExisting = async () => {
     if (savedUsername.value) await getUser(savedUsername.value)
@@ -28,6 +31,8 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const getUser = async (username: string) => {
+    if (user.value?.username === username) return
+    loadingUser.value = true
     try {
       const response = await fetch(`/.netlify/functions/get-user/${username}`)
       const userData: User | { message: string } = await response.json()
@@ -36,8 +41,10 @@ export const useUserStore = defineStore('user', () => {
       savedUsername.value = username
     } catch (err) {
       throw err
+    } finally {
+      loadingUser.value = false
     }
   }
 
-  return { user, addUser, getUser, loginExisting }
+  return { user, loadingUser, addUser, getUser, loginExisting }
 })

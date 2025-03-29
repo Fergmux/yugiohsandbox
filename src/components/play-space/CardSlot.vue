@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { YugiohCard } from '@/types'
-import { getS3ImageUrl } from '@/utils'
 import { computed } from 'vue'
+
+import type { YugiohCard } from '@/types/yugiohCard'
+import { getS3ImageUrl } from '@/utils'
+
 import IconButton from './IconButton.vue'
 
 const actionIconMap: Record<string, string> = {
@@ -148,7 +150,7 @@ const cardDef = computed({
             class="max-w-[min(3vh,3vw)] bg-black text-center"
             @click.stop
             :class="
-              topCard.newAttack
+              topCard.newAttack && topCard.atk
                 ? topCard.newAttack < topCard.atk
                   ? 'text-red-400'
                   : 'text-green-400'
@@ -165,7 +167,7 @@ const cardDef = computed({
             class="max-w-[min(3vh,3vw)] bg-black text-center"
             @click.stop
             :class="
-              topCard.newDefence
+              topCard.newDefence && topCard.def
                 ? topCard.newDefence < topCard.def
                   ? 'text-red-400'
                   : 'text-green-400'
@@ -179,9 +181,7 @@ const cardDef = computed({
 
       <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
         <div v-if="controls" class="absolute top-0 right-0 flex w-min gap-1">
-          <IconButton :scale="0.6" title="remove" @click.stop="emit('increment', -1)">
-            remove
-          </IconButton>
+          <IconButton :scale="0.6" title="remove" @click.stop="emit('increment', -1)"> remove </IconButton>
           <IconButton :scale="0.6" title="add" @click.stop="emit('increment', 1)"> add </IconButton>
         </div>
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { YugiohCard } from '@/types'
-import { getS3ImageUrl } from '@/utils'
 import { ref } from 'vue'
+
+import type { YugiohCard } from '@/types/yugiohCard'
+import { getS3ImageUrl } from '@/utils'
 
 defineProps<{
   cards?: YugiohCard[]
@@ -34,19 +35,17 @@ const toggleShowCards = () => {
 <template>
   <div class="mt-4">
     <div class="flex cursor-pointer items-center gap-2" @click="toggleShowCards">
-      <span class="material-symbols-outlined">{{
-        showCards ? 'arrow_drop_down' : 'arrow_drop_up'
-      }}</span>
+      <span class="material-symbols-outlined">{{ showCards ? 'arrow_drop_down' : 'arrow_drop_up' }}</span>
       <h3 class="text-2xl font-semibold">
         <slot />
-        <span class="font-normal">
-          - {{ cards?.length }}<template v-if="max"> / {{ max }}</template></span
+        <span class="ml-1 text-base font-normal">
+          {{ cards?.length }}<template v-if="max"> / {{ max }}</template></span
         >
       </h3>
     </div>
     <div v-if="showCards" class="mt-2">
       <ul
-        class="grid-cols-auto grid grid-cols-[repeat(auto-fill,minmax(50px,100px))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(75px,125px))] md:grid-cols-[repeat(auto-fill,minmax(100px,150px))] lg:grid-cols-[repeat(auto-fill,minmax(100px,200px))] 2xl:grid-cols-[repeat(auto-fill,minmax(100px,250px))]"
+        class="grid-cols-auto grid grid-cols-[repeat(auto-fill,minmax(50px,100px))] justify-around gap-4 sm:grid-cols-[repeat(auto-fill,minmax(75px,125px))] md:grid-cols-[repeat(auto-fill,minmax(100px,150px))] lg:grid-cols-[repeat(auto-fill,minmax(100px,200px))] 2xl:grid-cols-[repeat(auto-fill,minmax(100px,250px))]"
       >
         <li
           v-for="(card, index) in cards"

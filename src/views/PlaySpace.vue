@@ -1,45 +1,27 @@
 <script setup lang="ts">
-import type {
-  ComputedRef,
-  Ref,
-} from 'vue'
-import {
-  computed,
-  onMounted,
-  onUnmounted,
-  ref,
-  watch,
-} from 'vue'
+import type { ComputedRef, Ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  onSnapshot,
-  query,
-  updateDoc,
-  where,
-} from 'firebase/firestore'
+import { addDoc, collection, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore'
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 import { useRoute } from 'vue-router'
 
-import CoinFlip from '@/components/CoinFlip.vue'
-import FieldSide from '@/components/FieldSide.vue'
+import CoinFlip from '@/components/play-space/CoinFlip.vue'
+import FieldSide from '@/components/play-space/FieldSide.vue'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
-import type {
-  GameState,
-  YugiohCard,
-} from '@/types'
-import { extraDeckTypes } from '@/types'
+import { extraDeckTypes } from '@/types/filters'
+import type { GameState, YugiohCard } from '@/types/yugiohCard'
 import { useClipboard } from '@vueuse/core'
 
 /*
 TODO:
+- button component
+- align login page with join game page
+
 PLAYSPACE
 New Features
 - Login password/username
@@ -49,7 +31,7 @@ New Features
 - move from fauna to firebase
 - put firebase into edge functions
 
-- highlight card?
+- highlight card (for opponent)?
 - Counters in other card locations?
 - Multi select????????
 - custom card?
@@ -57,22 +39,22 @@ New Features
 - Edit level
 - Edit attribute
 
+- refactor field
+
 
 Deck Builder
 // - Tags
 // Format validation?
-// Lock filter
 
 Playground
-- Draw square/line
-- Text box
-- Click for options:
-- snap to closest card
--- bring to front/back
--- Copy card
--- delete card
--- Align left/right/top/bottom
--- Rotate left/right
+- Draw square/line?
+- Text box?
+- Click for options?
+-- bring to front/back?
+-- Copy card?
+-- delete card?
+-- Align left/right/top/bottom?
+-- Rotate left/right?
 */
 
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']
@@ -125,8 +107,10 @@ const { getAllCards, getDecks } = deckStore
 const userStore = useUserStore()
 const route = useRoute()
 
+const inputRef = ref<HTMLInputElement>()
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
+  inputRef.value?.focus()
   getAllCards()
   getDecks()
   if (route.params.gameCode) {
@@ -264,9 +248,7 @@ const tokensInDeck = computed(() => {
 
 const setDeck = (id: string) => {
   deckId.value = id
-  gameState.value.cards[playerKey.value].deck = cardsInNormalDeck.value.sort(
-    () => Math.random() - 0.5,
-  )
+  gameState.value.cards[playerKey.value].deck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
   gameState.value.cards[playerKey.value].tokens = tokensInDeck.value
   gameState.value.cards[playerKey.value].extra = cardsInExtraDeck.value
   gameState.value.decks[playerKey.value] = id
@@ -322,14 +304,9 @@ const showNotes = ref(false)
 </script>
 <template>
   <div v-if="gameId && (deckId || player === null)" class="fixed right-0 bottom-0 z-[200]">
-    <div
-      class="flex cursor-pointer justify-between bg-[rgba(0,0,0,0.5)]"
-      @click="showNotes = !showNotes"
-    >
+    <div class="flex cursor-pointer justify-between bg-[rgba(0,0,0,0.5)]" @click="showNotes = !showNotes">
       <h3 class="text-xl">Notes</h3>
-      <span class="material-symbols-outlined">{{
-        showNotes ? 'arrow_drop_down' : 'arrow_drop_up'
-      }}</span>
+      <span class="material-symbols-outlined">{{ showNotes ? 'arrow_drop_down' : 'arrow_drop_up' }}</span>
     </div>
     <textarea
       ref="notesRef"
@@ -345,9 +322,7 @@ const showNotes = ref(false)
   >
     <div class="flex cursor-pointer justify-between" @click="showChat = !showChat">
       <h3 class="text-xl">Game Log</h3>
-      <span class="material-symbols-outlined">{{
-        showChat ? 'arrow_drop_down' : 'arrow_drop_up'
-      }}</span>
+      <span class="material-symbols-outlined">{{ showChat ? 'arrow_drop_down' : 'arrow_drop_up' }}</span>
     </div>
     <div>
       <div
@@ -371,28 +346,25 @@ const showNotes = ref(false)
           @keydown.space.stop
           class="m-1 w-4/5 basis-4/5 rounded-md border-1 border-gray-300 p-1"
         />
-        <button @click="sendChat" class="m-1 basis-8 rounded-md border-1 border-gray-300 p-1">
-          Send
-        </button>
+        <button @click="sendChat" class="m-1 basis-8 rounded-md border-1 border-gray-300 p-1">Send</button>
       </div>
     </div>
   </div>
   <!-- JOIN/CREATE GAME -->
   <div v-if="!gameId" class="m-auto flex w-max flex-col items-center">
     <div>
-      <input v-model="gameCode" class="mt-2 mr-2 rounded-md border-1 border-gray-300 p-2" />
-      <button
-        @click="joinGame"
-        class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-      >
+      <input
+        v-model="gameCode"
+        ref="inputRef"
+        class="mt-2 mr-2 rounded-md border-1 border-gray-300 p-2"
+        @keyup.enter="joinGame"
+      />
+      <button @click="joinGame" class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
         Join Game
       </button>
     </div>
     <p class="m-4">or</p>
-    <button
-      @click="createGame"
-      class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-    >
+    <button @click="createGame" class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
       Create Game
     </button>
   </div>
@@ -402,10 +374,7 @@ const showNotes = ref(false)
     <p class="text-lg">
       Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
     </p>
-    <button
-      @click="leaveGame"
-      class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-    >
+    <button @click="leaveGame" class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
       Leave Game
     </button>
     <button
@@ -442,32 +411,17 @@ const showNotes = ref(false)
   </div>
 
   <!-- WHOLE PLAYSPACE -->
-  <div
-    v-if="gameId && (deckId || player === null)"
-    class="mt-20 flex h-screen items-center justify-center gap-2"
-  >
+  <div v-if="gameId && (deckId || player === null)" class="mt-20 flex h-screen items-center justify-center gap-2">
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="gameState.turn = 0">
         {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}
       </p>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 0 }" @click="setTurn(0)">
-        Draw phase
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 1 }" @click="setTurn(1)">
-        Standby phase
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 2 }" @click="setTurn(2)">
-        Main phase 1
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 3 }" @click="setTurn(3)">
-        Battle phase
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 4 }" @click="setTurn(4)">
-        Main phase 2
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">
-        End phase
-      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 0 }" @click="setTurn(0)">Draw phase</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 1 }" @click="setTurn(1)">Standby phase</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 2 }" @click="setTurn(2)">Main phase 1</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 3 }" @click="setTurn(3)">Battle phase</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 4 }" @click="setTurn(4)">Main phase 2</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">End phase</div>
     </div>
     <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
     <div class="w-[70vh]">
@@ -496,24 +450,12 @@ const showNotes = ref(false)
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn >= 6 }" @click="setTurn(6)">
         {{ playerKey === 'player2' ? "Opponent's turn" : 'Your turn' }}
       </p>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 6 }" @click="setTurn(6)">
-        Draw phase
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 7 }" @click="setTurn(7)">
-        Standby phase
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 8 }" @click="setTurn(8)">
-        Main phase 1
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 9 }" @click="setTurn(9)">
-        Battle phase
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 10 }" @click="setTurn(10)">
-        Main phase 2
-      </div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 11 }" @click="setTurn(11)">
-        End phase
-      </div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 6 }" @click="setTurn(6)">Draw phase</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 7 }" @click="setTurn(7)">Standby phase</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 8 }" @click="setTurn(8)">Main phase 1</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 9 }" @click="setTurn(9)">Battle phase</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 10 }" @click="setTurn(10)">Main phase 2</div>
+      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 11 }" @click="setTurn(11)">End phase</div>
     </div>
   </div>
 </template>

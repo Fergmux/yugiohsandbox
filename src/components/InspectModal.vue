@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { BoardSide, YugiohCard } from '@/types'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+
+import type { BoardSide, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 import { useOptimalGrid } from '@/utils/useOptimalGrid'
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+
 import InspectModal from './InspectModal.vue'
-import IconButton from './IconButton.vue'
+import IconButton from './play-space/IconButton.vue'
 
 const props = defineProps<{
   cards?: YugiohCard[] | YugiohCard
@@ -62,10 +64,7 @@ const isSelected = (index: number) => {
     return props.selectedIndex === props.cardIndex
   }
 
-  return (
-    index ===
-    (props.inspectedCardsLocation === 'attached' ? props.selectedIndex! + 1 : props.selectedIndex!)
-  )
+  return index === (props.inspectedCardsLocation === 'attached' ? props.selectedIndex! + 1 : props.selectedIndex!)
 }
 const revealCard = (card: YugiohCard) => {
   emit('reveal')
@@ -84,11 +83,7 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="cardList"
-      @click="emit('close')"
-      class="fixed top-0 left-0 z-[1000] h-screen w-screen"
-    >
+    <div v-if="cardList" @click="emit('close')" class="fixed top-0 left-0 z-[9999] h-screen w-screen">
       <div
         class="h-max-content absolute top-1/2 left-1/2 grid w-full -translate-x-1/2 -translate-y-1/2 gap-2 overflow-auto p-32"
         :style="cardList?.length > 1 ? gridStyle : 'grid-template-columns: 1fr;'"
@@ -155,9 +150,7 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
                 revealedCardIds.includes(card.uid) &&
                 !showCardIds.includes(card.uid)
               "
-              @click.stop="
-                revealedCardIds.includes(card.uid) ? revealedCards.delete(card) : revealCard(card)
-              "
+              @click.stop="revealedCardIds.includes(card.uid) ? revealedCards.delete(card) : revealCard(card)"
               :title="revealedCardIds.includes(card.uid) ? 'Hide' : 'Show'"
             >
               {{ revealedCardIds.includes(card.uid) ? 'visibility_off' : 'visibility' }}

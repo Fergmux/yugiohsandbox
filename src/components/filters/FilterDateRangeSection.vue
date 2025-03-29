@@ -2,15 +2,12 @@
 import FilterSectionWrapper from '../filters/FilterSectionWrapper.vue'
 
 defineProps<{
-  minLabel?: string
-  maxLabel?: string
-  defaultRange?: [string, string]
+  options?: { min: string; max: string }
 }>()
 
 const emit = defineEmits(['reset'])
 
-const min = defineModel<string>('min', { required: true })
-const max = defineModel<string>('max', { required: true })
+const selected = defineModel<{ min: string; max: string }>({ required: true })
 
 const shown = defineModel('shown', { default: true })
 const locked = defineModel('locked', { default: false })
@@ -20,8 +17,8 @@ const locked = defineModel('locked', { default: false })
   <FilterSectionWrapper
     @action="emit('reset')"
     v-model:shown="shown"
-    :default-range="defaultRange"
-    :range="[min, max]"
+    :default-range="options"
+    :range="selected"
     :locked="locked"
   >
     <template #title>
@@ -29,12 +26,12 @@ const locked = defineModel('locked', { default: false })
     </template>
     <div class="flex items-center gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        <label>{{ minLabel || 'Min' }}:</label>
-        <input type="date" v-model="min" class="rounded-md border-1 border-gray-300 p-1" />
+        <label>Min:</label>
+        <input type="date" v-model="selected.min" class="rounded-md border-1 border-gray-300 p-1" />
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <label>{{ maxLabel || 'Max' }}:</label>
-        <input type="date" v-model="max" class="rounded-md border-1 border-gray-300 p-1" />
+        <label>Max:</label>
+        <input type="date" v-model="selected.max" class="rounded-md border-1 border-gray-300 p-1" />
       </div>
     </div>
   </FilterSectionWrapper>

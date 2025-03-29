@@ -5,8 +5,8 @@ defineProps<{
   selected?: number
   total?: number
   depth?: number
-  range?: [number | string, number | string]
-  defaultRange?: [number | string, number | string]
+  range?: { min: number | string; max: number | string }
+  defaultRange?: { min: number | string; max: number | string }
   hasLockedChildren?: boolean
 }>()
 
@@ -22,12 +22,10 @@ const emit = defineEmits<{
   <div class="mb-2">
     <div class="mb-2 flex items-center justify-between gap-2">
       <div class="flex items-center">
-        <span class="material-symbols-outlined">{{
-          shown ? 'arrow_drop_down' : 'arrow_drop_up'
-        }}</span>
+        <span class="material-symbols-outlined">{{ shown ? 'arrow_drop_down' : 'arrow_drop_up' }}</span>
         <h4
           @click="shown = !shown"
-          class="flex cursor-pointer flex-wrap items-baseline text-xl font-semibold"
+          class="flex cursor-pointer flex-wrap items-baseline text-xl"
           :style="depth !== undefined ? { fontSize: `${1.25 - depth * 0.1}rem` } : {}"
         >
           <slot name="title" />
@@ -45,14 +43,10 @@ const emit = defineEmits<{
             {{ selected }}
           </span>
           <span
-            v-else-if="
-              range &&
-              defaultRange &&
-              (range[0] !== defaultRange[0] || range[1] !== defaultRange[1])
-            "
+            v-else-if="range && defaultRange && (range.min !== defaultRange.min || range.max !== defaultRange.max)"
             class="ml-1 text-sm text-green-400"
           >
-            {{ range[0] }} - {{ range[1] }}
+            {{ range.min }} - {{ range.max }}
           </span>
           <span
             class="material-symbols-outlined self-center"

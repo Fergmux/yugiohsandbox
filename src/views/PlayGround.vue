@@ -1,34 +1,19 @@
 <script setup lang="ts">
 import type { ComputedRef } from 'vue'
 // Fetch all cards and decks on component mount
-import {
-  computed,
-  onMounted,
-  onUnmounted,
-  ref,
-  useTemplateRef,
-  watch,
-} from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 
-import {
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore'
+import { collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import _debounce from 'lodash/debounce'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 
+import DeckSelect from '@/components/DeckSelect.vue'
 import InspectModal from '@/components/InspectModal.vue'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
-import type { YugiohCard } from '@/types'
-import {
-  extraDeckTypes,
-  otherDeckTypes,
-} from '@/types'
+import { extraDeckTypes, otherDeckTypes } from '@/types/filters'
+import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 import { useDraggable } from '@vueuse/core'
 
@@ -59,7 +44,6 @@ const playgroundState = ref<playgroundState>({
 
 onMounted(async () => {
   await deckStore.getAllCards()
-  await deckStore.getDecks()
 
   // Wait for container to be available before adding event listener
   watch(
@@ -134,7 +118,7 @@ const handleZoom = (event: WheelEvent) => {
 }
 
 // Deck selection
-const selectedDeckId = ref<string | null>(null)
+const selectedDeckId = ref<string | undefined>()
 
 // Get the selected deck
 const selectedDeck = computed(() => decks.value.find((deck) => deck.id === selectedDeckId.value))
@@ -187,12 +171,30 @@ const updateState = _debounce(async () => {
   const docRef = doc(collection(db, 'playgrounds'), selectedDeckId.value)
   await updateDoc(docRef, playgroundState.value)
 }, 1000)
-
 // Get cards in the deck
 const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
   let mainDeckX = 40
   let extraDeckX = 40
 
+  // If we have playground state with card locations, use that as the source of truth
+  if (Object.keys(playgroundState.value.cardLocations).length > 0) {
+    return Object.values(playgroundState.value.cardLocations)
+      .map((location) => {
+        const card = allCards.value.find((card) => card.id === location.cardId)
+        if (card) {
+          // Skip cards that are in otherDeckTypes
+          if (otherDeckTypes.includes(card.type)) {
+            return undefined
+          }
+          return { ...card, uid: location.uid }
+        }
+        return undefined
+      })
+      .sort((a, b) => (a && b ? a.frameType.localeCompare(b.frameType) : 0))
+      .filter(Boolean) as YugiohCard[]
+  }
+
+  // Fall back to selected deck if no playground state exists yet
   return selectedDeck.value?.cards
     .map((cardId: number, index: number) => {
       const card = allCards.value.find((card) => card.id === cardId)
@@ -202,37 +204,29 @@ const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
           return undefined
         }
 
-        // Find if this card already has a location with a UID
-        const existingLocation = Object.values(playgroundState.value.cardLocations).find(
-          (location) => location.cardId === cardId,
-        )
+        // Generate a new UID for this card
+        const uid = uuidv4()
 
-        // Use existing UID or generate a new one
-        const uid = existingLocation?.uid || uuidv4()
+        // Position extra deck cards on a lower row
+        const isExtraDeck = extraDeckTypes.includes(card.type)
+        const yPosition = isExtraDeck ? 120 : 40
 
-        // If this is a new card, initialize its location data
-        if (!existingLocation) {
-          // Position extra deck cards on a lower row
-          const isExtraDeck = extraDeckTypes.includes(card.type)
-          const yPosition = isExtraDeck ? 120 : 40
+        // Use separate X positions for main deck and extra deck
+        let xPosition
+        if (isExtraDeck) {
+          xPosition = extraDeckX
+          extraDeckX += 10 // Increment for the next extra deck card
+        } else {
+          xPosition = mainDeckX
+          mainDeckX += 10 // Increment for the next main deck card
+        }
 
-          // Use separate X positions for main deck and extra deck
-          let xPosition
-          if (isExtraDeck) {
-            xPosition = extraDeckX
-            extraDeckX += 10 // Increment for the next extra deck card
-          } else {
-            xPosition = mainDeckX
-            mainDeckX += 10 // Increment for the next main deck card
-          }
-
-          playgroundState.value.cardLocations[uid] = {
-            x: xPosition,
-            y: yPosition,
-            z: index + 1,
-            uid,
-            cardId,
-          }
+        playgroundState.value.cardLocations[uid] = {
+          x: xPosition,
+          y: yPosition,
+          z: index + 1,
+          uid,
+          cardId,
         }
 
         return { ...card, uid }
@@ -459,6 +453,261 @@ const toggleCardSelection = (uid: string, event: MouseEvent) => {
       selectedCards.value = [uid]
     }
   }
+
+  // Ensure the draggable instance position matches the stored position
+  const instance = draggableInstances.value.get(uid)
+  if (instance && playgroundState.value.cardLocations[uid]) {
+    instance.position.x = playgroundState.value.cardLocations[uid].x
+    instance.position.y = playgroundState.value.cardLocations[uid].y
+  }
+}
+// Snapping functionality
+const isSnappingEnabled = ref(true)
+const snapThreshold = 30 // Distance in pixels to trigger snapping
+const snapHighlightedEdges = ref<{
+  edges: { [cardUid: string]: { top?: boolean; right?: boolean; bottom?: boolean; left?: boolean } }
+}>({ edges: {} })
+
+// Get card dimensions
+const getCardDimensions = (uid: string) => {
+  const cardWidth = (playgroundState.value.cardSize * window.innerWidth) / 100
+  const cardHeight = cardWidth * 1.45 // Approximate card aspect ratio
+  const cardLocation = playgroundState.value.cardLocations[uid]
+
+  return {
+    left: cardLocation.x,
+    top: cardLocation.y,
+    right: cardLocation.x + cardWidth,
+    bottom: cardLocation.y + cardHeight,
+    width: cardWidth,
+    height: cardHeight,
+  }
+}
+// Check for snap opportunities
+const checkForSnap = (draggedUid: string) => {
+  if (!isSnappingEnabled.value) {
+    // Clear any highlighted edges
+    snapHighlightedEdges.value = { edges: {} }
+    return null
+  }
+
+  const draggedCard = getCardDimensions(draggedUid)
+
+  // Reset highlighted edges
+  snapHighlightedEdges.value = { edges: {} }
+
+  // Track all potential snaps across all cards
+  const allSnaps: Array<{
+    cardUid: string
+    edge: string
+    targetEdge: string
+    snapTo: number
+    isHorizontal: boolean
+    distance: number
+  }> = []
+
+  // Check against all other cards
+  Object.keys(playgroundState.value.cardLocations).forEach((uid) => {
+    // Skip if this is the dragged card or if it's a selected card (unless the dragged card isn't selected)
+    if (uid === draggedUid || (selectedCards.value.includes(uid) && selectedCards.value.includes(draggedUid))) return
+
+    const targetCard = getCardDimensions(uid)
+
+    // Calculate the center points of both cards
+    const draggedCenterX = draggedCard.left + draggedCard.width / 2
+    const draggedCenterY = draggedCard.top + draggedCard.height / 2
+    const targetCenterX = targetCard.left + targetCard.width / 2
+    const targetCenterY = targetCard.top + targetCard.height / 2
+
+    // Calculate distance between card centers
+    const centerDistance = Math.sqrt(
+      Math.pow(draggedCenterX - targetCenterX, 2) + Math.pow(draggedCenterY - targetCenterY, 2),
+    )
+
+    // Skip if cards are too far apart (using card width/height as a reference)
+    const proximityThreshold = Math.max(draggedCard.width, draggedCard.height) * 1.5
+    if (centerDistance > proximityThreshold) return
+
+    // Check all possible edge combinations for snapping
+    const edges = [
+      { draggedEdge: 'left', draggedPos: draggedCard.left, isHorizontal: true },
+      { draggedEdge: 'right', draggedPos: draggedCard.right, isHorizontal: true },
+      { draggedEdge: 'top', draggedPos: draggedCard.top, isHorizontal: false },
+      { draggedEdge: 'bottom', draggedPos: draggedCard.bottom, isHorizontal: false },
+    ]
+
+    const targetEdges = [
+      { targetEdge: 'left', targetPos: targetCard.left, isHorizontal: true },
+      { targetEdge: 'right', targetPos: targetCard.right, isHorizontal: true },
+      { targetEdge: 'top', targetPos: targetCard.top, isHorizontal: false },
+      { targetEdge: 'bottom', targetPos: targetCard.bottom, isHorizontal: false },
+    ]
+
+    // Check all edge combinations
+    for (const { draggedEdge, draggedPos, isHorizontal } of edges) {
+      for (const { targetEdge, targetPos } of targetEdges) {
+        // Only compare edges of the same orientation (horizontal with horizontal, vertical with vertical)
+        const targetIsHorizontal = targetEdge === 'left' || targetEdge === 'right'
+        if (isHorizontal !== targetIsHorizontal) continue
+
+        const distance = Math.abs(draggedPos - targetPos)
+
+        if (distance < snapThreshold) {
+          // Calculate the position to snap to
+          let snapTo = 0
+
+          if (draggedEdge === 'left') {
+            snapTo = targetPos
+          } else if (draggedEdge === 'right') {
+            snapTo = targetPos - draggedCard.width
+          } else if (draggedEdge === 'top') {
+            snapTo = targetPos
+          } else if (draggedEdge === 'bottom') {
+            snapTo = targetPos - draggedCard.height
+          }
+
+          allSnaps.push({
+            cardUid: uid,
+            edge: draggedEdge,
+            targetEdge: targetEdge,
+            snapTo: snapTo,
+            isHorizontal,
+            distance: distance + centerDistance,
+          })
+        }
+      }
+    }
+  })
+
+  // If we have no snaps, return null
+  if (allSnaps.length === 0) {
+    return null
+  }
+
+  // Sort snaps by distance (closest first)
+  allSnaps.sort((a, b) => a.distance - b.distance)
+
+  // Find the best horizontal and vertical snaps (which may be from different cards)
+  const horizontalSnaps = allSnaps.filter((snap) => snap.isHorizontal)
+  const verticalSnaps = allSnaps.filter((snap) => !snap.isHorizontal)
+
+  const bestHorizontalSnap = horizontalSnaps.length > 0 ? horizontalSnaps[0] : null
+  const bestVerticalSnap = verticalSnaps.length > 0 ? verticalSnaps[0] : null
+
+  // Highlight the edges that will be snapped to
+  const highlightedEdges: Record<string, Record<string, boolean>> = {}
+
+  // Add horizontal edge highlight if available
+  if (bestHorizontalSnap) {
+    if (!highlightedEdges[bestHorizontalSnap.cardUid]) {
+      highlightedEdges[bestHorizontalSnap.cardUid] = {}
+    }
+    highlightedEdges[bestHorizontalSnap.cardUid][bestHorizontalSnap.targetEdge] = true
+  }
+
+  // Add vertical edge highlight if available
+  if (bestVerticalSnap) {
+    if (!highlightedEdges[bestVerticalSnap.cardUid]) {
+      highlightedEdges[bestVerticalSnap.cardUid] = {}
+    }
+    highlightedEdges[bestVerticalSnap.cardUid][bestVerticalSnap.targetEdge] = true
+  }
+
+  // Apply highlights to all relevant cards
+  snapHighlightedEdges.value.edges = highlightedEdges
+
+  // Return the best snaps
+  return {
+    horizontal: bestHorizontalSnap
+      ? {
+          targetUid: bestHorizontalSnap.cardUid,
+          edge: bestHorizontalSnap.edge,
+          targetEdge: bestHorizontalSnap.targetEdge,
+          snapTo: bestHorizontalSnap.snapTo,
+          isHorizontal: bestHorizontalSnap.isHorizontal,
+        }
+      : null,
+    vertical: bestVerticalSnap
+      ? {
+          targetUid: bestVerticalSnap.cardUid,
+          edge: bestVerticalSnap.edge,
+          targetEdge: bestVerticalSnap.targetEdge,
+          snapTo: bestVerticalSnap.snapTo,
+          isHorizontal: bestVerticalSnap.isHorizontal,
+        }
+      : null,
+  }
+}
+
+// Apply snap
+const applySnap = (
+  draggedUid: string,
+  snap: {
+    horizontal?: {
+      targetUid: string
+      edge: string
+      targetEdge: string
+      snapTo: number
+      isHorizontal: boolean
+    } | null
+    vertical?: {
+      targetUid: string
+      edge: string
+      targetEdge: string
+      snapTo: number
+      isHorizontal: boolean
+    } | null
+  },
+) => {
+  const draggedCard = playgroundState.value.cardLocations[draggedUid]
+  const draggedInstance = draggableInstances.value.get(draggedUid)
+
+  if (!draggedCard || !draggedInstance) return
+
+  // Calculate the movement delta
+  let deltaX = 0
+  let deltaY = 0
+
+  // Apply horizontal snap if available
+  if (snap.horizontal) {
+    deltaX = snap.horizontal.snapTo - draggedCard.x
+  }
+
+  // Apply vertical snap if available
+  if (snap.vertical) {
+    deltaY = snap.vertical.snapTo - draggedCard.y
+  }
+
+  // Move the dragged card
+  draggedCard.x += deltaX
+  draggedCard.y += deltaY
+  draggedInstance.position.x = draggedCard.x
+  draggedInstance.position.y = draggedCard.y
+
+  // Move all selected cards by the same delta
+  if (selectedCards.value.includes(draggedUid)) {
+    selectedCards.value.forEach((selectedUid) => {
+      if (selectedUid !== draggedUid) {
+        const selectedCard = playgroundState.value.cardLocations[selectedUid]
+        const selectedInstance = draggableInstances.value.get(selectedUid)
+
+        if (selectedCard && selectedInstance) {
+          selectedCard.x += deltaX
+          selectedCard.y += deltaY
+          selectedInstance.position.x = selectedCard.x
+          selectedInstance.position.y = selectedCard.y
+        }
+      }
+    })
+  }
+
+  // Clear highlighted edges
+  snapHighlightedEdges.value = { edges: {} }
+}
+
+// Toggle snapping
+const toggleSnapping = () => {
+  isSnappingEnabled.value = !isSnappingEnabled.value
 }
 
 // Initialize draggable for each card
@@ -468,7 +717,13 @@ const initDraggable = (uid: string, index: number) => {
 
   // If we already have an instance for this card, return its current style
   if (draggableInstances.value.has(uid)) {
-    return draggableInstances.value.get(uid)?.style || ''
+    const instance = draggableInstances.value.get(uid)
+    // Ensure the instance's position matches the stored position
+    if (instance && playgroundState.value.cardLocations[uid]) {
+      instance.position.x = playgroundState.value.cardLocations[uid].x
+      instance.position.y = playgroundState.value.cardLocations[uid].y
+    }
+    return instance?.style || ''
   }
 
   // Get or initialize card location
@@ -495,35 +750,42 @@ const initDraggable = (uid: string, index: number) => {
   // Track initial position to detect actual movement
   const initialPosition = { x: 0, y: 0 }
   let hasMoved = false
+  let currentSnap: ReturnType<typeof checkForSnap> | null = null
+  let isJustSelecting = true
 
   const instance = useDraggable(cardRef, {
     initialValue: { x: cardLocation.x, y: cardLocation.y },
     preventDefault: true,
+    stopPropagation: true,
     containerElement: container,
     onStart: (position) => {
       // Store initial position
       initialPosition.x = position.x
       initialPosition.y = position.y
       hasMoved = false
+      isJustSelecting = true
 
-      // Find the highest z-index and increment it for the current card
-      const highestZ = Object.values(playgroundState.value.cardLocations)
-        .map((loc) => loc.z)
-        .reduce((max, z) => Math.max(max, z), 0)
+      // Only change z-index if we're not just selecting
+      if (!isJustSelecting) {
+        // Find the highest z-index and increment it for the current card
+        const highestZ = Object.values(playgroundState.value.cardLocations)
+          .map((loc) => loc.z)
+          .reduce((max, z) => Math.max(max, z), 0)
 
-      // Update the z-index for this card
-      playgroundState.value.cardLocations[uid].z = highestZ + 1
+        // Update the z-index for this card
+        playgroundState.value.cardLocations[uid].z = highestZ + 1
 
-      // If this card is part of a selection, bring all selected cards to front
-      if (selectedCards.value.includes(uid)) {
-        selectedCards.value.forEach((selectedUid, i) => {
-          if (selectedUid !== uid) {
-            playgroundState.value.cardLocations[selectedUid].z = highestZ + 2 + i
-          }
-        })
+        // If this card is part of a selection, bring all selected cards to front
+        if (selectedCards.value.includes(uid)) {
+          selectedCards.value.forEach((selectedUid, i) => {
+            if (selectedUid !== uid) {
+              playgroundState.value.cardLocations[selectedUid].z = highestZ + 2 + i
+            }
+          })
+        }
+
+        updateState()
       }
-
-      updateState()
     },
     onMove: (event) => {
       // Check if the card has actually moved a significant amount
@@ -534,6 +796,7 @@ const initDraggable = (uid: string, index: number) => {
       if (deltaX > 3 || deltaY > 3) {
         hasMoved = true
         isDragging.value = true
+        isJustSelecting = false
       }
 
       // Calculate the movement delta from last position
@@ -562,9 +825,18 @@ const initDraggable = (uid: string, index: number) => {
         })
       }
 
+      // Check for snap opportunities
+      currentSnap = checkForSnap(uid)
+
       updateState()
     },
     onEnd: () => {
+      // Apply snap if available
+      if (currentSnap) {
+        applySnap(uid, currentSnap)
+        updateState()
+      }
+
       // Only reset isDragging if the card actually moved
       if (hasMoved) {
         setTimeout(() => {
@@ -574,6 +846,9 @@ const initDraggable = (uid: string, index: number) => {
         // If the card didn't move, it's just a click, not a drag
         isDragging.value = false
       }
+
+      // Clear any highlighted edges
+      snapHighlightedEdges.value = { edges: {} }
     },
   })
 
@@ -632,25 +907,7 @@ const resetCardPositions = () => {
 
 <template>
   <div class="p-8">
-    <div class="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-end">
-      <div class="flex flex-col items-start rounded-md border-1 border-gray-300 p-4">
-        <h3 class="text-2xl">Decks</h3>
-        <div class="mt-2 flex max-w-full flex-wrap gap-2" v-if="decks.length">
-          <div
-            v-for="deck in decks"
-            :key="deck.id"
-            class="flex max-w-full cursor-pointer items-center rounded-md border-1 border-gray-300 p-2"
-            :class="{ 'bg-neutral-700': selectedDeckId === deck.id }"
-            @click="selectedDeckId = deck.id"
-          >
-            <h4 class="overflow-hidden text-xl font-semibold overflow-ellipsis">
-              {{ deck.name }}
-            </h4>
-          </div>
-        </div>
-        <p v-else>No decks yet</p>
-      </div>
-    </div>
+    <deck-select v-model="selectedDeckId" class="w-max" />
 
     <div v-if="fetchCompleted" class="mt-8 h-full">
       <!-- Main playground area -->
@@ -661,28 +918,22 @@ const resetCardPositions = () => {
 
             <div class="flex items-center gap-2 text-xl">
               <button
-                class="flex size-8 items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
-                @click="playgroundState.cardSize--"
-              >
-                <span class="material-symbols-outlined text-sm"> remove </span>
-              </button>
-              <button
-                class="flex size-8 items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
-                @click="playgroundState.cardSize++"
-              >
-                <span class="material-symbols-outlined text-sm"> add </span>
-              </button>
-              <button
-                class="flex size-8 items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @click="resetCardPositions"
+                title="Reset cards"
               >
                 <span class="material-symbols-outlined text-sm"> refresh </span>
               </button>
               <button
-                class="flex size-8 items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
-                @click="clearSelection"
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300"
+                :class="{
+                  'bg-blue-500': isSnappingEnabled,
+                  'active:bg-gray-400': !isSnappingEnabled,
+                }"
+                @click="toggleSnapping"
+                title="Toggle snapping"
               >
-                <span class="material-symbols-outlined text-sm"> clear </span>
+                <span class="material-symbols-outlined text-sm"> grid_on </span>
               </button>
             </div>
           </div>
@@ -718,23 +969,41 @@ const resetCardPositions = () => {
                   playgroundState.cardLocations[card.uid]?.z || index + 1
                 }`"
                 class="card-element absolute w-max cursor-move"
-                :class="{ 'selected-card': selectedCards.includes(card.uid) }"
+                :class="{
+                  'selected-card': selectedCards.includes(card.uid),
+                }"
                 @click="toggleCardSelection(card.uid, $event)"
                 @click.right.prevent="inspectedCard = card"
               >
                 <img
                   :src="
-                    card.card_images && card.card_images.length > 0
-                      ? card.card_images[0].image_url
-                      : getS3ImageUrl(0)
+                    card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : getS3ImageUrl(0)
                   "
                   :style="`width: ${playgroundState.cardSize}vw`"
                   :alt="card.name"
                   class="select-none"
                 />
+                <!-- Snap edge indicators as absolutely positioned divs -->
+                <div
+                  v-if="snapHighlightedEdges.edges[card.uid]?.top"
+                  class="absolute top-0 right-0 left-0 z-[1000] h-1 bg-white"
+                ></div>
+                <div
+                  v-if="snapHighlightedEdges.edges[card.uid]?.right"
+                  class="absolute top-0 right-0 bottom-0 z-[1000] w-1 bg-white"
+                ></div>
+                <div
+                  v-if="snapHighlightedEdges.edges[card.uid]?.bottom"
+                  class="absolute right-0 bottom-0 left-0 z-[1000] h-1 bg-white"
+                ></div>
+                <div
+                  v-if="snapHighlightedEdges.edges[card.uid]?.left"
+                  class="absolute top-0 bottom-0 left-0 z-[1000] w-1 bg-white"
+                ></div>
+                <!-- Selection indicator -->
                 <div
                   v-if="selectedCards.includes(card.uid)"
-                  class="pointer-events-none absolute inset-0 border-4 border-blue-500"
+                  class="pointer-events-none absolute inset-0 z-[999] border-4 border-yellow-200"
                 ></div>
               </div>
             </template>
