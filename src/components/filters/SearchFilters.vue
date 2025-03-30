@@ -52,16 +52,15 @@ const sectionTypes: Record<
   cardType: { type: 'sections', options: cardTypeOptions, title: 'Card Type' },
   race: { type: 'sections', options: raceOptions, title: 'Race' },
   attribute: { type: 'section', options: attributeOptions, title: 'Attribute' },
-  banlistGoat: { type: 'section', options: banlistOptions, title: 'GOAT Banlist' },
-  banlistOcg: { type: 'section', options: banlistOptions, title: 'OCG Banlist' },
-  banlistTcg: { type: 'section', options: banlistOptions, title: 'TCG Banlist' },
   format: { type: 'section', options: formatOptions, title: 'Format' },
   level: { type: 'range', options: defaultLevelRange, title: 'Level' },
   atk: { type: 'range', options: defaultAtkRange, title: 'Attack' },
   def: { type: 'range', options: defaultDefRange, title: 'Defense' },
+  banlistGoat: { type: 'section', options: banlistOptions, title: 'GOAT Banlist' },
+  banlistOcg: { type: 'section', options: banlistOptions, title: 'OCG Banlist' },
+  banlistTcg: { type: 'section', options: banlistOptions, title: 'TCG Banlist' },
   ocgReleaseDate: { type: 'date', options: defaultOcgReleaseDateRange, title: 'OCG Release Date' },
   tcgReleaseDate: { type: 'date', options: defaultTcgReleaseDateRange, title: 'TCG Release Date' },
-  archetype: { type: 'section', options: [], title: 'Archetype' },
 }
 
 const sectionTypeFunctionMap = {
@@ -90,7 +89,7 @@ const sections = computed(() => Object.entries(filters).map(([key, section]) => 
 
 const frameTypeSearch = computed(() =>
   (filters.frameType.filter.selected as string[])
-    .map((frameType: string) => (frameType === 'Pendulum' ? pendulumFrameTypeOptions : frameType))
+    .map((frameType: string) => (frameType === 'Pendulum' ? pendulumFrameTypeOptions : frameType.toLowerCase()))
     .flat(),
 )
 
@@ -183,7 +182,7 @@ const assertedArrayIncludes =
   (card: YugiohCard) => {
     if (!isStringArray(selected)) return false
     if (key) return selected.includes(card[key] ?? '')
-    if (banlistKey) return selected.includes(card.banlist_info?.[banlistKey] ?? '')
+    if (banlistKey) return selected.includes(card.banlist_info?.[banlistKey] ?? 'Allowed')
     if (value) return selected.includes(value)
   }
 
@@ -192,7 +191,7 @@ const assertedInRange =
   (card: YugiohCard) => {
     const { min, max } = Array.isArray(selected) ? {} : selected
     // Number comparison
-    if (numKey && card[numKey] && card[numKey] >= 0 !== undefined) {
+    if (numKey && card[numKey] && card[numKey] >= 0 && card[numKey] !== undefined) {
       if (typeof min === 'number' && typeof max === 'number') return card[numKey] >= min && card[numKey] <= max
       if (typeof max === 'number') return card[numKey] <= max
       if (typeof min === 'number') return card[numKey] >= min
@@ -200,19 +199,33 @@ const assertedInRange =
 
     // Date comparison
     const info = card.misc_info[0]
-    if (dateKey && info[dateKey]) {
-      if (typeof min === 'string' && typeof max === 'string')
+    if (dateKey) {
+      if (min && max && typeof min === 'string' && typeof max === 'string')
         return new Date(info[dateKey]) >= new Date(min) && new Date(info[dateKey]) <= new Date(max)
-      if (typeof max === 'string') return new Date(info[dateKey]) <= new Date(max)
-      if (typeof min === 'string') return new Date(info[dateKey]) >= new Date(min)
+      if (max && typeof max === 'string') return new Date(info[dateKey]) <= new Date(max)
+      if (min && typeof min === 'string') return new Date(info[dateKey]) >= new Date(min)
     }
     return true
   }
+// frameType: { type: 'section', options: frameTypeOptions, title: 'Frame Type' },
+// cardType: { type: 'sections', options: cardTypeOptions, title: 'Card Type' },
+// race: { type: 'sections', options: raceOptions, title: 'Race' },
+// attribute: { type: 'section', options: attributeOptions, title: 'Attribute' },
+// format: { type: 'section', options: formatOptions, title: 'Format' },
+// level: { type: 'range', options: defaultLevelRange, title: 'Level' },
+// atk: { type: 'range', options: defaultAtkRange, title: 'Attack' },
+// def: { type: 'range', options: defaultDefRange, title: 'Defense' },
+// banlistGoat: { type: 'section', options: banlistOptions, title: 'GOAT Banlist' },
+// banlistOcg: { type: 'section', options: banlistOptions, title: 'OCG Banlist' },
+// banlistTcg: { type: 'section', options: banlistOptions, title: 'TCG Banlist' },
+// ocgReleaseDate: { type: 'date', options: defaultOcgReleaseDateRange, title: 'OCG Release Date' },
+// tcgReleaseDate: { type: 'date', options: defaultTcgReleaseDateRange, title: 'TCG Release Date' },
+// archetype: { type: 'section', options: [], title: 'Archetype' },
 
-const filteredCards = computed<YugiohCard[]>(() => {
-  return allCards.value
-    .filter(assertedArrayIncludes(filters.cardType.filter.selected, { key: 'type' }))
+const filteredCards = computed<YugiohCard[]>(() =>
+  allCards.value
     .filter(assertedArrayIncludes(frameTypeSearch.value, { key: 'frameType' }))
+    .filter(assertedArrayIncludes(filters.cardType.filter.selected, { key: 'type' }))
     .filter(assertedArrayIncludes(filters.race.filter.selected, { key: 'race' }))
     .filter(
       (card) => assertedArrayIncludes(filters.attribute.filter.selected, { key: 'attribute' })(card) || !card.attribute,
@@ -223,36 +236,32 @@ const filteredCards = computed<YugiohCard[]>(() => {
           assertedArrayIncludes(filters.format.filter.selected, { value: format })(card),
         ) ||
         (card.misc_info[0].formats.length === 0 &&
-          assertedArrayIncludes(filters.format.filter.selected, { value: 'No Format' })),
-    )
-    .filter(
-      (card) =>
-        assertedArrayIncludes(filters.banlistGoat.filter.selected, { banlistKey: 'ban_goat' }) ||
-        (assertedArrayIncludes(filters.banlistGoat.filter.selected, { value: 'Allowed' }) &&
-          !card.banlist_info?.ban_goat) ||
-        assertedArrayIncludes(filters.banlistOcg.filter.selected, { banlistKey: 'ban_ocg' }) ||
-        (assertedArrayIncludes(filters.banlistOcg.filter.selected, { value: 'Allowed' }) &&
-          !card.banlist_info?.ban_ocg) ||
-        assertedArrayIncludes(filters.banlistTcg.filter.selected, { banlistKey: 'ban_tcg' }) ||
-        (assertedArrayIncludes(filters.banlistTcg.filter.selected, { value: 'Allowed' }) &&
-          !card.banlist_info?.ban_tcg),
+          assertedArrayIncludes(filters.format.filter.selected, { value: 'No Format' })(card)),
     )
     .filter(assertedInRange(filters.level.filter.selected, { numKey: 'level' }))
     .filter(assertedInRange(filters.atk.filter.selected, { numKey: 'atk' }))
     .filter(assertedInRange(filters.def.filter.selected, { numKey: 'def' }))
+    .filter(assertedArrayIncludes(filters.banlistGoat.filter.selected, { banlistKey: 'ban_goat' }))
+    .filter(assertedArrayIncludes(filters.banlistOcg.filter.selected, { banlistKey: 'ban_ocg' }))
+    .filter(assertedArrayIncludes(filters.banlistTcg.filter.selected, { banlistKey: 'ban_tcg' }))
+
     .filter(assertedInRange(filters.ocgReleaseDate.filter.selected, { dateKey: 'ocg_date' }))
     .filter(assertedInRange(filters.tcgReleaseDate.filter.selected, { dateKey: 'tcg_date' }))
-    .filter((card) => selectedArchetypes.value.length === 0 || selectedArchetypes.value.includes(card.archetype ?? ''))
-})
+    .filter((card) => selectedArchetypes.value.length === 0 || selectedArchetypes.value.includes(card.archetype ?? '')),
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: YugiohCard[]): void
 }>()
 
 // Watch for changes in filteredCards and emit update
-watch(filteredCards, (newValue) => {
-  emit('update:modelValue', newValue)
-})
+watch(
+  filteredCards,
+  (newValue) => {
+    emit('update:modelValue', newValue)
+  },
+  { immediate: true },
+)
 </script>
 <template>
   <div class="mb-4 w-full rounded-md border-1 border-gray-300 px-2 py-4">

@@ -46,7 +46,7 @@ const emit = defineEmits<{
             v-else-if="range && defaultRange && (range.min !== defaultRange.min || range.max !== defaultRange.max)"
             class="ml-1 text-sm text-green-400"
           >
-            {{ range.min }} - {{ range.max }}
+            {{ range.min }} <template v-if="range.max !== range.min"> - {{ range.max }}</template>
           </span>
           <span
             class="material-symbols-outlined self-center"

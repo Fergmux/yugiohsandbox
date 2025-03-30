@@ -35,16 +35,15 @@ New Features
 - Counters in other card locations?
 - Multi select????????
 - custom card?
-
 - Edit level
 - Edit attribute
-
-- refactor field
+- refactor field side
 
 
 Deck Builder
-// - Tags
-// Format validation?
+- Tags
+- Format validation?
+- improved card details
 
 Playground
 - Draw square/line?
