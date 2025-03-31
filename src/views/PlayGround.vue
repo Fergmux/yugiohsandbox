@@ -171,70 +171,60 @@ const updateState = _debounce(async () => {
   const docRef = doc(collection(db, 'playgrounds'), selectedDeckId.value)
   await updateDoc(docRef, playgroundState.value)
 }, 1000)
-// Get cards in the deck
-const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
+
+const cardsOnField: ComputedRef<YugiohCard[]> = computed(() => {
+  if (!selectedDeck.value) return []
+
   let mainDeckX = 40
   let extraDeckX = 40
+  const result: YugiohCard[] = []
 
-  // If we have playground state with card locations, use that as the source of truth
-  if (Object.keys(playgroundState.value.cardLocations).length > 0) {
-    return Object.values(playgroundState.value.cardLocations)
-      .map((location) => {
-        const card = allCards.value.find((card) => card.id === location.cardId)
-        if (card) {
-          // Skip cards that are in otherDeckTypes
-          if (otherDeckTypes.includes(card.type)) {
-            return undefined
-          }
-          return { ...card, uid: location.uid }
-        }
-        return undefined
-      })
-      .sort((a, b) => (a && b ? a.frameType.localeCompare(b.frameType) : 0))
-      .filter(Boolean) as YugiohCard[]
-  }
+  // Process each card in the selected deck
+  selectedDeck.value.cards.forEach((cardId: number, index: number) => {
+    const card = allCards.value.find((card) => card.id === cardId)
+    if (!card || otherDeckTypes.includes(card.type)) return
 
-  // Fall back to selected deck if no playground state exists yet
-  return selectedDeck.value?.cards
-    .map((cardId: number, index: number) => {
-      const card = allCards.value.find((card) => card.id === cardId)
-      if (card) {
-        // Skip cards that are in otherDeckTypes
-        if (otherDeckTypes.includes(card.type)) {
-          return undefined
-        }
+    // Check if this card already has a position in the playground state
+    const existingLocation = Object.values(playgroundState.value.cardLocations).find(
+      (location) => location.cardId === cardId,
+    )
 
-        // Generate a new UID for this card
-        const uid = uuidv4()
+    if (existingLocation) {
+      // Use the existing location and uid
+      result.push({ ...card, uid: existingLocation.uid })
+    } else {
+      // Generate a new UID and position for this card
+      const uid = uuidv4()
 
-        // Position extra deck cards on a lower row
-        const isExtraDeck = extraDeckTypes.includes(card.type)
-        const yPosition = isExtraDeck ? 120 : 40
+      // Position extra deck cards on a lower row
+      const isExtraDeck = extraDeckTypes.includes(card.type)
+      const yPosition = isExtraDeck ? 120 : 40
 
-        // Use separate X positions for main deck and extra deck
-        let xPosition
-        if (isExtraDeck) {
-          xPosition = extraDeckX
-          extraDeckX += 10 // Increment for the next extra deck card
-        } else {
-          xPosition = mainDeckX
-          mainDeckX += 10 // Increment for the next main deck card
-        }
-
-        playgroundState.value.cardLocations[uid] = {
-          x: xPosition,
-          y: yPosition,
-          z: index + 1,
-          uid,
-          cardId,
-        }
-
-        return { ...card, uid }
+      // Use separate X positions for main deck and extra deck
+      let xPosition
+      if (isExtraDeck) {
+        xPosition = extraDeckX
+        extraDeckX += 10 // Increment for the next extra deck card
+      } else {
+        xPosition = mainDeckX
+        mainDeckX += 10 // Increment for the next main deck card
       }
-      return undefined
-    })
-    .sort((a, b) => (a && b ? a.frameType.localeCompare(b.frameType) : 0))
-    .filter(Boolean) as YugiohCard[]
+
+      // Add the new card location to the playground state
+      playgroundState.value.cardLocations[uid] = {
+        x: xPosition,
+        y: yPosition,
+        z: index + 1,
+        uid,
+        cardId,
+      }
+
+      result.push({ ...card, uid })
+    }
+  })
+
+  // Sort the cards by frame type
+  return result.sort((a, b) => a.frameType.localeCompare(b.frameType)).filter(Boolean) as YugiohCard[]
 })
 
 // Create refs for each card element
@@ -728,7 +718,7 @@ const initDraggable = (uid: string, index: number) => {
 
   // Get or initialize card location
   if (!playgroundState.value.cardLocations[uid]) {
-    const card = cardsInDeck.value.find((card) => card.uid === uid)
+    const card = cardsOnField.value.find((card) => card.uid === uid)
     if (!card) return ''
 
     // Position extra deck cards on a lower row
@@ -864,7 +854,7 @@ const resetCardPositions = () => {
   let mainDeckX = 40
   let extraDeckX = 40
 
-  cardsInDeck.value.forEach((card, index) => {
+  cardsOnField.value.forEach((card, index) => {
     const uid = card.uid
     const instance = draggableInstances.value.get(uid)
 
@@ -960,9 +950,9 @@ const resetCardPositions = () => {
               }"
             ></div>
 
-            <template v-if="cardsInDeck && cardsInDeck.length > 0">
+            <template v-if="cardsOnField && cardsOnField.length > 0">
               <div
-                v-for="(card, index) in cardsInDeck"
+                v-for="(card, index) in cardsOnField"
                 :key="card.uid"
                 :ref="(el) => cardRefs.set(card.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(card.uid)?.style || initDraggable(card.uid, index)}; z-index: ${

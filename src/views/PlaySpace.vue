@@ -31,6 +31,8 @@ New Features
 - move from fauna to firebase
 - put firebase into edge functions
 
+- Dice
+Search deck by name
 - highlight card (for opponent)?
 - Counters in other card locations?
 - Multi select????????
@@ -44,8 +46,12 @@ Deck Builder
 - Tags
 - Format validation?
 - improved card details
+reset search result length
+card size scrteen widsth
+level atk set exclude none
 
 Playground
+remove deleted cards
 - Draw square/line?
 - Text box?
 - Click for options?
