@@ -37,9 +37,14 @@ interface playgroundState {
 }
 
 const playgroundState = ref<playgroundState>({
-  cardSize: 5,
+  cardSize: 120, // Base card size in pixels
   cardLocations: {},
   zoomLevel: 1,
+})
+
+// Computed property for the actual display size of cards after zoom is applied
+const displayCardSize = computed(() => {
+  return playgroundState.value.cardSize * playgroundState.value.zoomLevel
 })
 
 onMounted(async () => {
@@ -110,9 +115,6 @@ const handleZoom = (event: WheelEvent) => {
     // Update zoom level
     playgroundState.value.zoomLevel = newZoom
 
-    // Update card size based on zoom
-    playgroundState.value.cardSize = 5 * newZoom
-
     updateState()
   }
 }
@@ -147,11 +149,17 @@ const getPlaygroundState = async () => {
     playgroundState.value = {
       ...stateData,
       zoomLevel: stateData.zoomLevel || 1, // Ensure zoomLevel exists
+      cardSize: stateData.cardSize || 120, // Ensure cardSize exists with default of 120px
+    }
+
+    // If cardSize is too small or undefined, set it to the default
+    if (!playgroundState.value.cardSize || playgroundState.value.cardSize < 40) {
+      playgroundState.value.cardSize = 120
     }
   } else {
     // Create a new playground state document if it doesn't exist
     playgroundState.value = {
-      cardSize: 5,
+      cardSize: 120, // Changed from 5 to 120 pixels default size
       cardLocations: {},
       zoomLevel: 1,
     }
@@ -266,7 +274,7 @@ const isCardInSelection = (uid: string) => {
   const cardLocation = playgroundState.value.cardLocations[uid]
   if (!cardLocation) return false
 
-  const cardWidth = (playgroundState.value.cardSize * window.innerWidth) / 100
+  const cardWidth = displayCardSize.value // Use computed display size
   const cardHeight = cardWidth * 1.45 // Approximate card aspect ratio
 
   const cardRect = {
@@ -460,7 +468,7 @@ const snapHighlightedEdges = ref<{
 
 // Get card dimensions
 const getCardDimensions = (uid: string) => {
-  const cardWidth = (playgroundState.value.cardSize * window.innerWidth) / 100
+  const cardWidth = displayCardSize.value // Use computed display size
   const cardHeight = cardWidth * 1.45 // Approximate card aspect ratio
   const cardLocation = playgroundState.value.cardLocations[uid]
 
@@ -887,10 +895,19 @@ const resetCardPositions = () => {
 
   // Reset zoom level
   playgroundState.value.zoomLevel = 1
-  playgroundState.value.cardSize = 5
+  // Keep the card base size as is
 
   // Clear selection
   clearSelection()
+  updateState()
+}
+
+// Add function to change card size
+const changeCardSize = (newSize: number) => {
+  // Set the new card base size
+  playgroundState.value.cardSize = newSize
+
+  // Update the state in the database
   updateState()
 }
 </script>
@@ -924,6 +941,20 @@ const resetCardPositions = () => {
                 title="Toggle snapping"
               >
                 <span class="material-symbols-outlined text-sm"> grid_on </span>
+              </button>
+              <button
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="changeCardSize(Math.min(300, playgroundState.cardSize + 50))"
+                title="Increase card size"
+              >
+                <span class="material-symbols-outlined text-xs"> add </span>
+              </button>
+              <button
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="changeCardSize(Math.max(50, playgroundState.cardSize - 50))"
+                title="Decrease card size"
+              >
+                <span class="material-symbols-outlined text-xs"> remove </span>
               </button>
             </div>
           </div>
@@ -969,7 +1000,7 @@ const resetCardPositions = () => {
                   :src="
                     card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : getS3ImageUrl(0)
                   "
-                  :style="`width: ${playgroundState.cardSize}vw`"
+                  :style="`width: ${displayCardSize}px`"
                   :alt="card.name"
                   class="select-none"
                 />
