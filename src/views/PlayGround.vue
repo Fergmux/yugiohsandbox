@@ -122,6 +122,26 @@ const handleZoom = (event: WheelEvent) => {
       }
     })
 
+    // Update text element positions relative to mouse position
+    if (Array.isArray(textElements.value)) {
+      textElements.value.forEach((textElement) => {
+        // Calculate position relative to mouse
+        const dx = textElement.x - mouseX
+        const dy = textElement.y - mouseY
+
+        // Apply zoom transformation
+        textElement.x = mouseX + dx * zoomRatio
+        textElement.y = mouseY + dy * zoomRatio
+
+        // Update draggable instance if it exists
+        const instance = draggableInstances.value.get(textElement.uid)
+        if (instance) {
+          instance.position.x = textElement.x
+          instance.position.y = textElement.y
+        }
+      })
+    }
+
     // Update zoom level
     playgroundState.value.zoomLevel = newZoom
 
@@ -428,6 +448,22 @@ const updatePanning = (event: MouseEvent) => {
       instance.position.y = card.y
     }
   })
+
+  // Update all text element positions
+  if (Array.isArray(textElements.value)) {
+    textElements.value.forEach((textElement) => {
+      // Move the text element by the delta
+      textElement.x += deltaX
+      textElement.y += deltaY
+
+      // Update the draggable instance if it exists
+      const instance = draggableInstances.value.get(textElement.uid)
+      if (instance) {
+        instance.position.x = textElement.x
+        instance.position.y = textElement.y
+      }
+    })
+  }
 
   // Update the last position for the next movement
   lastPanPosition.value = {
@@ -962,6 +998,14 @@ const defaultTextElement: Omit<TextElement, 'uid'> = {
   z: 1000, // Start text elements above cards
 }
 
+// Base font size for text elements (in pixels)
+const baseFontSize = 16
+
+// Computed font size based on zoom level
+const scaledFontSize = computed(() => {
+  return baseFontSize * playgroundState.value.zoomLevel
+})
+
 const addTextElement = () => {
   // Ensure textElements.value is an array
   if (!Array.isArray(textElements.value)) {
@@ -1168,7 +1212,12 @@ const initTextDraggable = (uid: string) => {
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
                 class="text-element"
               >
-                <input v-model="element.text" class="border border-gray-300 p-1" @input="saveTextElement" />
+                <input
+                  v-model="element.text"
+                  class="p-1"
+                  :style="`font-size: ${scaledFontSize}px;`"
+                  @input="saveTextElement"
+                />
               </div>
 
               <div
