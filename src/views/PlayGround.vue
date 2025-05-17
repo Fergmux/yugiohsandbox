@@ -1450,6 +1450,31 @@ const initTextDraggable = (uid: string) => {
   draggableInstances.value.set(uid, instance)
   return instance.style.value
 }
+
+// Function to delete the selected text element
+const deleteTextElement = () => {
+  if (!selectedTextElement.value) return
+
+  const uid = selectedTextElement.value
+
+  // Remove the element from the textElements array
+  textElements.value = textElements.value.filter((el) => el.uid !== uid)
+
+  // Remove the draggable instance
+  draggableInstances.value.delete(uid)
+
+  // Remove font size record if exists
+  if (textElementFontSizes.value[uid]) {
+    delete textElementFontSizes.value[uid]
+  }
+
+  // Clear the selection
+  selectedTextElement.value = null
+  selectedTextElements.value = selectedTextElements.value.filter((id) => id !== uid)
+
+  // Update the state to save the changes
+  updateState()
+}
 </script>
 
 <template>
@@ -1521,6 +1546,16 @@ const initTextDraggable = (uid: string) => {
                 title="Increase font size"
               >
                 <span class="material-symbols-outlined text-xs"> text_increase </span>
+              </button>
+              <!-- Delete text element button -->
+              <button
+                v-if="selectedTextElement && !isDraggingText"
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-red-300 text-red-500 hover:bg-red-100 active:bg-red-200"
+                @mousedown.prevent
+                @click="deleteTextElement"
+                title="Delete text element"
+              >
+                <span class="material-symbols-outlined text-xs"> delete </span>
               </button>
             </div>
           </div>
