@@ -207,20 +207,6 @@ const assertedInRange =
     }
     return true
   }
-// frameType: { type: 'section', options: frameTypeOptions, title: 'Frame Type' },
-// cardType: { type: 'sections', options: cardTypeOptions, title: 'Card Type' },
-// race: { type: 'sections', options: raceOptions, title: 'Race' },
-// attribute: { type: 'section', options: attributeOptions, title: 'Attribute' },
-// format: { type: 'section', options: formatOptions, title: 'Format' },
-// level: { type: 'range', options: defaultLevelRange, title: 'Level' },
-// atk: { type: 'range', options: defaultAtkRange, title: 'Attack' },
-// def: { type: 'range', options: defaultDefRange, title: 'Defense' },
-// banlistGoat: { type: 'section', options: banlistOptions, title: 'GOAT Banlist' },
-// banlistOcg: { type: 'section', options: banlistOptions, title: 'OCG Banlist' },
-// banlistTcg: { type: 'section', options: banlistOptions, title: 'TCG Banlist' },
-// ocgReleaseDate: { type: 'date', options: defaultOcgReleaseDateRange, title: 'OCG Release Date' },
-// tcgReleaseDate: { type: 'date', options: defaultTcgReleaseDateRange, title: 'TCG Release Date' },
-// archetype: { type: 'section', options: [], title: 'Archetype' },
 
 const filteredCards = computed<YugiohCard[]>(() =>
   allCards.value

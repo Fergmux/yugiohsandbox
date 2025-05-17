@@ -22,17 +22,30 @@ TODO:
 - button component
 - align login page with join game page
 
+
+
+
+
+
+
+
 PLAYSPACE
 New Features
+- Spectator count
+- text search deck
+- Player name indicators
 - Login password/username
 - Admin portal?
 - User profile page?
 - Ensure mobile works?
 - move from fauna to firebase
 - put firebase into edge functions
+- Attack calculator
+- missing image backup
+
 
 - Dice
-Search deck by name
+- Search deck by name
 - highlight card (for opponent)?
 - Counters in other card locations?
 - Multi select????????
@@ -46,20 +59,21 @@ Deck Builder
 - Tags
 - Format validation?
 - improved card details
-reset search result length
-card size scrteen widsth
-level atk set exclude none
+- reset search result length
+- card size screen width
+- level atk set exclude none
+- copy deck
 
 Playground
-remove deleted cards
+- remove deleted cards
 - Draw square/line?
-- Text box?
+- Text box!
 - Click for options?
--- bring to front/back?
--- Copy card?
--- delete card?
--- Align left/right/top/bottom?
--- Rotate left/right?
+- bring to front/back?
+- Copy card?
+- delete card?
+- Align left/right/top/bottom?
+- Rotate left/right?
 */
 
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']

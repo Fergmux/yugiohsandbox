@@ -4,6 +4,8 @@ import { ref } from 'vue'
 import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
+import BanlistIndicator from './BanlistIndicator.vue'
+
 defineProps<{
   cards?: YugiohCard[]
   max?: number
@@ -51,7 +53,7 @@ const toggleShowCards = () => {
           v-for="(card, index) in cards"
           v-memo="[card.id, clickingOnCard]"
           :key="`${card.id}+${index}`"
-          class="flex cursor-pointer justify-center transition-transform duration-75"
+          class="relative flex cursor-pointer justify-center transition-transform duration-75"
           :style="{ transform: `scale(${clickingOnCard === card.id ? 0.95 : 1})` }"
         >
           <img
@@ -62,6 +64,7 @@ const toggleShowCards = () => {
             :alt="card.name"
             class="w-full max-w-[300px] min-w-[100px]"
           />
+          <BanlistIndicator :banlist-info="card.banlist_info" />
         </li>
       </ul>
     </div>

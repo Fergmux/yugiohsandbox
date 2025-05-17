@@ -8,7 +8,7 @@ import _debounce from 'lodash/debounce'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 
-import DeckSelect from '@/components/DeckSelect.vue'
+import DeckSelect from '@/components/deckbuilder/DeckSelect.vue'
 import InspectModal from '@/components/InspectModal.vue'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'

@@ -6,21 +6,12 @@ import { storeToRefs } from 'pinia'
 import { useDeckStore } from '@/stores/deck'
 
 const deckStore = useDeckStore()
-const { decks, deletingDeck, decksLoading } = storeToRefs(deckStore)
-const { removeDeck, ensureDecks } = deckStore
+const { decks, decksLoading } = storeToRefs(deckStore)
+const { ensureDecks } = deckStore
 
 onMounted(async () => {
   await ensureDecks()
 })
-
-withDefaults(
-  defineProps<{
-    allowDelete?: boolean
-  }>(),
-  {
-    allowDelete: false,
-  },
-)
 
 const selectedDeckId = defineModel<string>()
 </script>
@@ -39,10 +30,6 @@ const selectedDeckId = defineModel<string>()
         <h4 class="overflow-hidden text-xl overflow-ellipsis">
           {{ deck.name }}
         </h4>
-        <span v-if="allowDelete" class="ml-2 flex cursor-pointer items-center" @click.stop="removeDeck(deck.id)">
-          <span v-if="deletingDeck === deck.id" class="material-symbols-outlined animate-spin">refresh</span>
-          <span v-else class="material-symbols-outlined"> delete </span>
-        </span>
       </button>
     </div>
     <p v-else>No decks yet</p>

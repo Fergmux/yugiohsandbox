@@ -86,3 +86,13 @@ input[type='number']::-webkit-inner-spin-button {
 input[type='number'] {
   -moz-appearance: textfield;
 }
+
+.material-symbols-outlined {
+  font-variation-settings: 'wght' 300;
+}
+
+.material-thick {
+  font-variation-settings:
+    'wght' 700,
+    'opsz' 24;
+}

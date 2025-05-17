@@ -1,59 +1,35 @@
 <script setup lang="ts">
 import type { ComputedRef, Ref } from 'vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 
-import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 
-import DeckSection from '@/components/DeckSection.vue'
-import DeckSelect from '@/components/DeckSelect.vue'
+import BanlistIndicator from '@/components/deckbuilder/BanlistIndicator.vue'
+import DeckActions from '@/components/deckbuilder/deck-actions/DeckActions.vue'
+import DeckSection from '@/components/deckbuilder/DeckSection.vue'
+import DeckSelect from '@/components/deckbuilder/DeckSelect.vue'
 import SearchFilters from '@/components/filters/SearchFilters.vue'
 import InspectModal from '@/components/InspectModal.vue'
 import { useDeckStore } from '@/stores/deck'
 import { extraDeckTypes, frameTypeOptions } from '@/types/filters'
-import type { YugiohCard } from '@/types/yugiohCard'
+import type { BanlistFormat, YugiohCard } from '@/types/yugiohCard'
 
 const deckStore = useDeckStore()
-const { decks, allCards, addingDeck } = storeToRefs(deckStore)
-const { getAllCards, addDeck, addCardToDeck, removeCardFromDeck, changeDeckName } = deckStore
+const { decks, allCards, selectedDeckId } = storeToRefs(deckStore)
+const { getAllCards, addCardToDeck, removeCardFromDeck } = deckStore
 
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
   getAllCards()
 })
 
-const deckName = ref('')
+// DECK FORMAT //
 const searchLimit = ref(30)
+const format = ref<BanlistFormat>('tcg')
+provide('format', format)
 
 // SELECT DECK //
-
-const selectedDeckId = ref<string | undefined>()
 const selectedDeck = computed(() => decks.value.find((deck) => deck.id === selectedDeckId.value))
-const setSelectedDeckId = (deckId: string) => (selectedDeckId.value = deckId)
-const addDeckAndSelect = async () => {
-  const deckId = await addDeck(deckName.value)
-  deckName.value = ''
-  setSelectedDeckId(deckId)
-}
-
-const currentDeckName = ref('')
-
-// Update currentDeckName when selectedDeck changes
-watch(selectedDeck, (newDeck) => {
-  if (newDeck) {
-    currentDeckName.value = newDeck.name
-  }
-})
-
-// Watch for changes to currentDeckName and update the deck with debounce
-watch(
-  currentDeckName,
-  debounce((newName: string) => {
-    if (selectedDeckId.value && selectedDeck.value) {
-      changeDeckName(selectedDeckId.value, newName)
-    }
-  }, 500),
-)
 
 const cardIdMap = computed(() =>
   allCards.value.reduce((acc, card) => {
@@ -152,7 +128,7 @@ const clickOnCard = (cardId: number) => {
   clickingOnCard.value = cardId
   const moveAudio = new Audio('/card_move.mp3')
   moveAudio.play()
-  addCardToDeck(selectedDeckId.value, cardId)
+  addCardToDeck(cardId)
   setTimeout(() => {
     clickingOnCard.value = null
   }, 100)
@@ -165,27 +141,9 @@ watch(searchQuery, () => {
 <template>
   <div class="p-8">
     <div class="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-end">
-      <deck-select v-model="selectedDeckId" allow-delete />
-      <div class="flex basis-1/5 flex-col rounded-md border-1 border-gray-300 p-4">
-        <h3 class="text-2xl font-semibold">Add Deck</h3>
-        <div class="flex items-center">
-          <input
-            type="text"
-            v-model="deckName"
-            placeholder="Deck name"
-            class="basis-full rounded-md border-1 border-gray-300 p-2"
-            @keyup.enter="addDeckAndSelect"
-          />
-          <button
-            @click="addDeckAndSelect"
-            class="m-2 flex cursor-pointer items-center rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-            :disabled="addingDeck || !deckName"
-            :class="{ 'cursor-default! opacity-50': addingDeck || !deckName }"
-          >
-            <span v-if="addingDeck" class="material-symbols-outlined animate-spin"> refresh </span>
-            <span v-else class="material-symbols-outlined"> add </span>
-          </button>
-        </div>
+      <deck-select v-model="selectedDeckId" />
+      <div class="flex gap-4">
+        <deck-actions />
       </div>
     </div>
 
@@ -194,24 +152,24 @@ watch(searchQuery, () => {
       class="mt-4 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start"
     >
       <div class="basis-4/5 rounded-md border-1 border-gray-300 p-4">
-        <input v-model="currentDeckName" class="text-3xl font-semibold" />
-        <deck-section
-          :cards="cardsInNormalDeck"
-          :max="60"
-          @select="selectCard"
-          @remove="removeCardFromDeck(selectedDeckId, $event)"
-        >
+        <div class="flex items-center justify-between">
+          <h1 class="text-3xl font-semibold">{{ selectedDeck.name }}</h1>
+          <!-- format select -->
+          <div class="mr-4 rounded-md border-1 border-gray-300 p-2">
+            <select v-model="format" name="format" id="format" class="outline-none">
+              <option value="goat">GOAT</option>
+              <option value="ocg">OCG</option>
+              <option value="tcg">TCG</option>
+            </select>
+          </div>
+        </div>
+        <deck-section :cards="cardsInNormalDeck" :max="60" @select="selectCard" @remove="removeCardFromDeck($event)">
           Main Deck
         </deck-section>
-        <deck-section
-          :cards="cardsInExtraDeck"
-          :max="15"
-          @select="selectCard"
-          @remove="removeCardFromDeck(selectedDeckId, $event)"
-        >
+        <deck-section :cards="cardsInExtraDeck" :max="15" @select="selectCard" @remove="removeCardFromDeck($event)">
           Extra Deck
         </deck-section>
-        <deck-section :cards="tokenCards" @select="selectCard" @remove="removeCardFromDeck(selectedDeckId, $event)">
+        <deck-section :cards="tokenCards" @select="selectCard" @remove="removeCardFromDeck($event)">
           Tokens
         </deck-section>
       </div>
@@ -242,9 +200,10 @@ watch(searchQuery, () => {
                 <span v-if="!getCardCountInDeck(card.id)" class="text-lg text-white">&#8194;</span>
                 <span v-for="i in getCardCountInDeck(card.id)" :key="i" class="text-lg text-white">•</span>
               </div>
-              <div>
+              <div class="relative">
                 <img :src="getS3ImageUrl(card.id)" :alt="card.name" class="w-32" />
                 <p>{{ card.name }}</p>
+                <banlist-indicator :banlist-info="card.banlist_info" />
               </div>
             </li>
           </ul>

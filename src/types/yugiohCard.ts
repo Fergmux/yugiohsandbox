@@ -4,6 +4,7 @@ export interface CardImage {
   image_url: string
 }
 
+export type BanlistFormat = 'goat' | 'ocg' | 'tcg'
 export interface BanlistInfo {
   ban_goat: string
   ban_ocg: string
