@@ -1072,9 +1072,9 @@ const selectTextElement = (uid: string) => {
   // Focus the input element
   setTimeout(() => {
     const textElement = textRefs.value.get(uid)
-    const inputElement = textElement?.querySelector('input')
-    if (inputElement) {
-      inputElement.focus()
+    const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
+    if (editableElement) {
+      editableElement.focus()
     }
   }, 0)
 }
@@ -1306,14 +1306,21 @@ const initTextDraggable = (uid: string) => {
                 class="text-element"
                 @click="selectTextElement(element.uid)"
               >
-                <input
-                  v-model="element.text"
-                  class="p-1"
-                  :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
-                  @input="saveTextElement"
+                <div
+                  contenteditable="true"
+                  @input="
+                    (e: Event) => {
+                      element.text = (e.target as HTMLDivElement).innerText
+                      saveTextElement()
+                    }
+                  "
                   @focus="selectTextElement(element.uid)"
                   @blur="selectedTextElement = null"
-                />
+                  :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
+                  class="text-input"
+                >
+                  {{ element.text }}
+                </div>
               </div>
 
               <div
@@ -1373,5 +1380,13 @@ const initTextDraggable = (uid: string) => {
 <style scoped>
 .selected-card {
   border: 2px solid #facc15; /* Yellow border for selected cards */
+}
+
+.text-input {
+  display: inline-block;
+  white-space: nowrap;
+  min-width: 1em;
+  padding: 0.25em;
+  background-color: transparent;
 }
 </style>
