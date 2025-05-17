@@ -36,6 +36,7 @@ interface TextElement {
   y: number
   uid: string
   z: number
+  fontSize?: number // Add optional fontSize property
 }
 
 interface playgroundState {
@@ -190,6 +191,14 @@ const getPlaygroundState = async () => {
 
     // Load text elements from state
     textElements.value = Array.isArray(playgroundState.value.textElements) ? playgroundState.value.textElements : []
+
+    // Load font sizes from text elements
+    textElementFontSizes.value = {}
+    textElements.value.forEach((element) => {
+      if (element.fontSize) {
+        textElementFontSizes.value[element.uid] = element.fontSize
+      }
+    })
   } else {
     // Create a new playground state document if it doesn't exist
     playgroundState.value = {
@@ -222,6 +231,14 @@ const updateState = _debounce(async () => {
 
 // Debounced function to save text element changes
 const saveTextElement = _debounce(() => {
+  // Save font sizes for text elements in the state
+  textElements.value.forEach((element) => {
+    if (textElementFontSizes.value[element.uid]) {
+      // Store font size in the fontSize property
+      element.fontSize = textElementFontSizes.value[element.uid]
+    }
+  })
+
   updateState()
 }, 1000)
 
@@ -293,6 +310,9 @@ const draggableInstances = ref<Map<string, any>>(new Map())
 // Properly initialize textElements
 const textElements = ref<TextElement[]>([])
 
+// Selected text element reference
+const selectedTextElement = ref<string | null>(null)
+
 // Selection rectangle state
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
@@ -355,6 +375,12 @@ const startSelection = (event: MouseEvent) => {
     event.preventDefault()
     startPanning(event)
     return
+  }
+
+  // Deselect text element when clicking anywhere else
+  const clickedOnTextElement = (event.target as HTMLElement).closest('.text-element')
+  if (!clickedOnTextElement) {
+    selectedTextElement.value = null
   }
 
   // Only start selection on left click and not on cards
@@ -492,6 +518,14 @@ const clearSelection = () => {
 const toggleCardSelection = (uid: string, event: MouseEvent) => {
   // Prevent default to avoid triggering other events
   event.preventDefault()
+
+  // Clear any selected text element when selecting a card
+  selectedTextElement.value = null
+
+  // Force any active element to blur (defocus text inputs)
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
 
   // Don't select if we're currently dragging
   if (isDragging.value) return
@@ -1001,10 +1035,49 @@ const defaultTextElement: Omit<TextElement, 'uid'> = {
 // Base font size for text elements (in pixels)
 const baseFontSize = 16
 
-// Computed font size based on zoom level
-const scaledFontSize = computed(() => {
-  return baseFontSize * playgroundState.value.zoomLevel
-})
+// Individual text element font sizes
+const textElementFontSizes = ref<Record<string, number>>({})
+
+// Computed font size based on zoom level and individual element size
+const getScaledFontSize = (uid: string) => {
+  const baseFontSizeForElement = textElementFontSizes.value[uid] || baseFontSize
+  return baseFontSizeForElement * playgroundState.value.zoomLevel
+}
+
+// Function to increase text size of selected element
+const increaseTextSize = () => {
+  if (!selectedTextElement.value) return
+
+  const uid = selectedTextElement.value
+  textElementFontSizes.value[uid] = (textElementFontSizes.value[uid] || baseFontSize) + 2
+  saveTextElement()
+}
+
+// Function to decrease text size of selected element
+const decreaseTextSize = () => {
+  if (!selectedTextElement.value) return
+
+  const uid = selectedTextElement.value
+  const currentSize = textElementFontSizes.value[uid] || baseFontSize
+  textElementFontSizes.value[uid] = Math.max(8, currentSize - 2) // Minimum 8px font size
+  saveTextElement()
+}
+
+// Function to select text element
+const selectTextElement = (uid: string) => {
+  selectedTextElement.value = uid
+  // Clear selected cards when selecting text
+  clearSelection()
+
+  // Focus the input element
+  setTimeout(() => {
+    const textElement = textRefs.value.get(uid)
+    const inputElement = textElement?.querySelector('input')
+    if (inputElement) {
+      inputElement.focus()
+    }
+  }, 0)
+}
 
 const addTextElement = () => {
   // Ensure textElements.value is an array
@@ -1061,6 +1134,9 @@ const initTextDraggable = (uid: string) => {
       initialPosition.x = position.x
       initialPosition.y = position.y
       hasMoved = false
+
+      // Select this text element
+      selectTextElement(uid)
 
       // Find the highest z-index and increment it for the current element
       const cardZValues = Object.values(playgroundState.value.cardLocations).map((loc) => loc.z)
@@ -1179,6 +1255,23 @@ const initTextDraggable = (uid: string) => {
               >
                 <span class="material-symbols-outlined text-xs"> add_chart </span>
               </button>
+              <!-- Text formatting buttons - only show when text element is selected -->
+              <button
+                v-if="selectedTextElement"
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="increaseTextSize"
+                title="Increase font size"
+              >
+                <span class="material-symbols-outlined text-xs"> format_size </span>
+              </button>
+              <button
+                v-if="selectedTextElement"
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="decreaseTextSize"
+                title="Decrease font size"
+              >
+                <span class="material-symbols-outlined text-xs"> text_fields </span>
+              </button>
             </div>
           </div>
           <div
@@ -1211,12 +1304,15 @@ const initTextDraggable = (uid: string) => {
                 :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
                 class="text-element"
+                @click="selectTextElement(element.uid)"
               >
                 <input
                   v-model="element.text"
                   class="p-1"
-                  :style="`font-size: ${scaledFontSize}px;`"
+                  :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
                   @input="saveTextElement"
+                  @focus="selectTextElement(element.uid)"
+                  @blur="selectedTextElement = null"
                 />
               </div>
 
@@ -1273,3 +1369,9 @@ const initTextDraggable = (uid: string) => {
     <inspect-modal v-if="inspectedCard" :cards="inspectedCard" @close="inspectedCard = null" />
   </div>
 </template>
+
+<style scoped>
+.selected-card {
+  border: 2px solid #facc15; /* Yellow border for selected cards */
+}
+</style>
