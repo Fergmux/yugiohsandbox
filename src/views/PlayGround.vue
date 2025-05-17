@@ -1119,42 +1119,54 @@ const getScaledFontSize = (uid: string) => {
   return baseFontSizeForElement * playgroundState.value.zoomLevel
 }
 
-// Function to increase text size of selected element
+// Function to increase text size of selected elements
 const increaseTextSize = (e: MouseEvent) => {
   // Prevent default browser behavior that might affect focus
   e.preventDefault()
 
-  if (!selectedTextElement.value) return
+  // Handle case where no text is selected or both cards and text are selected
+  if (selectedCards.value.length > 0 || selectedTextElements.value.length === 0) return
 
-  const uid = selectedTextElement.value
-  textElementFontSizes.value[uid] = (textElementFontSizes.value[uid] || baseFontSize) + 2
+  // Apply font size increase to all selected text elements
+  selectedTextElements.value.forEach((uid) => {
+    textElementFontSizes.value[uid] = (textElementFontSizes.value[uid] || baseFontSize) + 2
+  })
+
   saveTextElement()
 
-  // Re-focus the text element
-  const textElement = textRefs.value.get(uid)
-  const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
-  if (editableElement) {
-    editableElement.focus()
+  // Re-focus the primary text element if it exists
+  if (selectedTextElement.value) {
+    const textElement = textRefs.value.get(selectedTextElement.value)
+    const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
+    if (editableElement) {
+      editableElement.focus()
+    }
   }
 }
 
-// Function to decrease text size of selected element
+// Function to decrease text size of selected elements
 const decreaseTextSize = (e: MouseEvent) => {
   // Prevent default browser behavior that might affect focus
   e.preventDefault()
 
-  if (!selectedTextElement.value) return
+  // Handle case where no text is selected or both cards and text are selected
+  if (selectedCards.value.length > 0 || selectedTextElements.value.length === 0) return
 
-  const uid = selectedTextElement.value
-  const currentSize = textElementFontSizes.value[uid] || baseFontSize
-  textElementFontSizes.value[uid] = Math.max(8, currentSize - 2) // Minimum 8px font size
+  // Apply font size decrease to all selected text elements
+  selectedTextElements.value.forEach((uid) => {
+    const currentSize = textElementFontSizes.value[uid] || baseFontSize
+    textElementFontSizes.value[uid] = Math.max(8, currentSize - 2) // Minimum 8px font size
+  })
+
   saveTextElement()
 
-  // Re-focus the text element
-  const textElement = textRefs.value.get(uid)
-  const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
-  if (editableElement) {
-    editableElement.focus()
+  // Re-focus the primary text element if it exists
+  if (selectedTextElement.value) {
+    const textElement = textRefs.value.get(selectedTextElement.value)
+    const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
+    if (editableElement) {
+      editableElement.focus()
+    }
   }
 }
 
@@ -1451,26 +1463,28 @@ const initTextDraggable = (uid: string) => {
   return instance.style.value
 }
 
-// Function to delete the selected text element
+// Function to delete the selected text elements
 const deleteTextElement = () => {
-  if (!selectedTextElement.value) return
+  // Handle case where no text is selected or both cards and text are selected
+  if (selectedCards.value.length > 0 || selectedTextElements.value.length === 0) return
 
-  const uid = selectedTextElement.value
+  // Delete all selected text elements
+  selectedTextElements.value.forEach((uid) => {
+    // Remove the draggable instance
+    draggableInstances.value.delete(uid)
 
-  // Remove the element from the textElements array
-  textElements.value = textElements.value.filter((el) => el.uid !== uid)
+    // Remove font size record if exists
+    if (textElementFontSizes.value[uid]) {
+      delete textElementFontSizes.value[uid]
+    }
+  })
 
-  // Remove the draggable instance
-  draggableInstances.value.delete(uid)
-
-  // Remove font size record if exists
-  if (textElementFontSizes.value[uid]) {
-    delete textElementFontSizes.value[uid]
-  }
+  // Remove all selected elements from the textElements array
+  textElements.value = textElements.value.filter((el) => !selectedTextElements.value.includes(el.uid))
 
   // Clear the selection
   selectedTextElement.value = null
-  selectedTextElements.value = selectedTextElements.value.filter((id) => id !== uid)
+  selectedTextElements.value = []
 
   // Update the state to save the changes
   updateState()
@@ -1499,7 +1513,7 @@ const deleteTextElement = () => {
               <button
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300"
                 :class="{
-                  'bg-blue-500': isSnappingEnabled,
+                  'bg-neutral-400 text-gray-900 active:bg-neutral-600': isSnappingEnabled,
                   'active:bg-gray-400': !isSnappingEnabled,
                 }"
                 @click="toggleSnapping"
@@ -1526,11 +1540,11 @@ const deleteTextElement = () => {
                 @click="addTextElement"
                 title="Add text element"
               >
-                <span class="material-symbols-outlined text-xs"> add_chart </span>
+                <span class="material-symbols-outlined text-xs"> text_fields </span>
               </button>
-              <!-- Text formatting buttons - only show when text element is selected -->
+              <!-- Text formatting buttons - only show when text element is selected and no cards are selected -->
               <button
-                v-if="selectedTextElement && !isDraggingText"
+                v-if="selectedTextElements.length > 0 && !isDraggingText && selectedCards.length === 0"
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @mousedown.prevent
                 @click="decreaseTextSize"
@@ -1539,7 +1553,7 @@ const deleteTextElement = () => {
                 <span class="material-symbols-outlined text-xs"> text_decrease </span>
               </button>
               <button
-                v-if="selectedTextElement && !isDraggingText"
+                v-if="selectedTextElements.length > 0 && !isDraggingText && selectedCards.length === 0"
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @mousedown.prevent
                 @click="increaseTextSize"
@@ -1549,8 +1563,8 @@ const deleteTextElement = () => {
               </button>
               <!-- Delete text element button -->
               <button
-                v-if="selectedTextElement && !isDraggingText"
-                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-red-300 text-red-500 hover:bg-red-100 active:bg-red-200"
+                v-if="selectedTextElements.length > 0 && !isDraggingText && selectedCards.length === 0"
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @mousedown.prevent
                 @click="deleteTextElement"
                 title="Delete text element"
