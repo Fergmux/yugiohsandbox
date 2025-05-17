@@ -313,6 +313,9 @@ const textElements = ref<TextElement[]>([])
 // Selected text element reference
 const selectedTextElement = ref<string | null>(null)
 
+// Track the text elements that are selected via drag selection
+const selectedTextElements = ref<string[]>([])
+
 // Selection rectangle state
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
@@ -368,6 +371,43 @@ const isCardInSelection = (uid: string) => {
   )
 }
 
+// Check if a text element is within the selection rectangle
+const isTextElementInSelection = (uid: string) => {
+  const textElement = textElements.value.find((el) => el.uid === uid)
+  if (!textElement) return false
+
+  // Get the text element's dimensions (approximate)
+  const textRef = textRefs.value.get(uid)
+  if (!textRef) return false
+
+  const textRect = textRef.getBoundingClientRect()
+  const containerRect = container.value?.getBoundingClientRect()
+  if (!containerRect) return false
+
+  // Convert to container coordinates
+  const textElementRect = {
+    left: textElement.x,
+    top: textElement.y,
+    right: textElement.x + textRect.width,
+    bottom: textElement.y + textRect.height,
+  }
+
+  const selRect = {
+    left: selectionRect.value.left,
+    top: selectionRect.value.top,
+    right: selectionRect.value.left + selectionRect.value.width,
+    bottom: selectionRect.value.top + selectionRect.value.height,
+  }
+
+  // Check for intersection
+  return !(
+    textElementRect.left > selRect.right ||
+    textElementRect.right < selRect.left ||
+    textElementRect.top > selRect.bottom ||
+    textElementRect.bottom < selRect.top
+  )
+}
+
 // Handle mouse events for selection rectangle
 const startSelection = (event: MouseEvent) => {
   // If right mouse button is pressed, start panning instead
@@ -379,8 +419,9 @@ const startSelection = (event: MouseEvent) => {
 
   // Deselect text element when clicking anywhere else
   const clickedOnTextElement = (event.target as HTMLElement).closest('.text-element')
-  if (!clickedOnTextElement) {
+  if (!clickedOnTextElement && !event.shiftKey) {
     selectedTextElement.value = null
+    selectedTextElements.value = []
   }
 
   // Only start selection on left click and not on cards
@@ -396,8 +437,10 @@ const startSelection = (event: MouseEvent) => {
   }
   selectionEnd.value = { ...selectionStart.value }
 
-  // Clear selection when starting a new selection
-  selectedCards.value = []
+  // Clear selection when starting a new selection (unless using Shift)
+  if (!event.shiftKey) {
+    selectedCards.value = []
+  }
 }
 
 const updateSelection = (event: MouseEvent) => {
@@ -419,6 +462,18 @@ const updateSelection = (event: MouseEvent) => {
 
   // Update selected cards in real-time as the selection rectangle changes
   selectedCards.value = Object.keys(playgroundState.value.cardLocations).filter(isCardInSelection)
+
+  // Also update selected text elements
+  selectedTextElements.value = textElements.value
+    .filter((element) => isTextElementInSelection(element.uid))
+    .map((element) => element.uid)
+
+  // Set the primary selected text element to the first one in the selection (if any)
+  if (selectedTextElements.value.length > 0) {
+    selectedTextElement.value = selectedTextElements.value[0]
+  } else {
+    selectedTextElement.value = null
+  }
 }
 
 const endSelection = () => {
@@ -512,15 +567,13 @@ const endPanning = () => {
 // Clear selection
 const clearSelection = () => {
   selectedCards.value = []
+  selectedTextElements.value = []
 }
 
 // Handle card selection
 const toggleCardSelection = (uid: string, event: MouseEvent) => {
   // Prevent default to avoid triggering other events
   event.preventDefault()
-
-  // Clear any selected text element when selecting a card
-  selectedTextElement.value = null
 
   // Force any active element to blur (defocus text inputs)
   if (document.activeElement instanceof HTMLElement) {
@@ -539,6 +592,7 @@ const toggleCardSelection = (uid: string, event: MouseEvent) => {
       // Add the card to selection
       selectedCards.value.push(uid)
     }
+    // Keep text selection with Shift key
   } else {
     // If shift key is not pressed, select only this card
     if (selectedCards.value.length === 1 && selectedCards.value[0] === uid) {
@@ -548,6 +602,10 @@ const toggleCardSelection = (uid: string, event: MouseEvent) => {
       // Otherwise, select only this card
       selectedCards.value = [uid]
     }
+
+    // Clear any selected text element when selecting a card without Shift
+    selectedTextElement.value = null
+    selectedTextElements.value = []
   }
 
   // Ensure the draggable instance position matches the stored position
@@ -919,6 +977,23 @@ const initDraggable = (uid: string, index: number) => {
             }
           }
         })
+
+        // Also move any selected text elements
+        selectedTextElements.value.forEach((selectedUid) => {
+          const textIndex = textElements.value.findIndex((el) => el.uid === selectedUid)
+          if (textIndex !== -1) {
+            // Move the text element by the same delta
+            textElements.value[textIndex].x += moveX
+            textElements.value[textIndex].y += moveY
+
+            // Update the draggable instance position
+            const selectedInstance = draggableInstances.value.get(selectedUid)
+            if (selectedInstance) {
+              selectedInstance.position.x = textElements.value[textIndex].x
+              selectedInstance.position.y = textElements.value[textIndex].y
+            }
+          }
+        })
       }
 
       // Check for snap opportunities
@@ -1064,10 +1139,31 @@ const decreaseTextSize = () => {
 }
 
 // Function to select text element
-const selectTextElement = (uid: string) => {
-  selectedTextElement.value = uid
-  // Clear selected cards when selecting text
-  clearSelection()
+const selectTextElement = (uid: string, event?: MouseEvent) => {
+  // Use Shift key for multi-select like with cards
+  if (event?.shiftKey) {
+    if (selectedTextElements.value.includes(uid)) {
+      // Remove this text element from selection
+      selectedTextElements.value = selectedTextElements.value.filter((id) => id !== uid)
+      // Update primary selected element
+      if (selectedTextElement.value === uid) {
+        selectedTextElement.value = selectedTextElements.value.length > 0 ? selectedTextElements.value[0] : null
+      }
+    } else {
+      // Add this text element to selection
+      selectedTextElements.value.push(uid)
+      // Set as primary selected element if there isn't one already
+      if (!selectedTextElement.value) {
+        selectedTextElement.value = uid
+      }
+    }
+  } else {
+    // Without Shift, select only this text element
+    selectedTextElement.value = uid
+    selectedTextElements.value = [uid]
+    // Clear selected cards when selecting text without Shift
+    selectedCards.value = []
+  }
 
   // Focus the input element
   setTimeout(() => {
@@ -1135,8 +1231,10 @@ const initTextDraggable = (uid: string) => {
       initialPosition.y = position.y
       hasMoved = false
 
-      // Select this text element
-      selectTextElement(uid)
+      // Select this text element if not already part of a selection
+      if (!selectedTextElements.value.includes(uid)) {
+        selectTextElement(uid)
+      }
 
       // Find the highest z-index and increment it for the current element
       const cardZValues = Object.values(playgroundState.value.cardLocations).map((loc) => loc.z)
@@ -1148,6 +1246,18 @@ const initTextDraggable = (uid: string) => {
       const index = textElements.value.findIndex((el) => el.uid === uid)
       if (index !== -1) {
         textElements.value[index].z = highestZ + 1
+      }
+
+      // If this text element is part of a selection, bring all selected text elements to front
+      if (selectedTextElements.value.includes(uid)) {
+        selectedTextElements.value.forEach((selectedUid, i) => {
+          if (selectedUid !== uid) {
+            const textIndex = textElements.value.findIndex((el) => el.uid === selectedUid)
+            if (textIndex !== -1) {
+              textElements.value[textIndex].z = highestZ + 2 + i
+            }
+          }
+        })
       }
     },
     onMove: (event) => {
@@ -1161,11 +1271,54 @@ const initTextDraggable = (uid: string) => {
         isDragging.value = true
       }
 
-      // Update the position of the text element
+      // Get the current text element
       const index = textElements.value.findIndex((el) => el.uid === uid)
-      if (index !== -1) {
-        textElements.value[index].x = event.x
-        textElements.value[index].y = event.y
+      if (index === -1) return
+
+      // Calculate movement delta from last position
+      const moveX = event.x - textElements.value[index].x
+      const moveY = event.y - textElements.value[index].y
+
+      // Update the position of the text element
+      textElements.value[index].x = event.x
+      textElements.value[index].y = event.y
+
+      // If this text element is part of a selection, move all selected elements
+      if (selectedTextElements.value.includes(uid)) {
+        // Move other selected text elements
+        selectedTextElements.value.forEach((selectedUid) => {
+          if (selectedUid !== uid) {
+            const textIndex = textElements.value.findIndex((el) => el.uid === selectedUid)
+            if (textIndex !== -1) {
+              textElements.value[textIndex].x += moveX
+              textElements.value[textIndex].y += moveY
+
+              // Update the draggable instance position
+              const selectedInstance = draggableInstances.value.get(selectedUid)
+              if (selectedInstance) {
+                selectedInstance.position.x = textElements.value[textIndex].x
+                selectedInstance.position.y = textElements.value[textIndex].y
+              }
+            }
+          }
+        })
+
+        // Also move any selected cards
+        selectedCards.value.forEach((selectedUid) => {
+          const cardLocation = playgroundState.value.cardLocations[selectedUid]
+          if (cardLocation) {
+            // Move the card by the same delta
+            cardLocation.x += moveX
+            cardLocation.y += moveY
+
+            // Update the draggable instance position
+            const selectedInstance = draggableInstances.value.get(selectedUid)
+            if (selectedInstance) {
+              selectedInstance.position.x = cardLocation.x
+              selectedInstance.position.y = cardLocation.y
+            }
+          }
+        })
       }
     },
     onEnd: () => {
@@ -1304,7 +1457,8 @@ const initTextDraggable = (uid: string) => {
                 :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
                 class="text-element"
-                @click="selectTextElement(element.uid)"
+                :class="{ 'border-4 border-yellow-200': selectedTextElements.includes(element.uid) }"
+                @click="(e) => selectTextElement(element.uid, e)"
               >
                 <div
                   contenteditable="true"
@@ -1315,9 +1469,13 @@ const initTextDraggable = (uid: string) => {
                     }
                   "
                   @focus="selectTextElement(element.uid)"
-                  @blur="selectedTextElement = null"
+                  @blur="
+                    (e: FocusEvent) => {
+                      if (!(e.relatedTarget as HTMLElement)?.closest('.text-element')) selectedTextElement = null
+                    }
+                  "
                   :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
-                  class="text-input"
+                  class="text-input outline-none"
                 >
                   {{ element.text }}
                 </div>
@@ -1378,10 +1536,6 @@ const initTextDraggable = (uid: string) => {
 </template>
 
 <style scoped>
-.selected-card {
-  border: 2px solid #facc15; /* Yellow border for selected cards */
-}
-
 .text-input {
   display: inline-block;
   white-space: nowrap;
