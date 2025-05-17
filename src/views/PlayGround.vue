@@ -910,6 +910,27 @@ const changeCardSize = (newSize: number) => {
   // Update the state in the database
   updateState()
 }
+
+interface TextElement {
+  text: string
+  x: number
+  y: number
+  uid: string
+}
+
+const defaultTextElement: Omit<TextElement, 'uid'> = {
+  text: 'Click to edit text',
+  x: 0,
+  y: 0,
+}
+
+const textElements = ref<TextElement[]>([])
+const addTextElement = () => {
+  textElements.value.push({
+    ...defaultTextElement,
+    uid: uuidv4(),
+  })
+}
 </script>
 
 <template>
@@ -956,6 +977,13 @@ const changeCardSize = (newSize: number) => {
               >
                 <span class="material-symbols-outlined text-xs"> remove </span>
               </button>
+              <button
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="addTextElement"
+                title="Add text element"
+              >
+                <span class="material-symbols-outlined text-xs"> add_chart </span>
+              </button>
             </div>
           </div>
           <div
@@ -982,6 +1010,9 @@ const changeCardSize = (newSize: number) => {
             ></div>
 
             <template v-if="cardsOnField && cardsOnField.length > 0">
+              <div v-for="element in textElements" :key="element.uid" class="absolute">
+                <input v-model="element.text" />
+              </div>
               <div
                 v-for="(card, index) in cardsOnField"
                 :key="card.uid"
