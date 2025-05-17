@@ -30,16 +30,26 @@ interface CardLocation {
   cardId: number
 }
 
+interface TextElement {
+  text: string
+  x: number
+  y: number
+  uid: string
+  z: number
+}
+
 interface playgroundState {
   cardSize: number
   cardLocations: Record<string, CardLocation>
   zoomLevel: number
+  textElements: TextElement[]
 }
 
 const playgroundState = ref<playgroundState>({
   cardSize: 120, // Base card size in pixels
   cardLocations: {},
   zoomLevel: 1,
+  textElements: [],
 })
 
 // Computed property for the actual display size of cards after zoom is applied
@@ -150,18 +160,23 @@ const getPlaygroundState = async () => {
       ...stateData,
       zoomLevel: stateData.zoomLevel || 1, // Ensure zoomLevel exists
       cardSize: stateData.cardSize || 120, // Ensure cardSize exists with default of 120px
+      textElements: stateData.textElements || [], // Ensure textElements exists
     }
 
     // If cardSize is too small or undefined, set it to the default
     if (!playgroundState.value.cardSize || playgroundState.value.cardSize < 40) {
       playgroundState.value.cardSize = 120
     }
+
+    // Load text elements from state
+    textElements.value = Array.isArray(playgroundState.value.textElements) ? playgroundState.value.textElements : []
   } else {
     // Create a new playground state document if it doesn't exist
     playgroundState.value = {
       cardSize: 120, // Changed from 5 to 120 pixels default size
       cardLocations: {},
       zoomLevel: 1,
+      textElements: [], // Initialize with empty text elements array
     }
 
     // Create a new document in the playgrounds collection
@@ -176,8 +191,18 @@ const getPlaygroundState = async () => {
 
 const updateState = _debounce(async () => {
   if (!selectedDeckId.value) return
+
+  // Update text elements in playgroundState before saving
+  // Ensure textElements.value is an array before storing
+  playgroundState.value.textElements = Array.isArray(textElements.value) ? textElements.value : []
+
   const docRef = doc(collection(db, 'playgrounds'), selectedDeckId.value)
   await updateDoc(docRef, playgroundState.value)
+}, 1000)
+
+// Debounced function to save text element changes
+const saveTextElement = _debounce(() => {
+  updateState()
 }, 1000)
 
 const cardsOnField: ComputedRef<YugiohCard[]> = computed(() => {
@@ -244,6 +269,9 @@ const cardStyles = ref<Map<string, string>>(new Map())
 // Create a map to store the draggable instances
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const draggableInstances = ref<Map<string, any>>(new Map())
+
+// Properly initialize textElements
+const textElements = ref<TextElement[]>([])
 
 // Selection rectangle state
 const isSelecting = ref(false)
@@ -893,6 +921,22 @@ const resetCardPositions = () => {
     }
   })
 
+  // Get all text element UIDs before clearing
+  const textElementUids = textElements.value?.map((element) => element.uid) || []
+
+  // Clear all text elements (ensure it's done properly)
+  textElements.value = []
+
+  // Clear associated draggable instances
+  textElementUids.forEach((uid) => {
+    if (uid) {
+      draggableInstances.value.delete(uid)
+    }
+  })
+
+  // Update the text elements in the playground state
+  playgroundState.value.textElements = []
+
   // Reset zoom level
   playgroundState.value.zoomLevel = 1
   // Keep the card base size as is
@@ -911,25 +955,132 @@ const changeCardSize = (newSize: number) => {
   updateState()
 }
 
-interface TextElement {
-  text: string
-  x: number
-  y: number
-  uid: string
-}
-
 const defaultTextElement: Omit<TextElement, 'uid'> = {
   text: 'Click to edit text',
   x: 0,
   y: 0,
+  z: 1000, // Start text elements above cards
 }
 
-const textElements = ref<TextElement[]>([])
 const addTextElement = () => {
+  // Ensure textElements.value is an array
+  if (!Array.isArray(textElements.value)) {
+    textElements.value = []
+  }
+
   textElements.value.push({
     ...defaultTextElement,
     uid: uuidv4(),
+    x: 100, // Default positions in the middle of the playground
+    y: 100,
   })
+
+  // Update the state to save the new text element
+  updateState()
+}
+
+// Create refs for text elements
+const textRefs = ref<Map<string, HTMLElement | null>>(new Map())
+
+// Initialize draggable for text elements
+const initTextDraggable = (uid: string) => {
+  const textRef = textRefs.value.get(uid)
+  if (!textRef) return ''
+
+  // If we already have an instance for this text element, return its current style
+  if (draggableInstances.value.has(uid)) {
+    const instance = draggableInstances.value.get(uid)
+    // Ensure the instance's position matches the stored position
+    const textElement = textElements.value.find((el) => el.uid === uid)
+    if (instance && textElement) {
+      instance.position.x = textElement.x
+      instance.position.y = textElement.y
+    }
+    return instance?.style || ''
+  }
+
+  // Get the text element
+  const textElement = textElements.value.find((el) => el.uid === uid)
+  if (!textElement) return ''
+
+  // Track initial position to detect actual movement
+  const initialPosition = { x: 0, y: 0 }
+  let hasMoved = false
+
+  const instance = useDraggable(textRef, {
+    initialValue: { x: textElement.x, y: textElement.y },
+    preventDefault: true,
+    stopPropagation: true,
+    containerElement: container,
+    onStart: (position) => {
+      // Store initial position
+      initialPosition.x = position.x
+      initialPosition.y = position.y
+      hasMoved = false
+
+      // Find the highest z-index and increment it for the current element
+      const cardZValues = Object.values(playgroundState.value.cardLocations).map((loc) => loc.z)
+      const textZValues = textElements.value.map((el) => el.z)
+      const allZValues = [...cardZValues, ...textZValues]
+      const highestZ = allZValues.reduce((max, z) => Math.max(max, z), 0)
+
+      // Update the z-index for this text element
+      const index = textElements.value.findIndex((el) => el.uid === uid)
+      if (index !== -1) {
+        textElements.value[index].z = highestZ + 1
+      }
+    },
+    onMove: (event) => {
+      // Check if the element has actually moved a significant amount
+      const deltaX = Math.abs(event.x - initialPosition.x)
+      const deltaY = Math.abs(event.y - initialPosition.y)
+
+      // Consider it a drag if moved more than 3 pixels in any direction
+      if (deltaX > 3 || deltaY > 3) {
+        hasMoved = true
+        isDragging.value = true
+      }
+
+      // Update the position of the text element
+      const index = textElements.value.findIndex((el) => el.uid === uid)
+      if (index !== -1) {
+        textElements.value[index].x = event.x
+        textElements.value[index].y = event.y
+      }
+    },
+    onEnd: () => {
+      // Save the text element if it was moved
+      if (hasMoved) {
+        saveTextElement()
+      }
+
+      // Focus the input if the element wasn't moved
+      if (!hasMoved) {
+        // Find the input element within the text element
+        const inputElement = textRef.querySelector('input')
+        if (inputElement) {
+          // Use setTimeout to ensure this happens after the click event processing
+          setTimeout(() => {
+            inputElement.focus()
+          }, 0)
+        }
+      }
+
+      // Only reset isDragging if the element actually moved
+      if (hasMoved) {
+        setTimeout(() => {
+          isDragging.value = false
+        }, 50)
+      } else {
+        // If the element didn't move, it's just a click, not a drag
+        isDragging.value = false
+      }
+    },
+  })
+
+  // Store the instance
+  draggableInstances.value.set(uid, instance)
+  return instance.style.value
 }
 </script>
 
@@ -1010,9 +1161,16 @@ const addTextElement = () => {
             ></div>
 
             <template v-if="cardsOnField && cardsOnField.length > 0">
-              <div v-for="element in textElements" :key="element.uid" class="absolute">
-                <input v-model="element.text" />
+              <div
+                v-for="element in textElements"
+                :key="element.uid"
+                :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
+                :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
+                class="text-element"
+              >
+                <input v-model="element.text" class="border border-gray-300 p-1" @input="saveTextElement" />
               </div>
+
               <div
                 v-for="(card, index) in cardsOnField"
                 :key="card.uid"
