@@ -1120,22 +1120,42 @@ const getScaledFontSize = (uid: string) => {
 }
 
 // Function to increase text size of selected element
-const increaseTextSize = () => {
+const increaseTextSize = (e: MouseEvent) => {
+  // Prevent default browser behavior that might affect focus
+  e.preventDefault()
+
   if (!selectedTextElement.value) return
 
   const uid = selectedTextElement.value
   textElementFontSizes.value[uid] = (textElementFontSizes.value[uid] || baseFontSize) + 2
   saveTextElement()
+
+  // Re-focus the text element
+  const textElement = textRefs.value.get(uid)
+  const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
+  if (editableElement) {
+    editableElement.focus()
+  }
 }
 
 // Function to decrease text size of selected element
-const decreaseTextSize = () => {
+const decreaseTextSize = (e: MouseEvent) => {
+  // Prevent default browser behavior that might affect focus
+  e.preventDefault()
+
   if (!selectedTextElement.value) return
 
   const uid = selectedTextElement.value
   const currentSize = textElementFontSizes.value[uid] || baseFontSize
   textElementFontSizes.value[uid] = Math.max(8, currentSize - 2) // Minimum 8px font size
   saveTextElement()
+
+  // Re-focus the text element
+  const textElement = textRefs.value.get(uid)
+  const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
+  if (editableElement) {
+    editableElement.focus()
+  }
 }
 
 // Function to select text element
@@ -1389,17 +1409,17 @@ const initTextDraggable = (uid: string) => {
               </button>
               <button
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
-                @click="changeCardSize(Math.min(300, playgroundState.cardSize + 50))"
-                title="Increase card size"
-              >
-                <span class="material-symbols-outlined text-xs"> add </span>
-              </button>
-              <button
-                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @click="changeCardSize(Math.max(50, playgroundState.cardSize - 50))"
                 title="Decrease card size"
               >
                 <span class="material-symbols-outlined text-xs"> remove </span>
+              </button>
+              <button
+                class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
+                @click="changeCardSize(Math.min(300, playgroundState.cardSize + 50))"
+                title="Increase card size"
+              >
+                <span class="material-symbols-outlined text-xs"> add </span>
               </button>
               <button
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
@@ -1412,18 +1432,20 @@ const initTextDraggable = (uid: string) => {
               <button
                 v-if="selectedTextElement"
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
-                @click="increaseTextSize"
-                title="Increase font size"
+                @mousedown.prevent
+                @click="decreaseTextSize"
+                title="Decrease font size"
               >
-                <span class="material-symbols-outlined text-xs"> format_size </span>
+                <span class="material-symbols-outlined text-xs"> text_decrease </span>
               </button>
               <button
                 v-if="selectedTextElement"
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
-                @click="decreaseTextSize"
-                title="Decrease font size"
+                @mousedown.prevent
+                @click="increaseTextSize"
+                title="Increase font size"
               >
-                <span class="material-symbols-outlined text-xs"> text_fields </span>
+                <span class="material-symbols-outlined text-xs"> text_increase </span>
               </button>
             </div>
           </div>
@@ -1456,7 +1478,7 @@ const initTextDraggable = (uid: string) => {
                 :key="element.uid"
                 :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
-                class="text-element"
+                class="text-element box-border"
                 :class="{ 'border-4 border-yellow-200': selectedTextElements.includes(element.uid) }"
                 @click="(e) => selectTextElement(element.uid, e)"
               >
@@ -1469,11 +1491,7 @@ const initTextDraggable = (uid: string) => {
                     }
                   "
                   @focus="selectTextElement(element.uid)"
-                  @blur="
-                    (e: FocusEvent) => {
-                      if (!(e.relatedTarget as HTMLElement)?.closest('.text-element')) selectedTextElement = null
-                    }
-                  "
+                  @blur="selectedTextElement = null"
                   :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
                   class="text-input outline-none"
                 >
@@ -1531,16 +1549,21 @@ const initTextDraggable = (uid: string) => {
         </div>
       </div>
     </div>
-    <inspect-modal v-if="inspectedCard" :cards="inspectedCard" @close="inspectedCard = null" />
   </div>
+  <inspect-modal v-if="inspectedCard" :cards="inspectedCard" @close="inspectedCard = null" />
 </template>
 
 <style scoped>
+/* Add your styles here */
 .text-input {
   display: inline-block;
   white-space: nowrap;
   min-width: 1em;
   padding: 0.25em;
   background-color: transparent;
+}
+
+.selected-card {
+  border: 2px solid #facc15; /* Yellow border for selected cards */
 }
 </style>
