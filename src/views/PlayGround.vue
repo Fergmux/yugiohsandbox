@@ -1191,6 +1191,24 @@ const selectTextElement = (uid: string, event?: MouseEvent) => {
     const editableElement = textElement?.querySelector('[contenteditable]') as HTMLDivElement | null
     if (editableElement) {
       editableElement.focus()
+
+      // Move cursor to the end of the text
+      const textElement = textElements.value.find((el) => el.uid === uid)
+      if (textElement && textElement.text) {
+        // Create a range at the end of the text content
+        const range = document.createRange()
+        const selection = window.getSelection()
+
+        // First clear any existing selection
+        selection?.removeAllRanges()
+
+        // Set range to end of content
+        if (editableElement.firstChild) {
+          range.setStart(editableElement.firstChild, textElement.text.length)
+          range.collapse(true)
+          selection?.addRange(range)
+        }
+      }
     }
   }, 0)
 }
@@ -1478,7 +1496,7 @@ const initTextDraggable = (uid: string) => {
                 :key="element.uid"
                 :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
-                class="text-element box-border border-4 border-transparent"
+                class="text-element box-border border-2 border-transparent"
                 :class="{ 'border-yellow-200': selectedTextElements.includes(element.uid) }"
                 @click="(e) => selectTextElement(element.uid, e)"
               >
