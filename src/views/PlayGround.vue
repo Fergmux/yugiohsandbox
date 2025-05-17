@@ -1478,8 +1478,8 @@ const initTextDraggable = (uid: string) => {
                 :key="element.uid"
                 :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
-                class="text-element box-border"
-                :class="{ 'border-4 border-yellow-200': selectedTextElements.includes(element.uid) }"
+                class="text-element box-border border-4 border-transparent"
+                :class="{ 'border-yellow-200': selectedTextElements.includes(element.uid) }"
                 @click="(e) => selectTextElement(element.uid, e)"
               >
                 <div
@@ -1493,7 +1493,7 @@ const initTextDraggable = (uid: string) => {
                   @focus="selectTextElement(element.uid)"
                   @blur="selectedTextElement = null"
                   :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
-                  class="text-input outline-none"
+                  class="inline-block min-w-[1em] bg-transparent p-1 whitespace-nowrap outline-none"
                 >
                   {{ element.text }}
                 </div>
@@ -1506,9 +1506,9 @@ const initTextDraggable = (uid: string) => {
                 :style="`${draggableInstances.get(card.uid)?.style || initDraggable(card.uid, index)}; z-index: ${
                   playgroundState.cardLocations[card.uid]?.z || index + 1
                 }`"
-                class="card-element absolute w-max cursor-move"
+                class="card-element absolute box-border w-max cursor-move border-2 border-transparent"
                 :class="{
-                  'selected-card': selectedCards.includes(card.uid),
+                  'border-yellow-200': selectedCards.includes(card.uid),
                 }"
                 @click="toggleCardSelection(card.uid, $event)"
                 @click.right.prevent="inspectedCard = card"
@@ -1538,11 +1538,6 @@ const initTextDraggable = (uid: string) => {
                   v-if="snapHighlightedEdges.edges[card.uid]?.left"
                   class="absolute top-0 bottom-0 left-0 z-[1000] w-1 bg-white"
                 ></div>
-                <!-- Selection indicator -->
-                <div
-                  v-if="selectedCards.includes(card.uid)"
-                  class="pointer-events-none absolute inset-0 z-[999] border-4 border-yellow-200"
-                ></div>
               </div>
             </template>
           </div>
@@ -1552,18 +1547,3 @@ const initTextDraggable = (uid: string) => {
   </div>
   <inspect-modal v-if="inspectedCard" :cards="inspectedCard" @close="inspectedCard = null" />
 </template>
-
-<style scoped>
-/* Add your styles here */
-.text-input {
-  display: inline-block;
-  white-space: nowrap;
-  min-width: 1em;
-  padding: 0.25em;
-  background-color: transparent;
-}
-
-.selected-card {
-  border: 2px solid #facc15; /* Yellow border for selected cards */
-}
-</style>
