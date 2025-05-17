@@ -1233,6 +1233,12 @@ const addTextElement = () => {
 // Create refs for text elements
 const textRefs = ref<Map<string, HTMLElement | null>>(new Map())
 
+// Add a variable to track if we're currently dragging a text element
+const isDraggingText = ref(false)
+
+// Keep track of text elements that were recently dragged to prevent auto-select
+const recentlyDragged = ref(new Set<string>())
+
 // Initialize draggable for text elements
 const initTextDraggable = (uid: string) => {
   const textRef = textRefs.value.get(uid)
@@ -1268,10 +1274,23 @@ const initTextDraggable = (uid: string) => {
       initialPosition.x = position.x
       initialPosition.y = position.y
       hasMoved = false
+      isDraggingText.value = true
 
-      // Select this text element if not already part of a selection
+      // Clear the recently dragged flag when starting a new interaction
+      recentlyDragged.value.delete(uid)
+
+      // Only update the selection status, but don't focus the input yet
       if (!selectedTextElements.value.includes(uid)) {
-        selectTextElement(uid)
+        // Just update the selection state without focusing
+        selectedTextElement.value = uid
+        selectedTextElements.value = [uid]
+        // Clear selected cards when selecting text without Shift
+        selectedCards.value = []
+      }
+
+      // Make sure any active editable field loses focus during drag
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
       }
 
       // Find the highest z-index and increment it for the current element
@@ -1307,6 +1326,11 @@ const initTextDraggable = (uid: string) => {
       if (deltaX > 3 || deltaY > 3) {
         hasMoved = true
         isDragging.value = true
+
+        // Make sure any active editable field loses focus during drag
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur()
+        }
       }
 
       // Get the current text element
@@ -1363,28 +1387,61 @@ const initTextDraggable = (uid: string) => {
       // Save the text element if it was moved
       if (hasMoved) {
         saveTextElement()
-      }
 
-      // Focus the input if the element wasn't moved
-      if (!hasMoved) {
-        // Find the input element within the text element
-        const inputElement = textRef.querySelector('input')
-        if (inputElement) {
-          // Use setTimeout to ensure this happens after the click event processing
-          setTimeout(() => {
-            inputElement.focus()
-          }, 0)
+        // If we've moved, mark this element as recently dragged
+        recentlyDragged.value.add(uid)
+
+        // If we've moved, don't automatically re-select this element
+        if (selectedTextElements.value.includes(uid)) {
+          selectedTextElements.value = selectedTextElements.value.filter((id) => id !== uid)
+
+          // Update primary selected element if needed
+          if (selectedTextElement.value === uid) {
+            selectedTextElement.value = null
+          }
         }
-      }
 
-      // Only reset isDragging if the element actually moved
-      if (hasMoved) {
+        // Add a delay before clearing the dragging flags to prevent immediate focus
         setTimeout(() => {
           isDragging.value = false
+          isDraggingText.value = false
+
+          // Clear the recently dragged flag after some time
+          setTimeout(() => {
+            recentlyDragged.value.delete(uid)
+          }, 300)
         }, 50)
       } else {
-        // If the element didn't move, it's just a click, not a drag
+        // If the element wasn't moved, it was a click, so focus the input
         isDragging.value = false
+        isDraggingText.value = false
+
+        // Wait a moment before applying focus to ensure click events are processed
+        setTimeout(() => {
+          // Only focus if we're not dragging anymore
+          if (!isDragging.value && !isDraggingText.value) {
+            const editableElement = textRef.querySelector('[contenteditable]') as HTMLDivElement | null
+            if (editableElement) {
+              editableElement.focus()
+
+              // Move cursor to the end of the text
+              if (textElement.text) {
+                const range = document.createRange()
+                const selection = window.getSelection()
+
+                // First clear any existing selection
+                selection?.removeAllRanges()
+
+                // Set range to end of content
+                if (editableElement.firstChild) {
+                  range.setStart(editableElement.firstChild, textElement.text.length)
+                  range.collapse(true)
+                  selection?.addRange(range)
+                }
+              }
+            }
+          }
+        }, 50)
       }
     },
   })
@@ -1448,7 +1505,7 @@ const initTextDraggable = (uid: string) => {
               </button>
               <!-- Text formatting buttons - only show when text element is selected -->
               <button
-                v-if="selectedTextElement"
+                v-if="selectedTextElement && !isDraggingText"
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @mousedown.prevent
                 @click="decreaseTextSize"
@@ -1457,7 +1514,7 @@ const initTextDraggable = (uid: string) => {
                 <span class="material-symbols-outlined text-xs"> text_decrease </span>
               </button>
               <button
-                v-if="selectedTextElement"
+                v-if="selectedTextElement && !isDraggingText"
                 class="flex size-8 cursor-pointer items-center justify-center rounded-full border-1 border-gray-300 active:bg-gray-400"
                 @mousedown.prevent
                 @click="increaseTextSize"
@@ -1497,8 +1554,16 @@ const initTextDraggable = (uid: string) => {
                 :ref="(el) => textRefs.set(element.uid, el as HTMLElement)"
                 :style="`${draggableInstances.get(element.uid)?.style || initTextDraggable(element.uid)}; position: absolute; cursor: move; z-index: ${element.z};`"
                 class="text-element box-border border-2 border-transparent"
-                :class="{ 'border-yellow-200': selectedTextElements.includes(element.uid) }"
-                @click="(e) => selectTextElement(element.uid, e)"
+                :class="{
+                  'border-yellow-200':
+                    selectedTextElements.includes(element.uid) && !isDraggingText && !recentlyDragged.has(element.uid),
+                }"
+                @click="
+                  (e) => {
+                    if (!isDragging && !isDraggingText && !recentlyDragged.has(element.uid))
+                      selectTextElement(element.uid, e)
+                  }
+                "
               >
                 <div
                   contenteditable="true"
@@ -1508,10 +1573,10 @@ const initTextDraggable = (uid: string) => {
                       saveTextElement()
                     }
                   "
-                  @focus="selectTextElement(element.uid)"
+                  @focus="!isDraggingText && selectTextElement(element.uid)"
                   @blur="selectedTextElement = null"
                   :style="`font-size: ${getScaledFontSize(element.uid)}px;`"
-                  class="inline-block min-w-[1em] bg-transparent p-1 whitespace-nowrap outline-none"
+                  class="pointer-events-auto inline-block min-w-[1em] bg-transparent p-1 whitespace-nowrap outline-none"
                 >
                   {{ element.text }}
                 </div>
