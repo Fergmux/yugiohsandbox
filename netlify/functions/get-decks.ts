@@ -1,4 +1,6 @@
-import { client, fql } from '../lib/client.js'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { path: string }) => {
   try {
@@ -7,22 +9,25 @@ const handler = async (event: { path: string }) => {
       const pathParts = event.path.split('/')
       if (pathParts.length > 0) {
         const lastPart = pathParts[pathParts.length - 1]
-        if (lastPart && lastPart !== 'get-user') {
+        if (lastPart && lastPart !== 'get-decks') {
           userId = decodeURIComponent(lastPart)
         }
       }
     }
 
-    // Build query that uses the previous var and sub-query
     if (userId) {
-      const updateUserQuery = fql`decks.where(.userId == ${userId})`
+      const decksRef = collection(db, 'decks')
+      const q = query(decksRef, where('userId', '==', userId))
+      const querySnapshot = await getDocs(q)
 
-      // Run the query
-      const response = await client.query(updateUserQuery)
+      const decks = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
 
       return {
         statusCode: 200,
-        body: JSON.stringify(response.data.data),
+        body: JSON.stringify(decks),
         headers: {
           'Content-Type': 'application/json',
         },

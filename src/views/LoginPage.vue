@@ -41,7 +41,13 @@ const onAddUser = async () => {
 const onGetUser = async () => {
   errorMessage.value = ''
   try {
-    await getUser(userName.value)
+    try {
+      await getUser(userName.value)
+    } catch (err) {
+      if (err instanceof Error) {
+        alert(err.message)
+      }
+    }
     await getDecks()
     if (route.params.gameCode) {
       router.push({ name: 'play', params: { gameCode: route.params.gameCode } })

@@ -6,14 +6,22 @@ const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const deckRef = doc(db, 'decks', body.deckId)
-    await updateDoc(deckRef, {
-      name: body.name,
-    })
+    if (!body.deckId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Deck ID is required' }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    }
+
+    const docRef = doc(db, 'playgrounds', body.deckId)
+    await updateDoc(docRef, body.state)
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ id: body.deckId, name: body.name }),
+      body: JSON.stringify({ success: true }),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -31,3 +39,4 @@ const handler = async (event: { body: string }) => {
 }
 
 export { handler }
+

@@ -9,25 +9,41 @@ const handler = async (event: { path: string }) => {
       const pathParts = event.path.split('/')
       if (pathParts.length > 0) {
         const lastPart = pathParts[pathParts.length - 1]
-        if (lastPart && lastPart !== 'get-deck') {
+        if (lastPart && lastPart !== 'get-playground') {
           deckId = decodeURIComponent(lastPart)
         }
       }
     }
 
     if (deckId) {
-      const deckRef = doc(db, 'decks', deckId)
-      const deckSnap = await getDoc(deckRef)
+      const docRef = doc(db, 'playgrounds', deckId)
+      const docSnap = await getDoc(docRef)
 
-      if (!deckSnap.exists()) throw new Error('Deck not found')
+      if (!docSnap.exists()) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ exists: false }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      }
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ id: deckSnap.id, ...deckSnap.data() }),
+        body: JSON.stringify({ exists: true, data: docSnap.data() }),
         headers: {
           'Content-Type': 'application/json',
         },
       }
+    }
+
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'Deck ID is required' }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
     }
   } catch (err) {
     console.error(err)
@@ -42,3 +58,4 @@ const handler = async (event: { path: string }) => {
 }
 
 export { handler }
+

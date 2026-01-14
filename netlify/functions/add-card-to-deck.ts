@@ -1,19 +1,19 @@
-import { client, fql } from '../lib/client.js'
+import { doc, updateDoc } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const addCardToDeckQuery = fql`
-      let deck = decks.firstWhere(.id == ${body.deckId})
-      deck?.update({
-        cards: ${body.cards}
-      })`
-    const response = await client.query(addCardToDeckQuery)
+    const deckRef = doc(db, 'decks', body.deckId)
+    await updateDoc(deckRef, {
+      cards: body.cards,
+    })
 
     return {
       statusCode: 200,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify({ id: body.deckId, cards: body.cards }),
       headers: {
         'Content-Type': 'application/json',
       },

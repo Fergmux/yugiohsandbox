@@ -1,22 +1,21 @@
-import { client, fql } from '../lib/client.js'
+import { addDoc, collection } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    // Build query that uses the previous var and sub-query
-    const addDeckQuery = fql`
-      decks?.create({
-        name: ${body.deckName},
-        userId: ${body.userId},
-      })`
-
-    // Run the query
-    const response = await client.query(addDeckQuery)
+    const decksRef = collection(db, 'decks')
+    const docRef = await addDoc(decksRef, {
+      name: body.deckName,
+      userId: body.userId,
+      cards: [],
+    })
 
     return {
       statusCode: 200,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify({ id: docRef.id, name: body.deckName, userId: body.userId, cards: [] }),
       headers: {
         'Content-Type': 'application/json',
       },

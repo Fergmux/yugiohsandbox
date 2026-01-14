@@ -1,4 +1,6 @@
-import { client, fql } from '../lib/client.js'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { path: string }) => {
   try {
@@ -14,14 +16,18 @@ const handler = async (event: { path: string }) => {
     }
 
     if (name) {
-      const getUserQuery = fql`users.firstWhere(.username.toLowerCase() == ${name.toLowerCase()})`
-      const response = await client.query(getUserQuery)
+      const usersRef = collection(db, 'users')
+      const q = query(usersRef, where('username', '==', name.toLowerCase()))
+      const querySnapshot = await getDocs(q)
 
-      if (!response.data) throw new Error('User not found')
+      if (querySnapshot.empty) throw new Error('User not found')
+
+      const userDoc = querySnapshot.docs[0]
+      const userData = { id: userDoc.id, ...userDoc.data() }
 
       return {
         statusCode: 200,
-        body: JSON.stringify(response.data),
+        body: JSON.stringify(userData),
         headers: {
           'Content-Type': 'application/json',
         },

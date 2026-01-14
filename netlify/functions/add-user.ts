@@ -1,24 +1,24 @@
-import { client, fql } from '../lib/client.js'
+import { addDoc, collection, getDocs, query, where } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const getUserQuery = fql`users.firstWhere(.username.toLowerCase() == ${body.username.toLowerCase()})`
-    const userResponse = await client.query(getUserQuery)
-    if (userResponse.data) throw new Error('User already exists')
+    const usersRef = collection(db, 'users')
+    const q = query(usersRef, where('username', '==', body.username.toLowerCase()))
+    const querySnapshot = await getDocs(q)
 
-    // Build query that uses the previous var and sub-query
-    const upsertCollectionQuery = fql`users.create({
-      username: ${body.username},
-    })`
+    if (!querySnapshot.empty) throw new Error('User already exists')
 
-    // Run the query
-    const response = await client.query(upsertCollectionQuery)
+    const docRef = await addDoc(usersRef, {
+      username: body.username.toLowerCase(),
+    })
 
     return {
       statusCode: 200,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify({ id: docRef.id, username: body.username }),
       headers: {
         'Content-Type': 'application/json',
       },

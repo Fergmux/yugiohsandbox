@@ -40,6 +40,7 @@ export const useUserStore = defineStore('user', () => {
       user.value = userData as User
       savedUsername.value = username
     } catch (err) {
+      alert(err)
       throw err
     } finally {
       loadingUser.value = false

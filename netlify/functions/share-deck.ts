@@ -1,10 +1,12 @@
-import { client, fql } from '../lib/client.js'
+import { addDoc, collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
     console.log('body', body)
-    // Validate required fields
+
     if (!body.deckId) {
       throw new Error('Deck ID is required')
     }
@@ -14,46 +16,52 @@ const handler = async (event: { body: string }) => {
     }
 
     // Get the original deck
-    const getDeckQuery = fql`decks.firstWhere(.id == ${body.deckId})`
-    const deckResponse = await client.query(getDeckQuery)
+    const deckRef = doc(db, 'decks', body.deckId)
+    const deckSnap = await getDoc(deckRef)
 
-    if (!deckResponse.data) {
+    if (!deckSnap.exists()) {
       throw new Error('Deck not found')
     }
-    console.log('deckResponse', deckResponse.data.name)
 
-    // Get the target user - search case insensitively but without using toLowerCase in FQL
-    const targetUsername = body.targetUsername.toLowerCase()
-    const getUserQuery = fql`
-      users.where(u => u.username.toLowerCase() == ${targetUsername}).first()
-    `
-    const userResponse = await client.query(getUserQuery)
+    const deckData = deckSnap.data()
+    console.log('deckResponse', deckData.name)
 
-    if (!userResponse.data) {
+    // Get the target user
+    const usersRef = collection(db, 'users')
+    const q = query(usersRef, where('username', '==', body.targetUsername.toLowerCase()))
+    const querySnapshot = await getDocs(q)
+
+    if (querySnapshot.empty) {
       throw new Error('User not found')
     }
-    console.log('userResponse', userResponse.data.username)
+
+    const userDoc = querySnapshot.docs[0]
+    console.log('userResponse', userDoc.data().username)
 
     // Create a new deck name with attribution if username is provided
-    let deckName = deckResponse.data.name
+    let deckName = deckData.name
     if (body.username) {
-      deckName = `${deckResponse.data.name} (${body.username})`
+      deckName = `${deckData.name} (${body.username})`
     }
 
     // Create a new deck for the target user
-    const shareDeckQuery = fql`
-      decks?.create({
-        name: ${deckName},
-        userId: ${userResponse.data.id},
-        cards: ${deckResponse.data.cards}
-      })`
+    const decksRef = collection(db, 'decks')
+    const newDeckRef = await addDoc(decksRef, {
+      name: deckName,
+      userId: userDoc.id,
+      cards: deckData.cards || [],
+    })
 
-    // Run the query
-    const response = await client.query(shareDeckQuery)
-    console.log('response', response.data)
+    console.log('response', newDeckRef.id)
+
     return {
       statusCode: 200,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify({
+        id: newDeckRef.id,
+        name: deckName,
+        userId: userDoc.id,
+        cards: deckData.cards || [],
+      }),
       headers: {
         'Content-Type': 'application/json',
       },

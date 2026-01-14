@@ -1,17 +1,17 @@
-import { client, fql } from '../lib/client.js'
+import { deleteDoc, doc } from 'firebase/firestore'
+
+import { db } from '../lib/firebase.js'
 
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const removeDeckQuery = fql`
-      let deck = decks.firstWhere(.id == ${body.deckId})
-      deck?.delete()`
-    const response = await client.query(removeDeckQuery)
+    const deckRef = doc(db, 'decks', body.deckId)
+    await deleteDoc(deckRef)
 
     return {
       statusCode: 200,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify({ id: body.deckId, deleted: true }),
       headers: {
         'Content-Type': 'application/json',
       },

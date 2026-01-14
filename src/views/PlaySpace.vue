@@ -2,7 +2,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
-import { addDoc, collection, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore'
+import { doc, onSnapshot } from 'firebase/firestore'
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
@@ -38,7 +38,6 @@ New Features
 - Admin portal?
 - User profile page?
 - Ensure mobile works?
-- move from fauna to firebase
 - put firebase into edge functions
 - Attack calculator
 - missing image backup
@@ -152,8 +151,13 @@ const createGame = async () => {
   gameState.value.code = gameCode.value
   gameState.value.players.player1 = userStore.user ?? null
   try {
-    const docRef = await addDoc(collection(db, 'games'), gameState.value)
-    gameId.value = docRef.id
+    const response = await fetch('/.netlify/functions/create-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameState: gameState.value }),
+    })
+    const data = await response.json()
+    gameId.value = data.id
   } catch (e) {
     console.error('Error adding document: ', e)
   }
@@ -276,26 +280,37 @@ const setDeck = (id: string) => {
 
 const updateGame = debounce(async () => {
   if (!gameId.value) return
-  await updateDoc(doc(db, 'games', gameId.value), gameState.value)
+  await fetch('/.netlify/functions/update-game', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gameId: gameId.value, gameState: gameState.value }),
+  })
 }, 100)
 
 const joinGame = async () => {
-  const q = query(collection(db, 'games'), where('code', '==', Number(gameCode.value)))
-  const querySnapshot = await getDocs(q)
-  if (querySnapshot.docs.length > 0) {
-    gameId.value = querySnapshot.docs[0].id
-    const gameData = querySnapshot.docs[0].data() as GameState
+  try {
+    const response = await fetch(`/.netlify/functions/get-game-by-code/${gameCode.value}`)
+    if (!response.ok) {
+      console.error('Game not found')
+      return
+    }
+    const gameData = (await response.json()) as GameState & { id: string }
+    gameId.value = gameData.id
     if (gameData.players.player1?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player1 ?? undefined
     } else if (gameData.players.player2?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player2 ?? undefined
     } else if (!gameData.players.player2) {
       gameData.players.player2 = userStore.user ?? null
-      await updateDoc(doc(db, 'games', gameId.value), { ...gameData })
+      await fetch('/.netlify/functions/update-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameId: gameId.value, gameState: gameData }),
+      })
     }
     subscribe()
-  } else {
-    console.error('Game not found')
+  } catch (e) {
+    console.error('Error joining game:', e)
   }
 }
 

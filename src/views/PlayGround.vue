@@ -3,14 +3,12 @@ import type { ComputedRef } from 'vue'
 // Fetch all cards and decks on component mount
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 
-import { collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import _debounce from 'lodash/debounce'
 import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 
 import DeckSelect from '@/components/deckbuilder/DeckSelect.vue'
 import InspectModal from '@/components/InspectModal.vue'
-import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { extraDeckTypes, otherDeckTypes } from '@/types/filters'
 import type { YugiohCard } from '@/types/yugiohCard'
@@ -173,48 +171,56 @@ watch(
 )
 
 const getPlaygroundState = async () => {
-  const docRef = doc(db, 'playgrounds', selectedDeckId.value || '')
-  const docSnap = await getDoc(docRef)
-  if (docSnap.exists()) {
-    const stateData = docSnap.data() as playgroundState
-    playgroundState.value = {
-      ...stateData,
-      zoomLevel: stateData.zoomLevel || 1, // Ensure zoomLevel exists
-      cardSize: stateData.cardSize || 120, // Ensure cardSize exists with default of 120px
-      textElements: stateData.textElements || [], // Ensure textElements exists
-    }
+  try {
+    const response = await fetch(`/.netlify/functions/get-playground/${selectedDeckId.value}`)
+    const data = await response.json()
 
-    // If cardSize is too small or undefined, set it to the default
-    if (!playgroundState.value.cardSize || playgroundState.value.cardSize < 40) {
-      playgroundState.value.cardSize = 120
-    }
-
-    // Load text elements from state
-    textElements.value = Array.isArray(playgroundState.value.textElements) ? playgroundState.value.textElements : []
-
-    // Load font sizes from text elements
-    textElementFontSizes.value = {}
-    textElements.value.forEach((element) => {
-      if (element.fontSize) {
-        textElementFontSizes.value[element.uid] = element.fontSize
+    if (data.exists) {
+      const stateData = data.data as playgroundState
+      playgroundState.value = {
+        ...stateData,
+        zoomLevel: stateData.zoomLevel || 1, // Ensure zoomLevel exists
+        cardSize: stateData.cardSize || 120, // Ensure cardSize exists with default of 120px
+        textElements: stateData.textElements || [], // Ensure textElements exists
       }
-    })
-  } else {
-    // Create a new playground state document if it doesn't exist
-    playgroundState.value = {
-      cardSize: 120, // Changed from 5 to 120 pixels default size
-      cardLocations: {},
-      zoomLevel: 1,
-      textElements: [], // Initialize with empty text elements array
-    }
 
-    // Create a new document in the playgrounds collection
-    const docRef = doc(collection(db, 'playgrounds'), selectedDeckId.value || '')
-    try {
-      await setDoc(docRef, playgroundState.value)
-    } catch (error) {
-      console.error('Error creating playground state:', error)
+      // If cardSize is too small or undefined, set it to the default
+      if (!playgroundState.value.cardSize || playgroundState.value.cardSize < 40) {
+        playgroundState.value.cardSize = 120
+      }
+
+      // Load text elements from state
+      textElements.value = Array.isArray(playgroundState.value.textElements) ? playgroundState.value.textElements : []
+
+      // Load font sizes from text elements
+      textElementFontSizes.value = {}
+      textElements.value.forEach((element) => {
+        if (element.fontSize) {
+          textElementFontSizes.value[element.uid] = element.fontSize
+        }
+      })
+    } else {
+      // Create a new playground state document if it doesn't exist
+      playgroundState.value = {
+        cardSize: 120, // Changed from 5 to 120 pixels default size
+        cardLocations: {},
+        zoomLevel: 1,
+        textElements: [], // Initialize with empty text elements array
+      }
+
+      // Create a new document in the playgrounds collection
+      try {
+        await fetch('/.netlify/functions/save-playground', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deckId: selectedDeckId.value, state: playgroundState.value }),
+        })
+      } catch (error) {
+        console.error('Error creating playground state:', error)
+      }
     }
+  } catch (error) {
+    console.error('Error fetching playground state:', error)
   }
 }
 
@@ -225,8 +231,11 @@ const updateState = _debounce(async () => {
   // Ensure textElements.value is an array before storing
   playgroundState.value.textElements = Array.isArray(textElements.value) ? textElements.value : []
 
-  const docRef = doc(collection(db, 'playgrounds'), selectedDeckId.value)
-  await updateDoc(docRef, playgroundState.value)
+  await fetch('/.netlify/functions/update-playground', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deckId: selectedDeckId.value, state: playgroundState.value }),
+  })
 }, 1000)
 
 // Debounced function to save text element changes
@@ -254,10 +263,12 @@ const cardsOnField: ComputedRef<YugiohCard[]> = computed(() => {
     const card = allCards.value.find((card) => card.id === cardId)
     if (!card || otherDeckTypes.includes(card.type)) return
 
+    const processedCardCount = result.filter((card) => card.id === cardId).length
+
     // Check if this card already has a position in the playground state
-    const existingLocation = Object.values(playgroundState.value.cardLocations).find(
+    const existingLocation = Object.values(playgroundState.value.cardLocations).filter(
       (location) => location.cardId === cardId,
-    )
+    )[processedCardCount]
 
     if (existingLocation) {
       // Use the existing location and uid
