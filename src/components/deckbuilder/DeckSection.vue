@@ -6,9 +6,10 @@ import { getS3ImageUrl } from '@/utils'
 
 import BanlistIndicator from './BanlistIndicator.vue'
 
-defineProps<{
+const props = defineProps<{
   cards?: YugiohCard[]
   max?: number
+  locked?: boolean | null
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 const moveAudio = new Audio('/card_move.mp3')
 const clickingOnCard = ref<number | null>(null)
 const clickOnCard = (cardId: number) => {
+  if (props.locked) return
   clickingOnCard.value = cardId
   moveAudio.currentTime = 0
   moveAudio.play()

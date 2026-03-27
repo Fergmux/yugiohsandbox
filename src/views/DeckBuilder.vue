@@ -16,17 +16,12 @@ import type { BanlistFormat, YugiohCard } from '@/types/yugiohCard'
 
 const deckStore = useDeckStore()
 const { decks, allCards, selectedDeckId } = storeToRefs(deckStore)
-const { getAllCards, addCardToDeck, removeCardFromDeck } = deckStore
+const { getAllCards, addCardToDeck, removeCardFromDeck, lockDeck, unlockDeck, setDeckFormat } = deckStore
 
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
   getAllCards()
 })
-
-// DECK FORMAT //
-const searchLimit = ref(30)
-const format = ref<BanlistFormat>('tcg')
-provide('format', format)
 
 // SELECT DECK //
 const selectedDeck = computed(() => decks.value.find((deck) => deck.id === selectedDeckId.value))
@@ -46,6 +41,30 @@ const cardsInDeck: ComputedRef<YugiohCard[] | undefined> =
         .sort((a, b) => (a && b ? a.name.localeCompare(b.name) : 0))
         .filter(Boolean) as YugiohCard[] | undefined,
   ) ?? []
+
+// LOCKED //
+const locked = ref(selectedDeck.value?.locked ?? false)
+watch(selectedDeck, (newDeck) => {
+  locked.value = newDeck?.locked ?? false
+})
+watch(locked, (newLocked) => {
+  if (newLocked) {
+    lockDeck()
+  } else {
+    unlockDeck()
+  }
+})
+
+// DECK FORMAT //
+const searchLimit = ref(30)
+const format = ref<BanlistFormat>(selectedDeck.value?.format ?? 'tcg')
+provide('format', format)
+watch(selectedDeck, (newDeck) => {
+  format.value = newDeck?.format ?? 'tcg'
+})
+watch(format, (newFormat) => {
+  setDeckFormat(newFormat)
+})
 
 // Sort function for cards based on frameType and name
 const sortCardsByFrameTypeAndName = (a: YugiohCard, b: YugiohCard) => {
@@ -125,6 +144,7 @@ const limitedSearchResults = computed(() => searchFilteredCards.value.slice(0, s
 const clickingOnCard = ref<number | null>(null)
 const clickOnCard = (cardId: number) => {
   if (!selectedDeckId.value) return
+  if (selectedDeck.value?.locked) return
   clickingOnCard.value = cardId
   const moveAudio = new Audio('/card_move.mp3')
   moveAudio.play()
@@ -141,8 +161,8 @@ watch(searchQuery, () => {
 <template>
   <div class="p-8">
     <div class="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-end">
-      <deck-select v-model="selectedDeckId" />
-      <div class="flex gap-4">
+      <deck-select v-model="selectedDeckId" class="basis-4/5" />
+      <div class="flex min-w-80 basis-1/5 gap-4">
         <deck-actions />
       </div>
     </div>
@@ -153,7 +173,16 @@ watch(searchQuery, () => {
     >
       <div class="basis-4/5 rounded-md border-1 border-gray-300 p-4">
         <div class="flex items-center justify-between">
-          <h1 class="text-3xl font-semibold">{{ selectedDeck.name }}</h1>
+          <div class="flex items-center gap-2">
+            <span
+              class="material-symbols-outlined cursor-pointer !text-3xl"
+              :title="locked ? 'Unlock Deck' : 'Lock Deck'"
+              @click="locked = !locked"
+            >
+              {{ locked ? 'lock' : 'lock_open' }}
+            </span>
+            <h1 class="text-3xl font-semibold">{{ selectedDeck.name }}</h1>
+          </div>
           <!-- format select -->
           <div class="mr-4 rounded-md border-1 border-gray-300 p-2">
             <select v-model="format" name="format" id="format" class="outline-none">
@@ -163,13 +192,25 @@ watch(searchQuery, () => {
             </select>
           </div>
         </div>
-        <deck-section :cards="cardsInNormalDeck" :max="60" @select="selectCard" @remove="removeCardFromDeck($event)">
+        <deck-section
+          :cards="cardsInNormalDeck"
+          :max="60"
+          :locked="locked"
+          @select="selectCard"
+          @remove="removeCardFromDeck($event)"
+        >
           Main Deck
         </deck-section>
-        <deck-section :cards="cardsInExtraDeck" :max="15" @select="selectCard" @remove="removeCardFromDeck($event)">
+        <deck-section
+          :cards="cardsInExtraDeck"
+          :max="15"
+          :locked="locked"
+          @select="selectCard"
+          @remove="removeCardFromDeck($event)"
+        >
           Extra Deck
         </deck-section>
-        <deck-section :cards="tokenCards" @select="selectCard" @remove="removeCardFromDeck($event)">
+        <deck-section :cards="tokenCards" :locked="locked" @select="selectCard" @remove="removeCardFromDeck($event)">
           Tokens
         </deck-section>
       </div>

@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import type { Deck } from '@/types/deck'
-import type { YugiohCard } from '@/types/yugiohCard'
+import type { BanlistFormat, YugiohCard } from '@/types/yugiohCard'
 
 import { useUserStore } from './user'
 
@@ -33,7 +33,7 @@ export const useDeckStore = defineStore('deck', () => {
     addingDeck.value = true
     const response = await fetch(`/.netlify/functions/add-deck`, {
       method: 'POST',
-      body: JSON.stringify({ userId: userStore.user?.id, deckName: deckName }),
+      body: JSON.stringify({ userId: userStore.user?.id, deckName: deckName, locked: false }),
     })
     await getDecks()
     const deck = await response.json()
@@ -126,6 +126,36 @@ export const useDeckStore = defineStore('deck', () => {
     await getDecks()
   }
 
+  const lockDeck = async () => {
+    if (selectedDeck.value) {
+      selectedDeck.value.locked = true
+      fetch(`/.netlify/functions/lock-deck`, {
+        method: 'POST',
+        body: JSON.stringify({ deckId: selectedDeckId.value }),
+      })
+    }
+  }
+
+  const unlockDeck = async () => {
+    if (selectedDeck.value) {
+      selectedDeck.value.locked = false
+      fetch(`/.netlify/functions/unlock-deck`, {
+        method: 'POST',
+        body: JSON.stringify({ deckId: selectedDeckId.value }),
+      })
+    }
+  }
+
+  const setDeckFormat = async (format: BanlistFormat) => {
+    if (selectedDeck.value) {
+      selectedDeck.value.format = format
+      fetch(`/.netlify/functions/set-deck-format`, {
+        method: 'POST',
+        body: JSON.stringify({ deckId: selectedDeckId.value, format }),
+      })
+    }
+  }
+
   return {
     getAllCards,
     addDeck,
@@ -137,6 +167,9 @@ export const useDeckStore = defineStore('deck', () => {
     changeDeckName,
     shareDeck,
     copyDeck,
+    lockDeck,
+    unlockDeck,
+    setDeckFormat,
     allCards,
     decks,
     addingDeck,

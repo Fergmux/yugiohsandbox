@@ -18,8 +18,8 @@ const selectedDeckId = defineModel<string>()
 <template>
   <div class="flex flex-col items-start rounded-md border-1 border-gray-300 p-4">
     <h3 class="text-2xl font-semibold">Decks</h3>
-    <div v-if="decksLoading && !decks.length" class="material-symbols-outlined mx-auto mt-2 animate-spin">refresh</div>
-    <div class="mt-2 flex max-w-full flex-wrap gap-2" v-else-if="decks.length">
+    <div v-if="decksLoading && !decks.length" class="material-symbols-outlined mx-auto mt-4 animate-spin">refresh</div>
+    <div class="mt-4 flex max-w-full flex-wrap gap-2" v-else-if="decks.length">
       <button
         v-for="deck in decks"
         :key="deck.id"
