@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ComputedRef, Ref } from 'vue'
-import { computed, onMounted, onUnmounted, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 
 import { doc, onSnapshot } from 'firebase/firestore'
 import { debounce } from 'lodash'
@@ -189,7 +189,7 @@ const inflightBatches = shallowRef<EditBatch[]>([])
 let sending = false
 
 const gameState = computed<GameState>(() => {
-  const base = structuredClone(toRaw(serverSnapshot.value))
+  const base = JSON.parse(JSON.stringify(serverSnapshot.value)) as GameState
   for (const batch of inflightBatches.value) {
     applyEdits(base, batch.edits)
   }

@@ -33,6 +33,28 @@ const crawl = ref<Crawl>({
 
 let unsubscribe: () => void
 
+/**
+ * Reference-counted pending field tracker.
+ * While a field has a count > 0, incoming snapshots won't overwrite
+ * the local value for that field, preventing remote data from clobbering
+ * optimistic updates that are still in-flight.
+ */
+const pendingCounts = new Map<string, number>()
+
+function markPending(key: string) {
+  pendingCounts.set(key, (pendingCounts.get(key) ?? 0) + 1)
+}
+
+function unmarkPending(key: string) {
+  const count = (pendingCounts.get(key) ?? 1) - 1
+  if (count <= 0) pendingCounts.delete(key)
+  else pendingCounts.set(key, count)
+}
+
+function isPending(key: string) {
+  return (pendingCounts.get(key) ?? 0) > 0
+}
+
 export const useCrawlManager = () => {
   const userStore = useUserStore()
 
@@ -62,8 +84,16 @@ export const useCrawlManager = () => {
   const joinUrl = computed(() => `${window.location.origin}/crawler/${gameCode.value}`)
   const { copy } = useClipboard({ source: joinUrl.value })
 
+  const sendUpdate = async (fields: Record<string, unknown>) => {
+    await fetch('/.netlify/functions/update-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: gameId.value, ...fields }),
+    })
+  }
+
   const createGame = async () => {
-    crawl.value.code = Math.floor(Math.random() * 10000) // Random number between 0 and 9999
+    crawl.value.code = Math.floor(Math.random() * 10000)
     crawl.value.player1.id = userStore.user?.id ?? null
     try {
       const response = await fetch('/.netlify/functions/create-crawl', {
@@ -87,26 +117,15 @@ export const useCrawlManager = () => {
         console.error('Game not found')
         return
       }
-      // const gameData = (await response.json()) as GameState & { id: string }
       const gameData = await response.json()
       gameId.value = gameData.id
-      // if (gameData.players.player1?.id === userStore.user?.id) {
-      //   deckId.value = gameData.decks.player1 ?? undefined
-      // } else if (gameData.players.player2?.id === userStore.user?.id) {
-      //   deckId.value = gameData.decks.player2 ?? undefined
-      // } else if (!gameData.players.player2) {
       subscribe()
-      await fetch('/.netlify/functions/update-crawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...gameData,
-          player2: {
-            id: userStore.user?.id ?? null,
-            deck: [],
-            powers: [],
-          },
-        }),
+      await sendUpdate({
+        player2: {
+          id: userStore.user?.id ?? null,
+          deck: [],
+          powers: [],
+        },
       })
     } catch (e) {
       console.error('Error joining game:', e)
@@ -116,10 +135,27 @@ export const useCrawlManager = () => {
   const subscribe = () => {
     console.log('subscribing to game', gameId.value)
     if (!gameId.value) return
-    unsubscribe = onSnapshot(doc(db, 'crawls', gameId.value), (doc) => {
-      console.log('doc sub', doc.data())
-      crawl.value = doc.data() as Crawl
-      // logRef.value?.scrollTo({ top: logRef.value.scrollHeight, behavior: 'smooth' })
+    unsubscribe = onSnapshot(doc(db, 'crawls', gameId.value), (snapshot) => {
+      console.log('doc sub', snapshot.data())
+      const remote = snapshot.data() as Crawl
+
+      if (!player.value || pendingCounts.size === 0) {
+        crawl.value = remote
+        return
+      }
+
+      const other = player.value === 'player1' ? 'player2' : 'player1'
+      const self = player.value
+
+      crawl.value[other] = { ...remote[other] }
+
+      if (!isPending('duelId')) crawl.value.duelId = remote.duelId
+      if (!isPending('round')) crawl.value.round = remote.round
+      if (!isPending('code')) crawl.value.code = remote.code
+
+      if (!isPending(`${self}.deck`)) crawl.value[self].deck = [...remote[self].deck]
+      if (!isPending(`${self}.powers`)) crawl.value[self].powers = [...remote[self].powers]
+      if (!isPending(`${self}.id`)) crawl.value[self].id = remote[self].id
     })
   }
 
@@ -127,95 +163,96 @@ export const useCrawlManager = () => {
     gameId.value = null
     gameCode.value = null
     crawl.value = { ...defaultCrawl, player1: { ...defaultCrawl.player1 }, player2: { ...defaultCrawl.player2 } }
+    pendingCounts.clear()
     if (unsubscribe) {
       unsubscribe()
     }
   }
 
   const newDuel = async (id: string) => {
-    await fetch('/.netlify/functions/update-crawl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...crawl.value,
-        duelId: id,
-        round: crawl.value.round + 1,
-      }),
-    })
+    const newRound = crawl.value.round + 1
+    crawl.value.duelId = id
+    crawl.value.round = newRound
+    markPending('duelId')
+    markPending('round')
+    try {
+      await sendUpdate({ duelId: id, round: newRound })
+    } finally {
+      unmarkPending('duelId')
+      unmarkPending('round')
+    }
   }
 
   const finishDuel = async () => {
-    await fetch('/.netlify/functions/update-crawl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...crawl.value,
-        duelId: null,
-      }),
-    })
+    crawl.value.duelId = null
+    markPending('duelId')
+    try {
+      await sendUpdate({ duelId: null })
+    } finally {
+      unmarkPending('duelId')
+    }
   }
 
   const addPowerToUser = async (power: Power) => {
     if (!player.value) return
-    await fetch('/.netlify/functions/update-crawl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...crawl.value,
-        [player.value]: {
-          ...crawl.value[player.value],
-          powers: [...crawl.value[player.value].powers, power],
-        },
-      }),
-    })
+    const p = player.value
+    const key = `${p}.powers`
+    const newPowers = [...crawl.value[p].powers, power]
+    crawl.value[p].powers = newPowers
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: newPowers })
+    } finally {
+      unmarkPending(key)
+    }
   }
 
   const removePowerFromUser = async (id: string) => {
     if (!player.value) return
-    const powers = crawl.value[player.value].powers
-    const idx = powers.findIndex((power) => power.id === id)
-    const updatedPowers = idx === -1 ? powers : [...powers.slice(0, idx), ...powers.slice(idx + 1)]
-    await fetch('/.netlify/functions/update-crawl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...crawl.value,
-        [player.value]: {
-          ...crawl.value[player.value],
-          powers: updatedPowers,
-        },
-      }),
-    })
+    const p = player.value
+    const key = `${p}.powers`
+    const currentPowers = crawl.value[p].powers
+    const idx = currentPowers.findIndex((power) => power.id === id)
+    const newPowers = idx === -1 ? currentPowers : [...currentPowers.slice(0, idx), ...currentPowers.slice(idx + 1)]
+    crawl.value[p].powers = newPowers
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: newPowers })
+    } finally {
+      unmarkPending(key)
+    }
   }
 
   const addCardToDeck = async (id: number) => {
     if (!player.value) return
-    await fetch('/.netlify/functions/update-crawl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...crawl.value,
-        [player.value]: { ...crawl.value[player.value], deck: [...crawl.value[player.value].deck, id] },
-      }),
-    })
+    const p = player.value
+    const key = `${p}.deck`
+    const newDeck = [...crawl.value[p].deck, id]
+    crawl.value[p].deck = newDeck
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: newDeck })
+    } finally {
+      unmarkPending(key)
+    }
   }
 
   const removeCardFromDeck = async (id: number) => {
     if (!player.value) return
-    const idx = deck.value.indexOf(id)
-    const updatedDeck = idx === -1 ? deck.value : [...deck.value.slice(0, idx), ...deck.value.slice(idx + 1)]
-    await fetch('/.netlify/functions/update-crawl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...crawl.value,
-        [player.value]: {
-          ...crawl.value[player.value],
-          deck: updatedDeck,
-        },
-      }),
-    })
+    const p = player.value
+    const key = `${p}.deck`
+    const currentDeck = crawl.value[p].deck
+    const idx = currentDeck.indexOf(id)
+    const newDeck = idx === -1 ? currentDeck : [...currentDeck.slice(0, idx), ...currentDeck.slice(idx + 1)]
+    crawl.value[p].deck = newDeck
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: newDeck })
+    } finally {
+      unmarkPending(key)
+    }
   }
+
   return {
     crawl,
     player,
