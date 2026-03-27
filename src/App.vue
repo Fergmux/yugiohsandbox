@@ -43,6 +43,14 @@ const route = useRoute()
       >
         Playground
       </button>
+      <button
+        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'crawler' }"
+        class="cursor-pointer p-1"
+        v-if="userStore.user"
+        @click="router.push('/crawler')"
+      >
+        Crawler
+      </button>
     </div>
     <router-view />
   </div>

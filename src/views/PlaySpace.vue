@@ -10,6 +10,7 @@ import { useRoute } from 'vue-router'
 
 import CoinFlip from '@/components/play-space/CoinFlip.vue'
 import FieldSide from '@/components/play-space/FieldSide.vue'
+import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
@@ -76,6 +77,12 @@ Playground
 - Rotate left/right?
 */
 
+const { newDuel, crawl } = useCrawlManager()
+
+const props = defineProps<{
+  crawlPlayer: 'player1' | 'player2' | null
+}>()
+
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']
 
 const defaultGameState: GameState = {
@@ -136,6 +143,20 @@ onMounted(async () => {
     gameCode.value = Number(route.params.gameCode)
     await joinGame()
   }
+  if (props.crawlPlayer) {
+    if (!crawl.value.duelId) {
+      await createGame()
+      if (gameId.value) {
+        await newDuel(gameId.value)
+      } else {
+        console.error('Error creating game, no gameId')
+      }
+      await setDeck(crawl.value[props.crawlPlayer].deck)
+    } else {
+      await joinGame(crawl.value.duelId)
+      await setDeck(crawl.value[props.crawlPlayer].deck)
+    }
+  }
 })
 
 const gameId: Ref<string | undefined> = ref()
@@ -148,7 +169,7 @@ const { copy } = useClipboard({ source: joinUrl.value })
 
 const createGame = async () => {
   gameState.value = defaultGameState
-  gameCode.value = Math.floor(Math.random() * 10001) // Random number between 0 and 10000
+  gameCode.value = Math.floor(Math.random() * 10000) // Random number between 0 and 9999
   gameState.value.code = gameCode.value
   gameState.value.players.player1 = userStore.user ?? null
   try {
@@ -217,6 +238,20 @@ const handleKeyDown = (event: KeyboardEvent) => {
     const newTurn = (turn.value + 1) % 12
     setTurn(newTurn)
   }
+  if (event.code === 'Enter' && gameId.value) {
+    sendEdits([
+      { type: 'set_zone', player: playerKey.value, location: 'hand', cards: [] },
+      {
+        type: 'set_zone',
+        player: playerKey.value,
+        location: 'graveyard',
+        cards: [
+          ...gameState.value.cards[playerKey.value].hand.map((c) => ({ ...c, faceDown: false })),
+          ...gameState.value.cards[playerKey.value].graveyard,
+        ],
+      },
+    ])
+  }
 }
 
 // Add event listener when component is mounted
@@ -229,17 +264,20 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
 
+const cardIdsToCards = (cardIds: number[]) => {
+  return cardIds.map((cardId) => {
+    const card = allCards.value.find((card) => card.id === cardId)
+    if (card) {
+      return { ...card, uid: uuidv4() }
+    }
+    return undefined
+  })
+}
+
 const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
-  return decks.value
-    .find((deck) => deck.id === deckId.value)
-    ?.cards.map((cardId: number) => {
-      const card = allCards.value.find((card) => card.id === cardId)
-      if (card) {
-        return { ...card, uid: uuidv4() }
-      }
-      return undefined
-    })
-    .filter(Boolean) as YugiohCard[]
+  return cardIdsToCards(decks.value.find((deck) => deck.id === deckId.value)?.cards ?? []).filter(
+    Boolean,
+  ) as YugiohCard[]
 })
 
 const cardsInNormalDeck = computed(() =>
@@ -268,19 +306,34 @@ const tokensInDeck = computed(() => {
     }))
 })
 
-const setDeck = (id: string) => {
-  deckId.value = id
-  const shuffledDeck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
-  gameState.value.cards[playerKey.value].deck = shuffledDeck
-  gameState.value.cards[playerKey.value].tokens = tokensInDeck.value
-  gameState.value.cards[playerKey.value].extra = cardsInExtraDeck.value
-  gameState.value.decks[playerKey.value] = id
-  sendEdits([
-    { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
-    { type: 'set_zone', player: playerKey.value, location: 'tokens', cards: [...tokensInDeck.value] },
-    { type: 'set_zone', player: playerKey.value, location: 'extra', cards: [...cardsInExtraDeck.value] },
-    { type: 'set_deck_id', player: playerKey.value, deckId: id },
-  ])
+const setDeck = (id: string | number[]) => {
+  // debugger
+  if (Array.isArray(id)) {
+    deckId.value = uuidv4()
+    const shuffledDeck = cardIdsToCards(id)
+      .filter((c): c is YugiohCard => c !== undefined)
+      .map((c) => ({ ...c, faceDown: true }))
+      .sort(() => Math.random() - 0.5)
+    gameState.value.cards[playerKey.value].deck = shuffledDeck
+    gameState.value.decks[playerKey.value] = deckId.value
+    sendEdits([
+      { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
+      { type: 'set_deck_id', player: playerKey.value, deckId: uuidv4() },
+    ])
+  } else {
+    deckId.value = id
+    const shuffledDeck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
+    gameState.value.cards[playerKey.value].deck = shuffledDeck
+    gameState.value.cards[playerKey.value].tokens = tokensInDeck.value
+    gameState.value.cards[playerKey.value].extra = cardsInExtraDeck.value
+    gameState.value.decks[playerKey.value] = id
+    sendEdits([
+      { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
+      { type: 'set_zone', player: playerKey.value, location: 'tokens', cards: [...tokensInDeck.value] },
+      { type: 'set_zone', player: playerKey.value, location: 'extra', cards: [...cardsInExtraDeck.value] },
+      { type: 'set_deck_id', player: playerKey.value, deckId: id },
+    ])
+  }
 }
 
 let pendingEdits: GameEdit[] = []
@@ -317,12 +370,21 @@ const sendEdits = (edits: GameEdit[]) => {
   flushEdits()
 }
 
-const joinGame = async () => {
+const joinGame = async (id?: string) => {
   try {
-    const response = await fetch(`/.netlify/functions/get-game-by-code/${gameCode.value}`)
-    if (!response.ok) {
-      console.error('Game not found')
-      return
+    let response
+    if (id) {
+      response = await fetch(`/.netlify/functions/get-game/${id}`)
+      if (!response.ok) {
+        console.error('Game not found')
+        return
+      }
+    } else {
+      response = await fetch(`/.netlify/functions/get-game-by-code/${gameCode.value}`)
+      if (!response.ok) {
+        console.error('Game not found')
+        return
+      }
     }
     const gameData = (await response.json()) as GameState & { id: string }
     gameId.value = gameData.id
@@ -382,8 +444,8 @@ const player = computed(() => {
   }
   return null
 })
-const playerKey: ComputedRef<'player1' | 'player2'> = computed(() =>
-  player.value === 'player2' ? 'player2' : 'player1',
+const playerKey: ComputedRef<'player1' | 'player2'> = computed(
+  () => props.crawlPlayer ?? (player.value === 'player2' ? 'player2' : 'player1'),
 )
 const notesRef = ref<HTMLTextAreaElement | null>(null)
 const showNotes = ref(false)
@@ -443,9 +505,9 @@ const showNotes = ref(false)
         v-model="gameCode"
         ref="inputRef"
         class="mt-2 mr-2 rounded-md border-1 border-gray-300 p-2"
-        @keyup.enter="joinGame"
+        @keyup.enter="joinGame()"
       />
-      <button @click="joinGame" class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
+      <button @click="joinGame()" class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
         Join Game
       </button>
     </div>

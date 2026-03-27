@@ -313,7 +313,23 @@ const giveToOpponent = (index: number) => {
 
 // Moving cards
 const drawCard = (source: keyof BoardSide) => {
-  if (!getCards(source).length) return
+  if (!getCards(source).length) {
+    if (props.player && source === 'deck') {
+      const shuffled = [...getCards('graveyard')]
+        .sort(() => Math.random() - 0.5)
+        .map((c) => ({ ...c, faceDown: true }) as YugiohCard)
+      sendEdit(
+        [
+          { type: 'set_zone', player: props.player, location: 'deck', cards: shuffled },
+          { type: 'set_zone', player: props.player, location: 'graveyard', cards: [] },
+        ],
+        `moved their graveyard into deck`,
+      )
+      return
+    } else {
+      return
+    }
+  }
   const card = getCards(source).shift()
   if (!card) return
   const cardData = { ...card, faceDown: true }
