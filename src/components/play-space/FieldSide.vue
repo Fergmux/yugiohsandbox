@@ -15,26 +15,21 @@ import IconButton from './IconButton.vue'
 type CardLocation = keyof BoardSide | 'attached'
 
 const props = defineProps<{
-  modelValue: GameState
+  gameState: GameState
   player: Player
   interactive?: boolean
   viewer?: boolean
+  crawl?: boolean
 }>()
 const i = computed(() => props.interactive || undefined)
 const iv = computed(() => i.value || props.viewer || undefined)
 const hideInspectControls = ref(false)
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: GameState): void
   (e: 'edit', edits: GameEdit[], logText?: string): void
 }>()
 
-const gameState = computed({
-  get: () => props.modelValue,
-  set: (value) => {
-    emit('update:modelValue', value)
-  },
-})
+const gameState = computed(() => props.gameState)
 
 const sendEdit = (edits: GameEdit[], logText?: string) => {
   emit('edit', edits, logText)
@@ -108,11 +103,8 @@ const extraZones = computed(() =>
 )
 
 const updateLifePoints = (value: number, player: Player) => {
-  gameState.value.lifePoints[player] += value
-  sendEdit(
-    [{ type: 'set_life_points', player, value: gameState.value.lifePoints[player] }],
-    `set their life points to ${gameState.value.lifePoints[player]}`,
-  )
+  const newValue = gameState.value.lifePoints[player] + value
+  sendEdit([{ type: 'set_life_points', player, value: newValue }], `set their life points to ${newValue}`)
 }
 
 // Utility functions
@@ -275,7 +267,6 @@ const inspectedCards = computed(() => {
 const showToOpponent = (index: number) => {
   const card = getCard('hand', index)
   if (!card) return
-  card.revealed = !card.revealed
   sendEdit(
     [
       {
@@ -283,7 +274,7 @@ const showToOpponent = (index: number) => {
         player: props.player,
         cardUid: card.uid,
         location: 'hand',
-        updates: { revealed: card.revealed },
+        updates: { revealed: !card.revealed },
       },
     ],
     `revealed ${card.name}`,
@@ -293,8 +284,6 @@ const giveToOpponent = (index: number) => {
   const card = getCard('hand', index)
   if (!card) return
   const cardData = { ...card, faceDown: false }
-  opponentCards.value.hand.push(cardData)
-  getCards('hand').splice(index, 1)
   sendEdit(
     [
       {
@@ -314,7 +303,7 @@ const giveToOpponent = (index: number) => {
 // Moving cards
 const drawCard = (source: keyof BoardSide) => {
   if (!getCards(source).length) {
-    if (props.player && source === 'deck') {
+    if (props.crawl && source === 'deck') {
       const shuffled = [...getCards('graveyard')]
         .sort(() => Math.random() - 0.5)
         .map((c) => ({ ...c, faceDown: true }) as YugiohCard)
@@ -330,10 +319,9 @@ const drawCard = (source: keyof BoardSide) => {
       return
     }
   }
-  const card = getCards(source).shift()
+  const card = getCards(source)[0]
   if (!card) return
   const cardData = { ...card, faceDown: true }
-  getCards('hand').push(cardData)
   sendEdit(
     [
       {
@@ -365,15 +353,6 @@ const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown
   }
 }
 
-const removeCard = (location: keyof BoardSide, index: number) => {
-  if (!location || index === undefined) return
-  if (location === 'field' || location === 'zones') {
-    cards.value[location].splice(index, 1, null)
-  } else {
-    cards.value[location].splice(index, 1)
-  }
-}
-
 const buildCardForDestination = (
   card: YugiohCard,
   destination: keyof BoardSide,
@@ -384,6 +363,7 @@ const buildCardForDestination = (
     defence?: boolean
     newAttack?: number | null
     newDefence?: number | null
+    attached?: string
   },
 ): YugiohCard => {
   const opts = { ...options }
@@ -409,67 +389,10 @@ const buildCardForDestination = (
   return { ...card, defence: false, counters: 0, ...opts, ...orientationOptions }
 }
 
-const addCardToDestination = (
-  card: YugiohCard,
-  destination: keyof BoardSide,
-  currentLocation: keyof BoardSide,
-  index?: number,
-  options?: {
-    faceDown?: boolean
-    defence?: boolean
-    newAttack?: number | null
-    newDefence?: number | null
-  },
-) => {
-  if (destination !== 'field' && destination !== 'zones') {
-    options = { ...options, newAttack: null, newDefence: null }
-  }
-  if (index != undefined) {
-    const target = getCard(destination, index)
-    if (target === null) {
-      const orientationOptions =
-        currentLocation === 'field' || currentLocation === 'zones' ? {} : { faceDown: false, defence: false }
-      getCards(destination)[index] = {
-        ...card,
-        ...orientationOptions,
-        ...options,
-      }
-    } else {
-      getCards(destination).splice(index, 0, {
-        ...card,
-        faceDown: true,
-        defence: false,
-        counters: 0,
-        ...options,
-      })
-    }
-  } else {
-    if (destination === 'deck' || destination === 'extra' || destination === 'tokens') {
-      getCards(destination).unshift({
-        ...card,
-        faceDown: true,
-        defence: false,
-        counters: 0,
-        ...options,
-      })
-    } else {
-      const orientationOptions = destination === 'banished' ? {} : { faceDown: false }
-      const method = destination === 'hand' ? 'push' : 'unshift'
-      getCards(destination)[method]({
-        ...card,
-        defence: false,
-        counters: 0,
-        ...options,
-        ...orientationOptions,
-      })
-    }
-  }
-}
-
 const moveCard = (
   destination: keyof BoardSide,
   index?: number,
-  options?: { faceDown?: boolean; defence?: boolean },
+  options?: { faceDown?: boolean; defence?: boolean; attached?: string },
 ): GameEdit[] => {
   options = options ?? {}
   if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return []
@@ -482,15 +405,10 @@ const moveCard = (
   const edits: GameEdit[] = []
   const fromLocation = selectedCardLocation.value as keyof BoardSide
 
-  removeCard(selectedCardLocation.value, selectedCardIndex.value)
-
   const attachedCards = getCards('attached').filter((c) => c?.attached === card?.uid) as YugiohCard[]
   if (destination !== 'field' && destination !== 'zones' && attachedCards.length) {
     attachedCards.forEach((c) => {
-      const attachedIndex = getCards('attached').findIndex((ac) => ac?.uid === c?.uid)
-      removeCard('attached', attachedIndex)
       const attachedCardData = buildCardForDestination(c, destination, 'attached', undefined, options)
-      addCardToDestination(c, destination, 'attached', undefined, options)
       edits.push({
         type: 'move_card',
         player: props.player,
@@ -503,7 +421,6 @@ const moveCard = (
   }
 
   const cardData = buildCardForDestination(card, destination, fromLocation, index, options)
-  addCardToDestination(card, destination, fromLocation, index, options)
   edits.push({
     type: 'move_card',
     player: props.player,
@@ -531,7 +448,6 @@ const logMoveCard = (
 }
 
 const flipCard = (card: YugiohCard) => {
-  card.faceDown = !card.faceDown
   const location = findCardLocation(card.uid) ?? 'field'
   sendEdit(
     [
@@ -540,10 +456,10 @@ const flipCard = (card: YugiohCard) => {
         player: props.player,
         cardUid: card.uid,
         location,
-        updates: { faceDown: card.faceDown },
+        updates: { faceDown: !card.faceDown },
       },
     ],
-    `flipped ${card.name} ${card.faceDown ? 'face down' : 'face up'}`,
+    `flipped ${card.name} ${!card.faceDown ? 'face down' : 'face up'}`,
   )
 }
 
@@ -571,7 +487,7 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
     case 'position': {
       const cardToChange = getCard(destination, index)
       if (!cardToChange) return
-      cardToChange.defence = !cardToChange.defence
+      const newDefence = !cardToChange.defence
       sendEdit(
         [
           {
@@ -579,10 +495,10 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
             player: props.player,
             cardUid: cardToChange.uid,
             location: destination,
-            updates: { defence: cardToChange.defence },
+            updates: { defence: newDefence },
           },
         ],
-        `changed ${cardName(cardToChange)} to ${cardToChange.defence ? 'defence' : 'attack'} mode`,
+        `changed ${cardName(cardToChange)} to ${newDefence ? 'defence' : 'attack'} mode`,
       )
       break
     }
@@ -596,7 +512,6 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
       if (cardsAttachedToSelected.length) {
         cardsAttachedToSelected.forEach((c) => {
           if (c) {
-            c.attached = destinationCardUid
             attachEdits.push({
               type: 'update_card',
               player: props.player,
@@ -607,9 +522,8 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
           }
         })
       }
-      selectedCard.value.attached = destinationCardUid
       const logText = `attached ${selectedCard.value?.name} to ${destinationCard?.name}`
-      const moveEdits = moveCard('attached', undefined, { faceDown: false })
+      const moveEdits = moveCard('attached', undefined, { faceDown: false, attached: destinationCardUid })
       if (moveEdits.length) sendEdit([...attachEdits, ...moveEdits], logText)
       break
     }
@@ -642,11 +556,8 @@ const handleDeckAction = (action: string) => {
       break
     }
     case 'shuffle': {
-      getCards('deck').sort(() => Math.random() - 0.5)
-      sendEdit(
-        [{ type: 'set_zone', player: props.player, location: 'deck', cards: [...getCards('deck')] }],
-        `shuffled their deck`,
-      )
+      const shuffled = [...getCards('deck')].sort(() => Math.random() - 0.5)
+      sendEdit([{ type: 'set_zone', player: props.player, location: 'deck', cards: shuffled }], `shuffled their deck`)
       break
     }
     case 'search': {
@@ -680,15 +591,14 @@ const handleBanishedAction = (action: string) => {
 const handleIncrement = (count: number, location: keyof BoardSide, index: number) => {
   const card = getCard(location, index)
   if (!card) return
-  const newCount = (card.counters || 0) + count
-  card.counters = newCount < 0 ? 0 : newCount
+  const newCount = Math.max(0, (card.counters || 0) + count)
   sendEdit([
     {
       type: 'update_card',
       player: props.player,
       cardUid: card.uid,
       location,
-      updates: { counters: card.counters },
+      updates: { counters: newCount },
     },
   ])
 }

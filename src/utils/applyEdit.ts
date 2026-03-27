@@ -68,7 +68,9 @@ export function applyEdit(state: GameState, edit: GameEdit): void {
       const playerCards = state.cards[edit.player]
       const removed = removeCardFromLocation(playerCards, edit.fromLocation, edit.cardUid)
       if (!removed) return
-      addCardToLocation(playerCards, edit.toLocation, edit.cardData, edit.toIndex)
+      if (findCardIndex(playerCards[edit.toLocation], edit.cardUid) === -1) {
+        addCardToLocation(playerCards, edit.toLocation, edit.cardData, edit.toIndex)
+      }
       break
     }
     case 'transfer_card': {
@@ -78,7 +80,9 @@ export function applyEdit(state: GameState, edit: GameEdit): void {
         edit.cardUid,
       )
       if (!removed) return
-      addCardToLocation(state.cards[edit.toPlayer], edit.toLocation, edit.cardData)
+      if (findCardIndex(state.cards[edit.toPlayer][edit.toLocation], edit.cardUid) === -1) {
+        addCardToLocation(state.cards[edit.toPlayer], edit.toLocation, edit.cardData)
+      }
       break
     }
     case 'update_card': {

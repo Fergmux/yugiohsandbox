@@ -71,6 +71,7 @@ export interface ExtraZone {
 }
 
 export interface GameState {
+  _version?: number
   code: number | null
   coinFlip?: ['heads' | 'tails', number] | null
   turn: number

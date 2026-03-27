@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ComputedRef, Ref } from 'vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, toRaw, watch } from 'vue'
 
 import { doc, onSnapshot } from 'firebase/firestore'
 import { debounce } from 'lodash'
@@ -85,47 +85,50 @@ const props = defineProps<{
 
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']
 
-const defaultGameState: GameState = {
-  code: null,
-  coinFlip: null,
-  turn: 0,
-  gameLog: [],
-  players: {
-    player1: null,
-    player2: null,
-  },
-  decks: {
-    player1: null,
-    player2: null,
-  },
-  lifePoints: {
-    player1: 8000,
-    player2: 8000,
-  },
-  cards: {
-    player1: {
-      deck: [],
-      hand: [],
-      field: Array(11).fill(null),
-      graveyard: [],
-      banished: [],
-      extra: [],
-      zones: Array(2).fill(null),
-      tokens: [],
-      attached: [],
+function createDefaultGameState(): GameState {
+  return {
+    _version: 0,
+    code: null,
+    coinFlip: null,
+    turn: 0,
+    gameLog: [],
+    players: {
+      player1: null,
+      player2: null,
     },
-    player2: {
-      deck: [],
-      hand: [],
-      field: Array(11).fill(null),
-      graveyard: [],
-      banished: [],
-      extra: [],
-      zones: Array(2).fill(null),
-      tokens: [],
-      attached: [],
+    decks: {
+      player1: null,
+      player2: null,
     },
-  },
+    lifePoints: {
+      player1: 8000,
+      player2: 8000,
+    },
+    cards: {
+      player1: {
+        deck: [],
+        hand: [],
+        field: Array(11).fill(null),
+        graveyard: [],
+        banished: [],
+        extra: [],
+        zones: Array(2).fill(null),
+        tokens: [],
+        attached: [],
+      },
+      player2: {
+        deck: [],
+        hand: [],
+        field: Array(11).fill(null),
+        graveyard: [],
+        banished: [],
+        extra: [],
+        zones: Array(2).fill(null),
+        tokens: [],
+        attached: [],
+      },
+    },
+  }
 }
 const deckStore = useDeckStore()
 const { decks, allCards } = storeToRefs(deckStore)
@@ -161,22 +164,43 @@ onMounted(async () => {
 
 const gameId: Ref<string | undefined> = ref()
 const gameCode: Ref<number | undefined> = ref()
-const gameState = ref<GameState>(defaultGameState)
 const deckId: Ref<string | undefined> = ref()
 let unsubscribe: () => void
 const joinUrl = computed(() => `${window.location.origin}/play/${gameCode.value}`)
+
+interface EditBatch {
+  edits: GameEdit[]
+  serverVersion: number | null
+}
+
+const serverSnapshot = shallowRef<GameState>(createDefaultGameState())
+const pendingEdits = shallowRef<GameEdit[]>([])
+const inflightBatches = shallowRef<EditBatch[]>([])
+let sending = false
+
+const gameState = computed<GameState>(() => {
+  const base = structuredClone(toRaw(serverSnapshot.value))
+  for (const batch of inflightBatches.value) {
+    applyEdits(base, batch.edits)
+  }
+  applyEdits(base, pendingEdits.value)
+  return base
+})
 const { copy } = useClipboard({ source: joinUrl.value })
 
 const createGame = async () => {
-  gameState.value = defaultGameState
-  gameCode.value = Math.floor(Math.random() * 10000) // Random number between 0 and 9999
-  gameState.value.code = gameCode.value
-  gameState.value.players.player1 = userStore.user ?? null
+  const initial = createDefaultGameState()
+  gameCode.value = Math.floor(Math.random() * 10000)
+  initial.code = gameCode.value
+  initial.players.player1 = userStore.user ?? null
+  serverSnapshot.value = initial
+  pendingEdits.value = []
+  inflightBatches.value = []
   try {
     const response = await fetch('/.netlify/functions/create-game', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameState: gameState.value }),
+      body: JSON.stringify({ gameState: initial }),
     })
     const data = await response.json()
     gameId.value = data.id
@@ -189,8 +213,11 @@ const createGame = async () => {
 const leaveGame = () => {
   gameId.value = undefined
   gameCode.value = undefined
-  gameState.value = defaultGameState
   deckId.value = undefined
+  serverSnapshot.value = createDefaultGameState()
+  pendingEdits.value = []
+  inflightBatches.value = []
+  sending = false
   unsubscribe()
 }
 
@@ -201,20 +228,18 @@ type CoinFlipComponent = {
 const coinRef = ref<CoinFlipComponent | null>(null)
 const createLogEntry = (action: string): GameEdit => {
   const entry = { text: `${userStore.user?.username} ${action}`, timestamp: new Date().getTime() }
-  gameState.value.gameLog.push(entry)
   return { type: 'append_log', entries: [entry] }
 }
 
 const flipCoin = (result: 'heads' | 'tails') => {
   const count = gameState.value.coinFlip?.[1] ?? 0
-  gameState.value.coinFlip = [result, count + 1]
   sendEdits([{ type: 'set_coin_flip', coinFlip: [result, count + 1] }, createLogEntry('flipped a coin')])
 }
 watch(
-  () => gameState.value.coinFlip,
-  (coinFlip, oldCoinFlip) => {
-    if (coinFlip && oldCoinFlip && coinFlip[1] !== oldCoinFlip[1]) {
-      coinRef.value?.flip(coinFlip[0])
+  () => gameState.value.coinFlip?.[1],
+  (count, oldCount) => {
+    if (count !== undefined && oldCount !== undefined && count !== oldCount) {
+      coinRef.value?.flip(gameState.value.coinFlip![0])
     }
   },
 )
@@ -229,7 +254,6 @@ const sendChat = () => {
 }
 const turn = computed(() => gameState.value.turn)
 const setTurn = (turn: number) => {
-  gameState.value.turn = turn
   sendEdits([{ type: 'set_turn', turn }, createLogEntry(`set turn to ${turnNameMap[turn % 6]}`)])
 }
 // Handle spacebar press to increment turn
@@ -238,7 +262,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
     const newTurn = (turn.value + 1) % 12
     setTurn(newTurn)
   }
-  if (event.code === 'Enter' && gameId.value) {
+  if (event.code === 'Enter' && gameId.value && props.crawlPlayer) {
     sendEdits([
       { type: 'set_zone', player: playerKey.value, location: 'hand', cards: [] },
       {
@@ -307,26 +331,19 @@ const tokensInDeck = computed(() => {
 })
 
 const setDeck = (id: string | number[]) => {
-  // debugger
   if (Array.isArray(id)) {
     deckId.value = uuidv4()
     const shuffledDeck = cardIdsToCards(id)
       .filter((c): c is YugiohCard => c !== undefined)
       .map((c) => ({ ...c, faceDown: true }))
       .sort(() => Math.random() - 0.5)
-    gameState.value.cards[playerKey.value].deck = shuffledDeck
-    gameState.value.decks[playerKey.value] = deckId.value
     sendEdits([
       { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
-      { type: 'set_deck_id', player: playerKey.value, deckId: uuidv4() },
+      { type: 'set_deck_id', player: playerKey.value, deckId: deckId.value },
     ])
   } else {
     deckId.value = id
-    const shuffledDeck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
-    gameState.value.cards[playerKey.value].deck = shuffledDeck
-    gameState.value.cards[playerKey.value].tokens = tokensInDeck.value
-    gameState.value.cards[playerKey.value].extra = cardsInExtraDeck.value
-    gameState.value.decks[playerKey.value] = id
+    const shuffledDeck = [...cardsInNormalDeck.value].sort(() => Math.random() - 0.5)
     sendEdits([
       { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
       { type: 'set_zone', player: playerKey.value, location: 'tokens', cards: [...tokensInDeck.value] },
@@ -336,37 +353,38 @@ const setDeck = (id: string | number[]) => {
   }
 }
 
-let pendingEdits: GameEdit[] = []
-const unconfirmedBatches: { edits: GameEdit[]; confirmedAt: number | null }[] = []
-let sending = false
-
 const doFlush = async () => {
-  if (!gameId.value || pendingEdits.length === 0 || sending) return
+  if (!gameId.value || pendingEdits.value.length === 0 || sending) return
   sending = true
-  const edits = pendingEdits
-  pendingEdits = []
-  const batch: { edits: GameEdit[]; confirmedAt: number | null } = { edits, confirmedAt: null }
-  unconfirmedBatches.push(batch)
+  const edits = pendingEdits.value
+  pendingEdits.value = []
+  const batch: EditBatch = { edits, serverVersion: null }
+  inflightBatches.value = [...inflightBatches.value, batch]
   try {
-    await fetch('/.netlify/functions/update-game', {
+    const response = await fetch('/.netlify/functions/update-game', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId: gameId.value, edits }),
     })
-    batch.confirmedAt = Date.now()
+    const data = await response.json()
+    batch.serverVersion = data.version
+    const snapshotVersion = serverSnapshot.value._version ?? 0
+    if (batch.serverVersion !== null && batch.serverVersion <= snapshotVersion) {
+      inflightBatches.value = inflightBatches.value.filter((b) => b !== batch)
+    }
   } catch {
-    const idx = unconfirmedBatches.indexOf(batch)
-    if (idx !== -1) unconfirmedBatches.splice(idx, 1)
+    pendingEdits.value = [...edits, ...pendingEdits.value]
+    inflightBatches.value = inflightBatches.value.filter((b) => b !== batch)
   } finally {
     sending = false
-    if (pendingEdits.length > 0) doFlush()
+    if (pendingEdits.value.length > 0) doFlush()
   }
 }
 
 const flushEdits = debounce(doFlush, 100)
 
 const sendEdits = (edits: GameEdit[]) => {
-  pendingEdits.push(...edits)
+  pendingEdits.value = [...pendingEdits.value, ...edits]
   flushEdits()
 }
 
@@ -388,6 +406,9 @@ const joinGame = async (id?: string) => {
     }
     const gameData = (await response.json()) as GameState & { id: string }
     gameId.value = gameData.id
+    serverSnapshot.value = gameData
+    pendingEdits.value = []
+    inflightBatches.value = []
     if (gameData.players.player1?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player1 ?? undefined
     } else if (gameData.players.player2?.id === userStore.user?.id) {
@@ -415,23 +436,16 @@ const handleEdit = (edits: GameEdit[], logText?: string) => {
   sendEdits(edits)
 }
 
-const CONFIRMED_KEEP_MS = 2000
 const subscribe = () => {
   if (!gameId.value) return
-  unsubscribe = onSnapshot(doc(db, 'games', gameId.value), (doc) => {
-    const serverState = doc.data() as GameState
-    const now = Date.now()
-    for (let i = unconfirmedBatches.length - 1; i >= 0; i--) {
-      const { confirmedAt } = unconfirmedBatches[i]
-      if (confirmedAt && now - confirmedAt > CONFIRMED_KEEP_MS) {
-        unconfirmedBatches.splice(i, 1)
-      }
+  unsubscribe = onSnapshot(doc(db, 'games', gameId.value), (docSnapshot) => {
+    const serverState = docSnapshot.data() as GameState
+    const snapshotVersion = serverState._version ?? 0
+    serverSnapshot.value = serverState
+    const remaining = inflightBatches.value.filter((b) => b.serverVersion === null || b.serverVersion > snapshotVersion)
+    if (remaining.length !== inflightBatches.value.length) {
+      inflightBatches.value = remaining
     }
-    const allUnconfirmed = [...unconfirmedBatches.flatMap((b) => b.edits), ...pendingEdits]
-    if (allUnconfirmed.length > 0) {
-      applyEdits(serverState, allUnconfirmed)
-    }
-    gameState.value = serverState
     logRef.value?.scrollTo({ top: logRef.value.scrollHeight, behavior: 'smooth' })
   })
 }
@@ -561,7 +575,7 @@ const showNotes = ref(false)
   <!-- WHOLE PLAYSPACE -->
   <div v-if="gameId && (deckId || player === null)" class="mt-20 flex h-screen items-center justify-center gap-2">
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
-      <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="gameState.turn = 0">
+      <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="setTurn(0)">
         {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}
       </p>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 0 }" @click="setTurn(0)">Draw phase</div>
@@ -576,19 +590,21 @@ const showNotes = ref(false)
       <!-- OPPONENT -->
       <field-side
         v-if="gameId"
-        v-model="gameState"
+        :game-state="gameState"
         :player="playerKey === 'player2' ? 'player1' : 'player2'"
         :viewer="player === null"
+        :crawl="props.crawlPlayer !== null"
         @edit="handleEdit"
         class="mb-2 rotate-180"
       />
       <!-- PLAYER -->
       <field-side
         v-if="gameId"
-        v-model="gameState"
+        :game-state="gameState"
         :player="playerKey"
         :interactive="player !== null"
         :viewer="player === null"
+        :crawl="props.crawlPlayer !== null"
         @edit="handleEdit"
         class="mb-20"
       />

@@ -117,7 +117,14 @@ function applyEdit(state: GameState, edit: GameEdit) {
       break
     }
     case 'append_log': {
-      state.gameLog.push(...edit.entries)
+      for (const entry of edit.entries) {
+        const exists = state.gameLog.some(
+          (e) => e.timestamp === entry.timestamp && e.text === entry.text,
+        )
+        if (!exists) {
+          state.gameLog.push(entry)
+        }
+      }
       break
     }
   }
@@ -154,22 +161,25 @@ const handler = async (event: { body: string }) => {
       }
     }
 
+    let newVersion = 0
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef)
       if (!docSnap.exists()) throw new Error('Game not found')
 
-      const state = docSnap.data() as GameState
+      const state = docSnap.data() as GameState & { _version?: number }
 
       for (const edit of body.edits as GameEdit[]) {
         applyEdit(state, edit)
       }
 
+      newVersion = (state._version ?? 0) + 1
+      state._version = newVersion
       transaction.update(docRef, { ...state })
     })
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true }),
+      body: JSON.stringify({ success: true, version: newVersion }),
       headers: { 'Content-Type': 'application/json' },
     }
   } catch (err) {
