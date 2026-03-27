@@ -1,7 +1,4 @@
-import { doc, runTransaction, updateDoc } from 'firebase/firestore'
-
-import type { BoardSide, GameEdit, GameState, YugiohCard } from '../../src/types/yugiohCard.js'
-import { db } from '../lib/firebase.js'
+import type { BoardSide, GameEdit, GameState, YugiohCard } from '@/types/yugiohCard'
 
 function findCardIndex(cards: (YugiohCard | null)[], cardUid: string): number {
   return cards.findIndex((c) => c?.uid === cardUid)
@@ -65,7 +62,7 @@ function setZone(playerCards: BoardSide, location: keyof BoardSide, cards: (Yugi
   playerCards[location].splice(0, playerCards[location].length, ...nonNullCards)
 }
 
-function applyEdit(state: GameState, edit: GameEdit) {
+export function applyEdit(state: GameState, edit: GameEdit): void {
   switch (edit.type) {
     case 'move_card': {
       const playerCards = state.cards[edit.player]
@@ -117,69 +114,22 @@ function applyEdit(state: GameState, edit: GameEdit) {
       break
     }
     case 'append_log': {
-      state.gameLog.push(...edit.entries)
+      for (const entry of edit.entries) {
+        const exists = state.gameLog.some(
+          (e) => e.timestamp === entry.timestamp && e.text === entry.text,
+        )
+        if (!exists) {
+          state.gameLog.push(entry)
+        }
+      }
       break
     }
   }
 }
 
-const handler = async (event: { body: string }) => {
-  try {
-    const body = JSON.parse(event.body)
-
-    if (!body.gameId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: 'Game ID is required' }),
-        headers: { 'Content-Type': 'application/json' },
-      }
-    }
-
-    const docRef = doc(db, 'games', body.gameId)
-
-    if (body.gameState) {
-      await updateDoc(docRef, body.gameState)
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ success: true }),
-        headers: { 'Content-Type': 'application/json' },
-      }
-    }
-
-    if (!body.edits || !Array.isArray(body.edits) || body.edits.length === 0) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: 'Edits array is required' }),
-        headers: { 'Content-Type': 'application/json' },
-      }
-    }
-
-    await runTransaction(db, async (transaction) => {
-      const docSnap = await transaction.get(docRef)
-      if (!docSnap.exists()) throw new Error('Game not found')
-
-      const state = docSnap.data() as GameState
-
-      for (const edit of body.edits as GameEdit[]) {
-        applyEdit(state, edit)
-      }
-
-      transaction.update(docRef, { ...state })
-    })
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true }),
-      headers: { 'Content-Type': 'application/json' },
-    }
-  } catch (err) {
-    console.error(err)
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: String(err) }),
-    }
+export function applyEdits(state: GameState, edits: GameEdit[]): GameState {
+  for (const edit of edits) {
+    applyEdit(state, edit)
   }
+  return state
 }
-
-export { handler }

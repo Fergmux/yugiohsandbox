@@ -14,7 +14,8 @@ import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
 import { extraDeckTypes } from '@/types/filters'
-import type { GameState, YugiohCard } from '@/types/yugiohCard'
+import type { GameEdit, GameState, YugiohCard } from '@/types/yugiohCard'
+import { applyEdits } from '@/utils/applyEdit'
 import { useClipboard } from '@vueuse/core'
 
 /*
@@ -177,11 +178,16 @@ type CoinFlipComponent = {
 }
 
 const coinRef = ref<CoinFlipComponent | null>(null)
+const createLogEntry = (action: string): GameEdit => {
+  const entry = { text: `${userStore.user?.username} ${action}`, timestamp: new Date().getTime() }
+  gameState.value.gameLog.push(entry)
+  return { type: 'append_log', entries: [entry] }
+}
+
 const flipCoin = (result: 'heads' | 'tails') => {
   const count = gameState.value.coinFlip?.[1] ?? 0
   gameState.value.coinFlip = [result, count + 1]
-  log(`flipped a coin`)
-  updateGame()
+  sendEdits([{ type: 'set_coin_flip', coinFlip: [result, count + 1] }, createLogEntry('flipped a coin')])
 }
 watch(
   () => gameState.value.coinFlip,
@@ -192,25 +198,18 @@ watch(
   },
 )
 
-const log = (action: string) => {
-  const text = `${userStore.user?.username} ${action}`
-  gameState.value.gameLog.push({ text, timestamp: new Date().getTime() })
-  updateGame()
-}
-
 const logRef = ref<HTMLDivElement | null>(null)
 const textChat = ref('')
 const showChat = ref(false)
 const sendChat = () => {
   if (!textChat.value) return
-  log(`: ${textChat.value}`)
+  sendEdits([createLogEntry(`: ${textChat.value}`)])
   textChat.value = ''
 }
 const turn = computed(() => gameState.value.turn)
 const setTurn = (turn: number) => {
   gameState.value.turn = turn
-  log(`set turn to ${turnNameMap[turn % 6]}`)
-  updateGame()
+  sendEdits([{ type: 'set_turn', turn }, createLogEntry(`set turn to ${turnNameMap[turn % 6]}`)])
 }
 // Handle spacebar press to increment turn
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -271,21 +270,52 @@ const tokensInDeck = computed(() => {
 
 const setDeck = (id: string) => {
   deckId.value = id
-  gameState.value.cards[playerKey.value].deck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
+  const shuffledDeck = cardsInNormalDeck.value.sort(() => Math.random() - 0.5)
+  gameState.value.cards[playerKey.value].deck = shuffledDeck
   gameState.value.cards[playerKey.value].tokens = tokensInDeck.value
   gameState.value.cards[playerKey.value].extra = cardsInExtraDeck.value
   gameState.value.decks[playerKey.value] = id
-  updateGame()
+  sendEdits([
+    { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
+    { type: 'set_zone', player: playerKey.value, location: 'tokens', cards: [...tokensInDeck.value] },
+    { type: 'set_zone', player: playerKey.value, location: 'extra', cards: [...cardsInExtraDeck.value] },
+    { type: 'set_deck_id', player: playerKey.value, deckId: id },
+  ])
 }
 
-const updateGame = debounce(async () => {
-  if (!gameId.value) return
-  await fetch('/.netlify/functions/update-game', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gameId: gameId.value, gameState: gameState.value }),
-  })
-}, 100)
+let pendingEdits: GameEdit[] = []
+const unconfirmedBatches: { edits: GameEdit[]; confirmedAt: number | null }[] = []
+let sending = false
+
+const doFlush = async () => {
+  if (!gameId.value || pendingEdits.length === 0 || sending) return
+  sending = true
+  const edits = pendingEdits
+  pendingEdits = []
+  const batch: { edits: GameEdit[]; confirmedAt: number | null } = { edits, confirmedAt: null }
+  unconfirmedBatches.push(batch)
+  try {
+    await fetch('/.netlify/functions/update-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId: gameId.value, edits }),
+    })
+    batch.confirmedAt = Date.now()
+  } catch {
+    const idx = unconfirmedBatches.indexOf(batch)
+    if (idx !== -1) unconfirmedBatches.splice(idx, 1)
+  } finally {
+    sending = false
+    if (pendingEdits.length > 0) doFlush()
+  }
+}
+
+const flushEdits = debounce(doFlush, 100)
+
+const sendEdits = (edits: GameEdit[]) => {
+  pendingEdits.push(...edits)
+  flushEdits()
+}
 
 const joinGame = async () => {
   try {
@@ -301,11 +331,13 @@ const joinGame = async () => {
     } else if (gameData.players.player2?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player2 ?? undefined
     } else if (!gameData.players.player2) {
-      gameData.players.player2 = userStore.user ?? null
       await fetch('/.netlify/functions/update-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameId: gameId.value, gameState: gameData }),
+        body: JSON.stringify({
+          gameId: gameId.value,
+          edits: [{ type: 'set_player', player: 'player2', user: userStore.user ?? null }],
+        }),
       })
     }
     subscribe()
@@ -314,10 +346,30 @@ const joinGame = async () => {
   }
 }
 
+const handleEdit = (edits: GameEdit[], logText?: string) => {
+  if (logText) {
+    edits.push(createLogEntry(logText))
+  }
+  sendEdits(edits)
+}
+
+const CONFIRMED_KEEP_MS = 2000
 const subscribe = () => {
   if (!gameId.value) return
   unsubscribe = onSnapshot(doc(db, 'games', gameId.value), (doc) => {
-    gameState.value = doc.data() as GameState
+    const serverState = doc.data() as GameState
+    const now = Date.now()
+    for (let i = unconfirmedBatches.length - 1; i >= 0; i--) {
+      const { confirmedAt } = unconfirmedBatches[i]
+      if (confirmedAt && now - confirmedAt > CONFIRMED_KEEP_MS) {
+        unconfirmedBatches.splice(i, 1)
+      }
+    }
+    const allUnconfirmed = [...unconfirmedBatches.flatMap((b) => b.edits), ...pendingEdits]
+    if (allUnconfirmed.length > 0) {
+      applyEdits(serverState, allUnconfirmed)
+    }
+    gameState.value = serverState
     logRef.value?.scrollTo({ top: logRef.value.scrollHeight, behavior: 'smooth' })
   })
 }
@@ -465,7 +517,7 @@ const showNotes = ref(false)
         v-model="gameState"
         :player="playerKey === 'player2' ? 'player1' : 'player2'"
         :viewer="player === null"
-        @update="updateGame"
+        @edit="handleEdit"
         class="mb-2 rotate-180"
       />
       <!-- PLAYER -->
@@ -475,8 +527,7 @@ const showNotes = ref(false)
         :player="playerKey"
         :interactive="player !== null"
         :viewer="player === null"
-        @update="updateGame"
-        @log="log"
+        @edit="handleEdit"
         class="mb-20"
       />
     </div>

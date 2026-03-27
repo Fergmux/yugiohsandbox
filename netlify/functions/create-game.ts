@@ -28,4 +28,3 @@ const handler = async (event: { body: string }) => {
 }
 
 export { handler }
-

@@ -60,4 +60,3 @@ const handler = async (event: { path: string }) => {
 }
 
 export { handler }
-
