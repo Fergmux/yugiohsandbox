@@ -1,4 +1,4 @@
-import type { User } from './user'
+import type { User } from './user.js'
 
 export interface CardImage {
   image_url: string

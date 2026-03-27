@@ -253,10 +253,7 @@ const removeCard = async (id: number) => {
       <div class="flex items-center gap-2">
         <button
           v-if="!rerolledPower"
-          @click="
-            selectedReward = null
-            rerolledPower = null
-          "
+          @click="selectedReward = null"
           class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border-1 border-gray-300 active:bg-gray-600"
         >
           <span class="material-symbols-outlined text-xl">arrow_back</span>
