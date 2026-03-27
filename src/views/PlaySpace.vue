@@ -560,6 +560,9 @@ const showNotes = ref(false)
   <div v-else class="m-auto w-fit text-center">
     <template v-if="props.crawlPlayer">
       <p class="text-lg">
+        Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
+      </p>
+      <p class="text-lg">
         Round: <span class="text-lg font-bold">{{ crawl.round }}</span>
       </p>
       <button
