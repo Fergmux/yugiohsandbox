@@ -68,7 +68,7 @@ const isSelected = (index: number) => {
 }
 const revealCard = (card: YugiohCard) => {
   emit('reveal')
-  revealedCards.value.add(card)
+  revealedCards.value.add(card.uid)
 }
 const selectCard = (index: number) =>
   Array.isArray(props.cards) ? emit('select', index) : emit('select', props.cardIndex!)
@@ -77,8 +77,9 @@ const drawCard = (destination: keyof BoardSide, index: number, card: YugiohCard)
   emit('draw', destination, index, !revealedCardIds.value.includes(card.uid))
 }
 const showCardIds = computed(() => props.showCards?.map((card) => card.uid) ?? [])
-const revealedCards = ref<Set<YugiohCard>>(props.showCards ? new Set(props.showCards) : new Set())
-const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card) => card.uid))
+const revealedCards = ref<Set<string>>(new Set(props.showCards?.map((card) => card.uid)))
+const revealedCardIds = computed(() => Array.from(revealedCards.value))
+const revealedCardObjects = computed(() => cardList.value.filter((card) => revealedCards.value.has(card.uid)))
 </script>
 
 <template>
@@ -150,7 +151,7 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
                 revealedCardIds.includes(card.uid) &&
                 !showCardIds.includes(card.uid)
               "
-              @click.stop="revealedCardIds.includes(card.uid) ? revealedCards.delete(card) : revealCard(card)"
+              @click.stop="revealedCardIds.includes(card.uid) ? revealedCards.delete(card.uid) : revealCard(card)"
               :title="revealedCardIds.includes(card.uid) ? 'Hide' : 'Show'"
             >
               {{ revealedCardIds.includes(card.uid) ? 'visibility_off' : 'visibility' }}
@@ -170,7 +171,7 @@ const revealedCardIds = computed(() => Array.from(revealedCards.value).map((card
       v-if="selectedCard"
       :cards="selectedCard"
       @close="selectedCard = undefined"
-      :show-cards="Array.from(revealedCards)"
+      :show-cards="revealedCardObjects"
       :inspected-cards-location="inspectedCardsLocation"
     />
   </Teleport>

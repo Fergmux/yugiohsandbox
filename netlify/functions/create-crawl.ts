@@ -6,7 +6,7 @@ const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const docRef = await addDoc(collection(db, 'games'), body.gameState)
+    const docRef = await addDoc(collection(db, 'crawls'), body.crawl)
 
     return {
       statusCode: 200,

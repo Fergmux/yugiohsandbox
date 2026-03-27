@@ -7,50 +7,38 @@ import { debounce, zip } from 'lodash'
 import InspectModal from '@/components/InspectModal.vue'
 import CardSlot from '@/components/play-space/CardSlot.vue'
 import LifePoints from '@/components/play-space/LifePoints.vue'
-import type { BoardSide, GameState, YugiohCard } from '@/types/yugiohCard'
+import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
 import IconButton from './IconButton.vue'
 
 type CardLocation = keyof BoardSide | 'attached'
 
-type Player = 'player1' | 'player2'
-
-// Handle game state synchronisation
 const props = defineProps<{
-  modelValue: GameState
+  gameState: GameState
   player: Player
   interactive?: boolean
   viewer?: boolean
+  crawl?: boolean
 }>()
 const i = computed(() => props.interactive || undefined)
 const iv = computed(() => i.value || props.viewer || undefined)
 const hideInspectControls = ref(false)
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: GameState): void
-  (e: 'update'): void
-  (e: 'log', action: string): void
+  (e: 'edit', edits: GameEdit[], logText?: string): void
 }>()
 
-const gameState = computed({
-  get: () => props.modelValue,
-  set: (value) => {
-    emit('update:modelValue', value)
-  },
-})
+const gameState = computed(() => props.gameState)
 
-const updateGame = async () => {
-  emit('update')
+const sendEdit = (edits: GameEdit[], logText?: string) => {
+  emit('edit', edits, logText)
 }
 
 const revealCard = () => {
-  log(`revealed a card in ${zoneName(inspectedCardsLocation.value)}`)
+  sendEdit([], `revealed a card in ${zoneName(inspectedCardsLocation.value)}`)
 }
 
-const log = (action: string) => {
-  emit('log', action)
-}
 const cardName = (card?: YugiohCard) => (card?.faceDown ? 'a card' : card?.name)
 const zoneNameMap: Record<keyof BoardSide, string> = {
   field: 'the field',
@@ -66,9 +54,47 @@ const zoneNameMap: Record<keyof BoardSide, string> = {
 const zoneName = (zone?: keyof BoardSide) => (zone ? zoneNameMap[zone] : undefined)
 
 const debouncedUpdateCardStats = debounce((name: string, stat?: 'attack' | 'defence') => {
-  log(`updated ${name}'s' ${stat}`)
-  updateGame()
+  const card = findCardOnField(name)
+  if (card) {
+    sendEdit(
+      [
+        {
+          type: 'update_card',
+          player: props.player,
+          cardUid: card.uid,
+          location: findCardLocation(card.uid) ?? 'field',
+          updates: { newAttack: card.newAttack, newDefence: card.newDefence },
+        },
+      ],
+      `updated ${name}'s' ${stat}`,
+    )
+  }
 }, 1000)
+
+function findCardOnField(name: string): YugiohCard | undefined {
+  for (const loc of ['field', 'zones'] as (keyof BoardSide)[]) {
+    const found = cards.value[loc].find((c: YugiohCard | null) => c?.name === name)
+    if (found) return found as YugiohCard
+  }
+  return undefined
+}
+
+function findCardLocation(uid: string): keyof BoardSide | undefined {
+  for (const loc of [
+    'field',
+    'zones',
+    'hand',
+    'graveyard',
+    'banished',
+    'extra',
+    'deck',
+    'tokens',
+    'attached',
+  ] as (keyof BoardSide)[]) {
+    if (cards.value[loc].some((c: YugiohCard | null) => c?.uid === uid)) return loc
+  }
+  return undefined
+}
 
 const extraZones = computed(() =>
   gameState.value.cards[props.player].zones.map((zone, index) =>
@@ -77,9 +103,8 @@ const extraZones = computed(() =>
 )
 
 const updateLifePoints = (value: number, player: Player) => {
-  gameState.value.lifePoints[player] += value
-  log(`set their life points to ${gameState.value.lifePoints[player]}`)
-  updateGame()
+  const newValue = gameState.value.lifePoints[player] + value
+  sendEdit([{ type: 'set_life_points', player, value: newValue }], `set their life points to ${newValue}`)
 }
 
 // Utility functions
@@ -204,12 +229,14 @@ const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
     selectCard(zone, index)
   } else {
     if (selectedCard.value) {
+      let logText: string
       if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
-        log(`moved ${cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(zone)}`)
+        logText = `moved ${cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(zone)}`
       } else {
-        log(`summoned ${selectedCard.value?.name} from ${zoneName(selectedCardLocation.value)}`)
+        logText = `summoned ${selectedCard.value?.name} from ${zoneName(selectedCardLocation.value)}`
       }
-      moveCard(zone, index)
+      const edits = moveCard(zone, index)
+      if (edits.length) sendEdit(edits, logText)
     }
   }
 }
@@ -234,33 +261,87 @@ const inspectedCards = computed(() => {
       : inspectedCard.value
   }
   if (!inspectedCardsLocation.value || !inspectedCardsPlayerKey.value) return undefined
-  return getCardData(inspectedCardsPlayerKey.value)[inspectedCardsLocation.value].filter(Boolean) as YugiohCard[]
+  const cardsToInspect = getCardData(inspectedCardsPlayerKey.value)[inspectedCardsLocation.value].filter(
+    Boolean,
+  ) as YugiohCard[]
+  if (props.crawl && inspectedCardsLocation.value === 'deck' && revealDeck.value) {
+    return cardsToInspect.sort(() => Math.random() - 0.5)
+  } else {
+    return cardsToInspect
+  }
 })
 
 const showToOpponent = (index: number) => {
   const card = getCard('hand', index)
   if (!card) return
-  card.revealed = !card.revealed
-  log(`revealed ${card.name}`)
-  updateGame()
+  sendEdit(
+    [
+      {
+        type: 'update_card',
+        player: props.player,
+        cardUid: card.uid,
+        location: 'hand',
+        updates: { revealed: !card.revealed },
+      },
+    ],
+    `revealed ${card.name}`,
+  )
 }
 const giveToOpponent = (index: number) => {
   const card = getCard('hand', index)
   if (!card) return
-  opponentCards.value.hand.push({ ...card, faceDown: false })
-  getCards('hand').splice(index, 1)
-  log(`gave ${card.name} to their opponent`)
-  updateGame()
+  const cardData = { ...card, faceDown: false }
+  sendEdit(
+    [
+      {
+        type: 'transfer_card',
+        fromPlayer: props.player,
+        toPlayer: opponentPlayerKey.value,
+        cardUid: card.uid,
+        fromLocation: 'hand',
+        toLocation: 'hand',
+        cardData,
+      },
+    ],
+    `gave ${card.name} to their opponent`,
+  )
 }
 
 // Moving cards
 const drawCard = (source: keyof BoardSide) => {
-  if (!getCards(source).length) return
-  const card = getCards(source).shift()
+  if (!getCards(source).length) {
+    if (props.crawl && source === 'deck') {
+      const shuffled = [...getCards('graveyard')]
+        .sort(() => Math.random() - 0.5)
+        .map((c) => ({ ...c, faceDown: true }) as YugiohCard)
+      sendEdit(
+        [
+          { type: 'set_zone', player: props.player, location: 'deck', cards: shuffled },
+          { type: 'set_zone', player: props.player, location: 'graveyard', cards: [] },
+        ],
+        `moved their graveyard into deck`,
+      )
+      return
+    } else {
+      return
+    }
+  }
+  const card = getCards(source)[0]
   if (!card) return
-  getCards('hand').push({ ...card, faceDown: true })
-  log(`drew a card from ${zoneName(source)}`)
-  updateGame()
+  const cardData = { ...card, faceDown: true }
+  sendEdit(
+    [
+      {
+        type: 'move_card',
+        player: props.player,
+        cardUid: card.uid,
+        fromLocation: source,
+        toLocation: 'hand',
+        cardData,
+      },
+    ],
+    `drew a card from ${zoneName(source)}`,
+  )
 }
 
 const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown?: boolean) => {
@@ -279,18 +360,7 @@ const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown
   }
 }
 
-const removeCard = (location: keyof BoardSide, index: number) => {
-  if (!location || index === undefined) return
-  // if it's on the field or zones, replace with null
-  if (location === 'field' || location === 'zones') {
-    cards.value[location].splice(index, 1, null)
-  } else {
-    // otherwise, remove the card from its location
-    cards.value[location].splice(index, 1)
-  }
-}
-
-const addCardToDestination = (
+const buildCardForDestination = (
   card: YugiohCard,
   destination: keyof BoardSide,
   currentLocation: keyof BoardSide,
@@ -300,202 +370,244 @@ const addCardToDestination = (
     defence?: boolean
     newAttack?: number | null
     newDefence?: number | null
+    attached?: string
   },
-) => {
+): YugiohCard => {
+  const opts = { ...options }
   if (destination !== 'field' && destination !== 'zones') {
-    // If it's leaving the field rest the atk/def modifiers
-    options = { ...options, newAttack: null, newDefence: null }
+    opts.newAttack = null
+    opts.newDefence = null
   }
-  // if there's an index, move the card to the target location
-  if (index != undefined) {
+
+  if (index !== undefined) {
     const target = getCard(destination, index)
     if (target === null) {
-      // if the target is null, replace it with the card (field/zones)
       const orientationOptions =
         currentLocation === 'field' || currentLocation === 'zones' ? {} : { faceDown: false, defence: false }
-      getCards(destination)[index] = {
-        ...card,
-        ...orientationOptions,
-        ...options,
-      }
-    } else {
-      // otherwise, insert the card at the target index (deck)
-      getCards(destination).splice(index, 0, {
-        ...card,
-        faceDown: true,
-        defence: false,
-        counters: 0,
-        ...options,
-      })
+      return { ...card, ...orientationOptions, ...opts }
     }
-  } else {
-    // if there's no index, move the card to the target location
-    if (destination === 'deck' || destination === 'extra' || destination === 'tokens') {
-      getCards(destination).unshift({
-        ...card,
-        faceDown: true,
-        defence: false,
-        counters: 0,
-        ...options,
-      })
-    } else {
-      // hand/gy/banished
-      const orientationOptions = destination === 'banished' ? {} : { faceDown: false }
-      const method = destination === 'hand' ? 'push' : 'unshift'
-      getCards(destination)[method]({
-        ...card,
-        defence: false,
-        counters: 0,
-        ...options,
-        ...orientationOptions,
-      })
-    }
+    return { ...card, faceDown: true, defence: false, counters: 0, ...opts }
   }
+
+  if (destination === 'deck' || destination === 'extra' || destination === 'tokens') {
+    return { ...card, faceDown: true, defence: false, counters: 0, ...opts }
+  }
+  const orientationOptions = destination === 'banished' ? {} : { faceDown: false }
+  return { ...card, defence: false, counters: 0, ...opts, ...orientationOptions }
 }
 
 const moveCard = (
   destination: keyof BoardSide,
   index?: number,
-  options?: { faceDown?: boolean; defence?: boolean } = {},
-) => {
-  // Check selected card is valid
-  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return
+  options?: { faceDown?: boolean; defence?: boolean; attached?: string },
+): GameEdit[] => {
+  options = options ?? {}
+  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return []
   const card = getCard(selectedCardLocation.value, selectedCardIndex.value)
-  if (!card) return
+  if (!card) return []
 
-  if (destination === 'tokens' && card.type !== 'Token') return
-  if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return
+  if (destination === 'tokens' && card.type !== 'Token') return []
+  if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return []
 
-  removeCard(selectedCardLocation.value, selectedCardIndex.value)
+  const edits: GameEdit[] = []
+  const fromLocation = selectedCardLocation.value as keyof BoardSide
 
   const attachedCards = getCards('attached').filter((c) => c?.attached === card?.uid) as YugiohCard[]
   if (destination !== 'field' && destination !== 'zones' && attachedCards.length) {
     attachedCards.forEach((c) => {
-      removeCard(
-        'attached',
-        attachedCards.findIndex((c) => c?.uid === card?.uid),
-      )
-      addCardToDestination(c, destination, 'attached', undefined, options)
+      const attachedCardData = buildCardForDestination(c, destination, 'attached', undefined, options)
+      edits.push({
+        type: 'move_card',
+        player: props.player,
+        cardUid: c.uid,
+        fromLocation: 'attached',
+        toLocation: destination,
+        cardData: attachedCardData,
+      })
     })
   }
-  addCardToDestination(card, destination, selectedCardLocation.value, index, options)
+
+  const cardData = buildCardForDestination(card, destination, fromLocation, index, options)
+  edits.push({
+    type: 'move_card',
+    player: props.player,
+    cardUid: card.uid,
+    fromLocation,
+    toLocation: destination,
+    toIndex: index,
+    cardData,
+  })
+
   resetSelectedCard()
-  updateGame()
-  return true
+  return edits
 }
 
 const logMoveCard = (
   destination: keyof BoardSide,
   index?: number,
-  options?: { faceDown?: boolean; defence?: boolean } = {},
+  options?: { faceDown?: boolean; defence?: boolean },
 ) => {
+  options = options ?? {}
   if (!selectedCard.value || !selectedCardLocation.value) return
-  log(
-    `moved ${destination === 'graveyard' ? selectedCard.value.name : cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(destination)}`,
-  )
-  moveCard(destination, index, options)
+  const logText = `moved ${destination === 'graveyard' ? selectedCard.value.name : cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(destination)}`
+  const edits = moveCard(destination, index, options)
+  if (edits.length) sendEdit(edits, logText)
 }
 
 const flipCard = (card: YugiohCard) => {
-  card.faceDown = !card.faceDown
-  log(`flipped ${card.name} ${card.faceDown ? 'face down' : 'face up'}`)
-  updateGame()
+  const location = findCardLocation(card.uid) ?? 'field'
+  sendEdit(
+    [
+      {
+        type: 'update_card',
+        player: props.player,
+        cardUid: card.uid,
+        location,
+        updates: { faceDown: !card.faceDown },
+      },
+    ],
+    `flipped ${card.name} ${!card.faceDown ? 'face down' : 'face up'}`,
+  )
 }
 
 const handleAction = (action: string, destination: keyof BoardSide, index: number) => {
   switch (action) {
-    case 'set':
+    case 'set': {
       const defence = selectedCard.value?.type !== 'Trap Card' && selectedCard.value?.type !== 'Spell Card'
-      log(`set ${cardName(selectedCard.value)} face down`)
-      moveCard(destination, index, { faceDown: true, defence })
+      const logText = `set ${cardName(selectedCard.value)} face down`
+      const edits = moveCard(destination, index, { faceDown: true, defence })
+      if (edits.length) sendEdit(edits, logText)
       break
-    case 'defence':
-      log(`summoned ${selectedCard.value?.name} in defence mode`)
-      moveCard(destination, index, { defence: true })
+    }
+    case 'defence': {
+      const logText = `summoned ${selectedCard.value?.name} in defence mode`
+      const edits = moveCard(destination, index, { defence: true })
+      if (edits.length) sendEdit(edits, logText)
       break
-    case 'flip':
+    }
+    case 'flip': {
       const cardToFlip = getCard(destination, index)
       if (!cardToFlip) return
       flipCard(cardToFlip)
       break
-    case 'position':
+    }
+    case 'position': {
       const cardToChange = getCard(destination, index)
       if (!cardToChange) return
-      cardToChange.defence = !cardToChange.defence
-      log(`changed ${cardName(cardToChange)} to ${cardToChange.defence ? 'defence' : 'attack'} mode`)
-      updateGame()
+      const newDefence = !cardToChange.defence
+      sendEdit(
+        [
+          {
+            type: 'update_card',
+            player: props.player,
+            cardUid: cardToChange.uid,
+            location: destination,
+            updates: { defence: newDefence },
+          },
+        ],
+        `changed ${cardName(cardToChange)} to ${newDefence ? 'defence' : 'attack'} mode`,
+      )
       break
-    case 'attach':
+    }
+    case 'attach': {
       if (!selectedCard.value) return
       const cardsAttachedToSelected = getCards('attached').filter((c) => c?.attached === selectedCard.value?.uid)
       const destinationCard = getCard(destination, index)
       const destinationCardUid = destinationCard?.uid
-      if (cardsAttachedToSelected) {
-        cardsAttachedToSelected.map((c) => {
+      const attachEdits: GameEdit[] = []
+
+      if (cardsAttachedToSelected.length) {
+        cardsAttachedToSelected.forEach((c) => {
           if (c) {
-            c.attached = destinationCardUid
+            attachEdits.push({
+              type: 'update_card',
+              player: props.player,
+              cardUid: c.uid,
+              location: 'attached',
+              updates: { attached: destinationCardUid },
+            })
           }
         })
       }
-      selectedCard.value.attached = destinationCardUid
-      log(`attached ${selectedCard.value?.name} to ${destinationCard?.name}`)
-      moveCard('attached', undefined, { faceDown: false })
+      const logText = `attached ${selectedCard.value?.name} to ${destinationCard?.name}`
+      const moveEdits = moveCard('attached', undefined, { faceDown: false, attached: destinationCardUid })
+      if (moveEdits.length) sendEdit([...attachEdits, ...moveEdits], logText)
       break
+    }
   }
 }
 
 const handleDeckAction = (action: string) => {
   const options = { faceDown: true, defence: false }
   switch (action) {
-    case 'shuffle-in':
+    case 'shuffle-in': {
       if (!selectedCard.value) return
       const randomIndex = Math.floor(Math.random() * (getCards('deck').length + 1))
-      log(`shuffled ${cardName(selectedCard.value)} into their deck`)
-      moveCard('deck', randomIndex, options)
+      const logText = `shuffled ${cardName(selectedCard.value)} into their deck`
+      const edits = moveCard('deck', randomIndex, options)
+      if (edits.length) sendEdit(edits, logText)
       break
-    case 'place-top':
+    }
+    case 'place-top': {
       if (!selectedCard.value) return
-      log(`placed ${cardName(selectedCard.value)} on top of their deck`)
-      moveCard('deck', 0, options)
+      const logText = `placed ${cardName(selectedCard.value)} on top of their deck`
+      const edits = moveCard('deck', 0, options)
+      if (edits.length) sendEdit(edits, logText)
       break
-    case 'place-bottom':
+    }
+    case 'place-bottom': {
       if (!selectedCard.value) return
-      log(`placed ${cardName(selectedCard.value)} on the bottom of their deck`)
-      moveCard('deck', getCards('deck').length, options)
+      const logText = `placed ${cardName(selectedCard.value)} on the bottom of their deck`
+      const edits = moveCard('deck', getCards('deck').length, options)
+      if (edits.length) sendEdit(edits, logText)
       break
-    case 'shuffle':
-      getCards('deck').sort(() => Math.random() - 0.5)
-      log(`shuffled their deck`)
+    }
+    case 'shuffle': {
+      const shuffled = [...getCards('deck')].sort(() => Math.random() - 0.5)
+      sendEdit([{ type: 'set_zone', player: props.player, location: 'deck', cards: shuffled }], `shuffled their deck`)
       break
-    case 'search':
+    }
+    case 'search': {
       revealDeck.value = true
       inspectCards('deck')
-      log(`searched their deck`)
+      sendEdit([], `searched their deck`)
       break
+    }
   }
 }
 
 const handleBanishedAction = (action: string) => {
   switch (action) {
-    case 'face-down':
+    case 'face-down': {
       if (!selectedCard.value) return
-      log(`banished ${cardName(selectedCard.value)} face down`)
-      moveCard('banished', 0, { faceDown: true })
+      const logText = `banished ${cardName(selectedCard.value)} face down`
+      const edits = moveCard('banished', 0, { faceDown: true })
+      if (edits.length) sendEdit(edits, logText)
       break
-    case 'face-up':
+    }
+    case 'face-up': {
       if (!selectedCard.value) return
-      log(`banished ${selectedCard.value?.name} face up`)
-      moveCard('banished', 0, { faceDown: false })
+      const logText = `banished ${selectedCard.value?.name} face up`
+      const edits = moveCard('banished', 0, { faceDown: false })
+      if (edits.length) sendEdit(edits, logText)
       break
+    }
   }
 }
 
 const handleIncrement = (count: number, location: keyof BoardSide, index: number) => {
   const card = getCard(location, index)
   if (!card) return
-  const newCount = (card.counters || 0) + count
-  card.counters = newCount < 0 ? 0 : newCount
-  updateGame()
+  const newCount = Math.max(0, (card.counters || 0) + count)
+  sendEdit([
+    {
+      type: 'update_card',
+      player: props.player,
+      cardUid: card.uid,
+      location,
+      updates: { counters: newCount },
+    },
+  ])
 }
 
 const closeInspectModal = async () => {

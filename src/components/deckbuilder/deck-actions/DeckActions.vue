@@ -45,7 +45,7 @@ const configs: Record<ActionType, ActionConfig> = {
 
 const deckStore = useDeckStore()
 const { addDeck, shareDeck, copyDeck, removeDeck, changeDeckName } = deckStore
-const { selectedDeckId } = storeToRefs(deckStore)
+const { selectedDeckId, selectedDeck } = storeToRefs(deckStore)
 
 // Action state - defaults to 'add' when no deck is selected
 const explicitAction = ref<ActionType | null>(null)
@@ -107,18 +107,18 @@ const showActionButtons = computed(() => selectedDeckId.value && explicitAction.
 </script>
 
 <template>
-  <div class="rounded-md border-1 border-gray-300 p-4">
+  <div class="w-full rounded-md border-1 border-gray-300 p-4">
     <!-- Show action buttons when a deck is selected and no explicit action is chosen -->
-    <div v-if="showActionButtons" class="flex flex-col items-center">
+    <div v-if="showActionButtons" class="flex w-full flex-col items-center">
       <h3 class="mb-4 text-2xl font-semibold">Deck Actions</h3>
-      <div class="flex gap-4">
+      <div class="flex w-full justify-between">
         <button
           v-for="action in Object.keys(configs) as ActionType[]"
           :key="action"
           @click="setAction(action)"
-          class="flex cursor-pointer flex-col items-center rounded-md border-1 border-gray-300 p-2"
+          class="flex cursor-pointer flex-col items-center justify-center rounded-md border-1 border-gray-300 px-[10px] py-[6px]"
         >
-          <span class="material-symbols-outlined text-3xl">
+          <span class="material-symbols-outlined !text-2xl">
             {{ getActionConfig(action).icon }}
           </span>
         </button>
@@ -128,6 +128,7 @@ const showActionButtons = computed(() => selectedDeckId.value && explicitAction.
     <!-- Always show the action form - which action is determined by the computed property -->
     <action-item
       v-if="!showActionButtons"
+      :default-input-value="selectedDeck?.name"
       :title="getActionConfig(currentAction).title"
       :icon="getActionConfig(currentAction).icon"
       :placeholder="getActionConfig(currentAction).placeholder"

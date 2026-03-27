@@ -9,7 +9,7 @@ const handler = async (event: { path: string }) => {
       const pathParts = event.path.split('/')
       if (pathParts.length > 0) {
         const lastPart = pathParts[pathParts.length - 1]
-        if (lastPart && lastPart !== 'get-game-by-code') {
+        if (lastPart && lastPart !== 'get-crawl-by-code') {
           gameCode = Number(decodeURIComponent(lastPart))
         }
       }
@@ -25,7 +25,7 @@ const handler = async (event: { path: string }) => {
       }
     }
 
-    const q = query(collection(db, 'games'), where('code', '==', gameCode))
+    const q = query(collection(db, 'crawls'), where('code', '==', gameCode))
     const querySnapshot = await getDocs(q)
 
     if (querySnapshot.docs.length === 0) {

@@ -1,34 +1,32 @@
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 
 import { db } from '../lib/firebase.js'
 
 const handler = async (event: { path: string }) => {
   try {
-    let gameCode
-    if (!gameCode && event.path) {
+    let gameId: string | undefined
+    if (event.path) {
       const pathParts = event.path.split('/')
-      if (pathParts.length > 0) {
-        const lastPart = pathParts[pathParts.length - 1]
-        if (lastPart && lastPart !== 'get-game-by-code') {
-          gameCode = Number(decodeURIComponent(lastPart))
-        }
+      const lastPart = pathParts[pathParts.length - 1]
+      if (lastPart && lastPart !== 'get-game') {
+        gameId = decodeURIComponent(lastPart)
       }
     }
 
-    if (gameCode === undefined || isNaN(gameCode)) {
+    if (!gameId) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Game code is required' }),
+        body: JSON.stringify({ message: 'Game ID is required' }),
         headers: {
           'Content-Type': 'application/json',
         },
       }
     }
 
-    const q = query(collection(db, 'games'), where('code', '==', gameCode))
-    const querySnapshot = await getDocs(q)
+    const gameRef = doc(db, 'games', gameId)
+    const gameDoc = await getDoc(gameRef)
 
-    if (querySnapshot.docs.length === 0) {
+    if (!gameDoc.exists()) {
       return {
         statusCode: 404,
         body: JSON.stringify({ message: 'Game not found' }),
@@ -37,8 +35,6 @@ const handler = async (event: { path: string }) => {
         },
       }
     }
-
-    const gameDoc = querySnapshot.docs[0]
 
     return {
       statusCode: 200,

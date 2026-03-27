@@ -6,11 +6,15 @@ const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
-    const docRef = await addDoc(collection(db, 'games'), body.gameState)
+    const powersRef = collection(db, 'powers')
+    const docRef = await addDoc(powersRef, {
+      name: body.name,
+      description: body.description,
+    })
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ id: docRef.id }),
+      body: JSON.stringify({ id: docRef.id, name: body.name, description: body.description }),
       headers: {
         'Content-Type': 'application/json',
       },

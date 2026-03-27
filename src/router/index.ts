@@ -1,6 +1,7 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
 import { useUserStore } from '@/stores/user'
 import LoginPage from '@/views/LoginPage.vue'
-import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,6 +25,38 @@ const router = createRouter({
       path: '/playground',
       name: 'playground',
       component: () => import('@/views/PlayGround.vue'),
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/AdminPanel.vue'),
+    },
+    {
+      path: '/crawler',
+      name: 'crawler',
+      component: () => import('@/views/YugiCrawler.vue'),
+      children: [
+        {
+          path: '/crawler/:gameCode?',
+          name: 'newGame',
+          component: () => import('@/components/crawler/pages/NewGame.vue'),
+        },
+        {
+          path: '/deckSelection',
+          name: 'deckSelection',
+          component: () => import('@/components/crawler/pages/DeckSelection.vue'),
+        },
+        {
+          path: '/playSpace',
+          name: 'playSpace',
+          component: () => import('@/components/crawler/pages/PlaySpace.vue'),
+        },
+        {
+          path: '/rewards',
+          name: 'rewards',
+          component: () => import('@/components/crawler/pages/GameRewards.vue'),
+        },
+      ],
     },
     // {
     //   path: '/about',

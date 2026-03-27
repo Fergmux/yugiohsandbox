@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   title: string
   isProcessing: boolean
   icon?: string
   placeholder?: string
   isDisabled?: boolean
   showClose?: boolean
+  defaultInputValue?: string
 }>()
 
 const emit = defineEmits(['close', 'action'])
 
-const inputValue = ref('')
+const inputValue = ref(props.defaultInputValue ?? '')
 </script>
 
 <template>

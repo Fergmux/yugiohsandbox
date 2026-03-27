@@ -5,7 +5,6 @@ import { db } from '../lib/firebase.js'
 const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
-    console.log('body', body)
 
     if (!body.deckId) {
       throw new Error('Deck ID is required')
@@ -24,7 +23,6 @@ const handler = async (event: { body: string }) => {
     }
 
     const deckData = deckSnap.data()
-    console.log('deckResponse', deckData.name)
 
     // Get the target user
     const usersRef = collection(db, 'users')
@@ -36,7 +34,6 @@ const handler = async (event: { body: string }) => {
     }
 
     const userDoc = querySnapshot.docs[0]
-    console.log('userResponse', userDoc.data().username)
 
     // Create a new deck name with attribution if username is provided
     let deckName = deckData.name
@@ -51,8 +48,6 @@ const handler = async (event: { body: string }) => {
       userId: userDoc.id,
       cards: deckData.cards || [],
     })
-
-    console.log('response', newDeckRef.id)
 
     return {
       statusCode: 200,

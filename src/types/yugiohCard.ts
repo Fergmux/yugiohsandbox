@@ -71,6 +71,7 @@ export interface ExtraZone {
 }
 
 export interface GameState {
+  _version?: number
   code: number | null
   coinFlip?: ['heads' | 'tails', number] | null
   turn: number
@@ -95,3 +96,47 @@ export interface GameState {
     player2: BoardSide
   }
 }
+
+export type Player = 'player1' | 'player2'
+
+export type NullableCardLocation = 'field' | 'zones'
+export type CardLocation = Exclude<keyof BoardSide, NullableCardLocation>
+
+export type GameEdit =
+  | {
+      type: 'move_card'
+      player: Player
+      cardUid: string
+      fromLocation: keyof BoardSide
+      toLocation: keyof BoardSide
+      toIndex?: number
+      cardData: YugiohCard
+    }
+  | {
+      type: 'transfer_card'
+      fromPlayer: Player
+      toPlayer: Player
+      cardUid: string
+      fromLocation: keyof BoardSide
+      toLocation: keyof BoardSide
+      cardData: YugiohCard
+    }
+  | {
+      type: 'update_card'
+      player: Player
+      cardUid: string
+      location: keyof BoardSide
+      updates: Partial<YugiohCard>
+    }
+  | {
+      type: 'set_zone'
+      player: Player
+      location: keyof BoardSide
+      cards: (YugiohCard | null)[]
+    }
+  | { type: 'set_turn'; turn: number }
+  | { type: 'set_coin_flip'; coinFlip: ['heads' | 'tails', number] | null }
+  | { type: 'set_life_points'; player: Player; value: number }
+  | { type: 'set_player'; player: Player; user: User | null }
+  | { type: 'set_deck_id'; player: Player; deckId: string | null }
+  | { type: 'append_log'; entries: { text: string; timestamp: number }[] }

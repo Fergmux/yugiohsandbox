@@ -157,7 +157,7 @@ const cardDef = computed({
                 : 'text-white'
             "
             :disabled="!controls"
-            v-model="cardAtk"
+            v-model.lazy="cardAtk"
           />
         </div>
         <div v-if="cardDef != null" class="">
@@ -174,7 +174,7 @@ const cardDef = computed({
                 : 'text-white'
             "
             :disabled="!controls"
-            v-model="cardDef"
+            v-model.lazy="cardDef"
           />
         </div>
       </div>
