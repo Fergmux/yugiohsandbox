@@ -8,9 +8,11 @@ import { storeToRefs } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 import { useRoute } from 'vue-router'
 
+import InspectModal from '@/components/InspectModal.vue'
 import CoinFlip from '@/components/play-space/CoinFlip.vue'
 import FieldSide from '@/components/play-space/FieldSide.vue'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
+import { usePageManager } from '@/composables/crawler/pageManager'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
@@ -25,7 +27,10 @@ TODO:
 - align login page with join game page
 
 
-
+CRAWLER
+- Powers display
+- Whole deck display 
+- Draw pile randomised
 
 
 
@@ -77,7 +82,9 @@ Playground
 - Rotate left/right?
 */
 
-const { newDuel, crawl } = useCrawlManager()
+const { newDuel, finishDuel, crawl } = useCrawlManager()
+
+const { next } = usePageManager()
 
 const props = defineProps<{
   crawlPlayer: 'player1' | 'player2' | null
@@ -101,8 +108,8 @@ function createDefaultGameState(): GameState {
       player2: null,
     },
     lifePoints: {
-      player1: 8000,
-      player2: 8000,
+      player1: props.crawlPlayer ? 4000 : 8000,
+      player2: props.crawlPlayer ? 4000 : 8000,
     },
     cards: {
       player1: {
@@ -167,6 +174,9 @@ const gameCode: Ref<number | undefined> = ref()
 const deckId: Ref<string | undefined> = ref()
 let unsubscribe: () => void
 const joinUrl = computed(() => `${window.location.origin}/play/${gameCode.value}`)
+const viewDeck = ref(false)
+const powerDescription = ref<string | null>(null)
+const activatedPowerIds = ref<Set<string>>(new Set())
 
 interface EditBatch {
   edits: GameEdit[]
@@ -221,6 +231,12 @@ const leaveGame = () => {
   unsubscribe()
 }
 
+const endDuel = () => {
+  leaveGame()
+  finishDuel()
+  next()
+}
+
 type CoinFlipComponent = {
   flip: (desiredSide?: 'heads' | 'tails') => void
 }
@@ -257,8 +273,9 @@ const setTurn = (turn: number) => {
   sendEdits([{ type: 'set_turn', turn }, createLogEntry(`set turn to ${turnNameMap[turn % 6]}`)])
 }
 // Handle spacebar press to increment turn
-const handleKeyDown = (event: KeyboardEvent) => {
+const handleKeyUp = (event: KeyboardEvent) => {
   if (event.code === 'Space' && gameId.value) {
+    event.preventDefault()
     const newTurn = (turn.value + 1) % 12
     setTurn(newTurn)
   }
@@ -278,14 +295,20 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
-// Add event listener when component is mounted
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.code === 'Space' && gameId.value) {
+    event.preventDefault()
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
 })
 
-// Remove event listener when component is unmounted
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('keyup', handleKeyUp)
 })
 
 const cardIdsToCards = (cardIds: number[]) => {
@@ -329,14 +352,16 @@ const tokensInDeck = computed(() => {
       faceDown: true,
     }))
 })
-
+const crawlDeckCards = ref<YugiohCard[]>([])
 const setDeck = (id: string | number[]) => {
   if (Array.isArray(id)) {
     deckId.value = uuidv4()
-    const shuffledDeck = cardIdsToCards(id)
+    const deckCards = cardIdsToCards(id)
       .filter((c): c is YugiohCard => c !== undefined)
+      .filter((c) => !extraDeckTypes.includes(c.type) && c.type !== 'Token')
       .map((c) => ({ ...c, faceDown: true }))
-      .sort(() => Math.random() - 0.5)
+    crawlDeckCards.value = deckCards
+    const shuffledDeck = deckCards.sort(() => Math.random() - 0.5)
     sendEdits([
       { type: 'set_zone', player: playerKey.value, location: 'deck', cards: [...shuffledDeck] },
       { type: 'set_deck_id', player: playerKey.value, deckId: deckId.value },
@@ -504,8 +529,8 @@ const showNotes = ref(false)
       <div v-if="showChat" class="flex">
         <input
           v-model="textChat"
-          @keyup.enter="sendChat"
-          @keydown.space.stop
+          @keyup.enter.stop="sendChat"
+          @keyup.space.stop
           class="m-1 w-4/5 basis-4/5 rounded-md border-1 border-gray-300 p-1"
         />
         <button @click="sendChat" class="m-1 basis-8 rounded-md border-1 border-gray-300 p-1">Send</button>
@@ -533,18 +558,37 @@ const showNotes = ref(false)
 
   <!-- ROOM LEAVE -->
   <div v-else class="m-auto w-fit text-center">
-    <p class="text-lg">
-      Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
-    </p>
-    <button @click="leaveGame" class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
-      Leave Game
-    </button>
-    <button
-      @click="copy(joinUrl)"
-      class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-    >
-      Copy Link
-    </button>
+    <template v-if="props.crawlPlayer">
+      <p class="text-lg">
+        Round: <span class="text-lg font-bold">{{ crawl.round }}</span>
+      </p>
+      <button
+        @click="endDuel"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        End Duel
+      </button>
+      <button
+        @click="viewDeck = !viewDeck"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        View Deck
+      </button>
+    </template>
+    <template v-else>
+      <p class="text-lg">
+        Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
+      </p>
+      <button @click="leaveGame" class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
+        Leave Game
+      </button>
+      <button
+        @click="copy(joinUrl)"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        Copy Link
+      </button>
+    </template>
 
     <br />
     <coin-flip ref="coinRef" class="mx-auto mt-2" @flip="flipCoin" />
@@ -608,6 +652,25 @@ const showNotes = ref(false)
         @edit="handleEdit"
         class="mb-20"
       />
+      <template v-if="props.crawlPlayer && crawl[props.crawlPlayer].powers.length">
+        <br />
+        <p class="mx-auto w-max">{{ powerDescription ? powerDescription : 'Powers' }}</p>
+        <div class="mx-auto mt-4 mb-40 flex w-max gap-4">
+          <div
+            v-for="power in crawl[props.crawlPlayer].powers"
+            @mouseover="powerDescription = power.description"
+            @mouseleave="powerDescription = null"
+            :key="power.id"
+            class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+            :class="{ 'bg-yellow-500': activatedPowerIds.has(power.id) }"
+            @click="
+              activatedPowerIds.has(power.id) ? activatedPowerIds.delete(power.id) : activatedPowerIds.add(power.id)
+            "
+          >
+            {{ power.name }}
+          </div>
+        </div>
+      </template>
     </div>
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn >= 6 }" @click="setTurn(6)">
@@ -620,5 +683,6 @@ const showNotes = ref(false)
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 10 }" @click="setTurn(10)">Main phase 2</div>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 11 }" @click="setTurn(11)">End phase</div>
     </div>
+    <inspect-modal v-if="viewDeck" :cards="crawlDeckCards" :showCards="crawlDeckCards" @close="viewDeck = false" />
   </div>
 </template>

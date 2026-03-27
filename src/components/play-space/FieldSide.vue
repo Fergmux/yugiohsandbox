@@ -261,7 +261,14 @@ const inspectedCards = computed(() => {
       : inspectedCard.value
   }
   if (!inspectedCardsLocation.value || !inspectedCardsPlayerKey.value) return undefined
-  return getCardData(inspectedCardsPlayerKey.value)[inspectedCardsLocation.value].filter(Boolean) as YugiohCard[]
+  const cardsToInspect = getCardData(inspectedCardsPlayerKey.value)[inspectedCardsLocation.value].filter(
+    Boolean,
+  ) as YugiohCard[]
+  if (props.crawl && inspectedCardsLocation.value === 'deck' && revealDeck.value) {
+    return cardsToInspect.sort(() => Math.random() - 0.5)
+  } else {
+    return cardsToInspect
+  }
 })
 
 const showToOpponent = (index: number) => {

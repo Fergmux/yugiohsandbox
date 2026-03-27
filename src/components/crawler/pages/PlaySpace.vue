@@ -7,7 +7,6 @@ const { player } = useCrawlManager()
 
 <template>
   <div>
-    <h1>PlaySpace</h1>
     <play-space :crawl-player="player" />
   </div>
 </template>

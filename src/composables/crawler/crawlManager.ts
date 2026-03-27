@@ -4,23 +4,8 @@ import { doc, onSnapshot } from 'firebase/firestore'
 
 import { db } from '@/firebase/client'
 import { useUserStore } from '@/stores/user'
+import type { Crawl, Power } from '@/types/crawl'
 import { useClipboard } from '@vueuse/core'
-
-interface Crawl {
-  code: number | null
-  round: number
-  duelId: string | null
-  player1: {
-    id: string | null
-    deck: number[]
-    powers: string[]
-  }
-  player2: {
-    id: string | null
-    deck: number[]
-    powers: string[]
-  }
-}
 
 const defaultCrawl: Crawl = {
   code: null,
@@ -58,6 +43,20 @@ export const useCrawlManager = () => {
       return 'player2'
     }
     return null
+  })
+
+  const powers = computed(() => {
+    if (player.value) {
+      return crawl.value[player.value].powers
+    }
+    return []
+  })
+
+  const deck = computed(() => {
+    if (player.value) {
+      return crawl.value[player.value].deck
+    }
+    return []
   })
 
   const joinUrl = computed(() => `${window.location.origin}/crawler/${gameCode.value}`)
@@ -145,9 +144,83 @@ export const useCrawlManager = () => {
     })
   }
 
+  const finishDuel = async () => {
+    await fetch('/.netlify/functions/update-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...crawl.value,
+        duelId: null,
+      }),
+    })
+  }
+
+  const addPowerToUser = async (power: Power) => {
+    if (!player.value) return
+    await fetch('/.netlify/functions/update-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...crawl.value,
+        [player.value]: {
+          ...crawl.value[player.value],
+          powers: [...crawl.value[player.value].powers, power],
+        },
+      }),
+    })
+  }
+
+  const removePowerFromUser = async (id: string) => {
+    if (!player.value) return
+    const powers = crawl.value[player.value].powers
+    const idx = powers.findIndex((power) => power.id === id)
+    const updatedPowers = idx === -1 ? powers : [...powers.slice(0, idx), ...powers.slice(idx + 1)]
+    await fetch('/.netlify/functions/update-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...crawl.value,
+        [player.value]: {
+          ...crawl.value[player.value],
+          powers: updatedPowers,
+        },
+      }),
+    })
+  }
+
+  const addCardToDeck = async (id: number) => {
+    if (!player.value) return
+    await fetch('/.netlify/functions/update-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...crawl.value,
+        [player.value]: { ...crawl.value[player.value], deck: [...crawl.value[player.value].deck, id] },
+      }),
+    })
+  }
+
+  const removeCardFromDeck = async (id: number) => {
+    if (!player.value) return
+    const idx = deck.value.indexOf(id)
+    const updatedDeck = idx === -1 ? deck.value : [...deck.value.slice(0, idx), ...deck.value.slice(idx + 1)]
+    await fetch('/.netlify/functions/update-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...crawl.value,
+        [player.value]: {
+          ...crawl.value[player.value],
+          deck: updatedDeck,
+        },
+      }),
+    })
+  }
   return {
     crawl,
     player,
+    powers,
+    deck,
     gameId,
     gameCode,
     joinUrl,
@@ -156,5 +229,10 @@ export const useCrawlManager = () => {
     createGame,
     leaveGame,
     newDuel,
+    finishDuel,
+    addPowerToUser,
+    removePowerFromUser,
+    addCardToDeck,
+    removeCardFromDeck,
   }
 }
