@@ -133,10 +133,8 @@ export const useCrawlManager = () => {
   }
 
   const subscribe = () => {
-    console.log('subscribing to game', gameId.value)
     if (!gameId.value) return
     unsubscribe = onSnapshot(doc(db, 'crawls', gameId.value), (snapshot) => {
-      console.log('doc sub', snapshot.data())
       const remote = snapshot.data() as Crawl
 
       if (!player.value || pendingCounts.size === 0) {

@@ -21,7 +21,6 @@ watch(
   currentPage,
   (newPage) => {
     router.push({ name: newPage })
-    console.log(newPage)
   },
   { immediate: true },
 )

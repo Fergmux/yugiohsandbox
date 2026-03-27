@@ -61,7 +61,7 @@ const confirm = async () => {
         class="cursor-pointer rounded-md border-1 border-gray-200 p-2"
         @click="selectedDeckId = deck.id"
       >
-        <h3>{{ deck.name.split('ST-')[1] }}</h3>
+        <h3>{{ deck.name }}</h3>
       </div>
     </div>
     <button

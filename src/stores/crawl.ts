@@ -11,8 +11,8 @@ export const useCrawlStore = defineStore('crawl', () => {
   const adminDecks = ref<Deck[]>([])
   const powerRewards = ref<Power[]>([])
 
-  const rewardDecks = computed(() => adminDecks.value.filter((deck) => deck.name.startsWith('RW-')))
-  const starterDecks = computed(() => adminDecks.value.filter((deck) => deck.name.startsWith('ST-')))
+  const rewardDecks = computed(() => adminDecks.value.filter((deck) => deck.type === 'reward'))
+  const starterDecks = computed(() => adminDecks.value.filter((deck) => deck.type === 'starter'))
 
   const getPowers = async () => {
     const response = await fetch(`/.netlify/functions/get-powers`)

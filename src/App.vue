@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import router from './router/index'
 import { useUserStore } from './stores/user'
 
+const ADMIN_ID = 'k42xZxnDK6KhbBYuEiI1'
+
 const userStore = useUserStore()
 const route = useRoute()
 </script>
@@ -50,6 +52,14 @@ const route = useRoute()
         @click="router.push('/crawler')"
       >
         Crawler
+      </button>
+      <button
+        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'admin' }"
+        class="cursor-pointer p-1"
+        v-if="userStore.user?.id === ADMIN_ID"
+        @click="router.push('/admin')"
+      >
+        Admin
       </button>
     </div>
     <router-view />

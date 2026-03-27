@@ -27,6 +27,11 @@ const router = createRouter({
       component: () => import('@/views/PlayGround.vue'),
     },
     {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/AdminPanel.vue'),
+    },
+    {
       path: '/crawler',
       name: 'crawler',
       component: () => import('@/views/YugiCrawler.vue'),

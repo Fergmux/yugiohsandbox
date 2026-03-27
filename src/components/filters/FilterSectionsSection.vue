@@ -92,9 +92,6 @@ const currentLock = computed({
   },
   set: (value: boolean) => {
     locked.value = { ...locked.value, [props.depth]: value }
-    setTimeout(() => {
-      console.log(locked.value)
-    }, 100)
   },
 })
 

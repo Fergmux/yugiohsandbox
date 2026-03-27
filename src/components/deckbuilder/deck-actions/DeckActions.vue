@@ -45,7 +45,7 @@ const configs: Record<ActionType, ActionConfig> = {
 
 const deckStore = useDeckStore()
 const { addDeck, shareDeck, copyDeck, removeDeck, changeDeckName } = deckStore
-const { selectedDeckId } = storeToRefs(deckStore)
+const { selectedDeckId, selectedDeck } = storeToRefs(deckStore)
 
 // Action state - defaults to 'add' when no deck is selected
 const explicitAction = ref<ActionType | null>(null)
@@ -128,6 +128,7 @@ const showActionButtons = computed(() => selectedDeckId.value && explicitAction.
     <!-- Always show the action form - which action is determined by the computed property -->
     <action-item
       v-if="!showActionButtons"
+      :default-input-value="selectedDeck?.name"
       :title="getActionConfig(currentAction).title"
       :icon="getActionConfig(currentAction).icon"
       :placeholder="getActionConfig(currentAction).placeholder"

@@ -141,7 +141,7 @@ const removeCard = async (id: number) => {
           <div v-for="deck in rewardDecks" :key="deck.id" class="rounded-md border-1 border-gray-300">
             <div class="flex items-center justify-between p-3">
               <div>
-                <span class="font-medium">{{ deck.name.split('RW-')[1] }}</span>
+                <span class="font-medium">{{ deck.name }}</span>
                 <span class="mt-0.5 block text-xs text-gray-500">{{ deck.cards?.length ?? 0 }} cards</span>
               </div>
               <div class="flex gap-2">
@@ -182,7 +182,7 @@ const removeCard = async (id: number) => {
 
       <div v-else class="flex flex-col gap-3">
         <p class="text-sm text-gray-400">
-          Drawing from <span class="font-semibold text-gray-300">{{ selectedRewardDeck.name.split('RW-')[1] }}</span>
+          Drawing from <span class="font-semibold text-gray-300">{{ selectedRewardDeck.name }}</span>
         </p>
         <ul class="flex flex-wrap justify-around gap-4">
           <li
@@ -208,7 +208,10 @@ const removeCard = async (id: number) => {
       <div class="flex items-center gap-2">
         <button
           v-if="!newPower"
-          @click="selectedReward = null; newPower = null"
+          @click="
+            selectedReward = null
+            newPower = null
+          "
           class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border-1 border-gray-300 active:bg-gray-600"
         >
           <span class="material-symbols-outlined text-xl">arrow_back</span>
@@ -253,7 +256,10 @@ const removeCard = async (id: number) => {
       <div class="flex items-center gap-2">
         <button
           v-if="!rerolledPower"
-          @click="selectedReward = null; rerolledPower = null"
+          @click="
+            selectedReward = null
+            rerolledPower = null
+          "
           class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border-1 border-gray-300 active:bg-gray-600"
         >
           <span class="material-symbols-outlined text-xl">arrow_back</span>
