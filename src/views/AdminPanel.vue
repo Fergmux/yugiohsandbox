@@ -157,13 +157,9 @@ onMounted(() => {
     </div>
 
     <ul v-else class="flex flex-col gap-3">
-      <li
-        v-for="power in powers"
-        :key="power.id"
-        class="rounded-md border-1 border-gray-300 p-4"
-      >
+      <li v-for="power in powers" :key="power.id" class="rounded-md border-1 border-gray-300 p-4">
         <div v-if="editingPower?.id === power.id" class="flex items-start justify-between gap-4">
-          <div class="min-w-0 flex-1 flex flex-col gap-2">
+          <div class="flex min-w-0 flex-1 flex-col gap-2">
             <input
               v-model="editName"
               type="text"
@@ -221,7 +217,7 @@ onMounted(() => {
       <h2 class="mb-4 text-2xl font-semibold">Starter Decks</h2>
       <div v-if="loadingDecks" class="py-6 text-center text-gray-400">Loading decks...</div>
       <div v-else-if="starterDecks.length === 0" class="py-6 text-center text-gray-400">
-        No starter decks assigned.
+        No starter decks assigned!.
       </div>
       <ul v-else class="flex flex-col gap-2">
         <li
@@ -244,9 +240,7 @@ onMounted(() => {
     <div class="mt-10">
       <h2 class="mb-4 text-2xl font-semibold">Reward Decks</h2>
       <div v-if="loadingDecks" class="py-6 text-center text-gray-400">Loading decks...</div>
-      <div v-else-if="rewardDecks.length === 0" class="py-6 text-center text-gray-400">
-        No reward decks assigned.
-      </div>
+      <div v-else-if="rewardDecks.length === 0" class="py-6 text-center text-gray-400">No reward decks assigned.</div>
       <ul v-else class="flex flex-col gap-2">
         <li
           v-for="deck in rewardDecks"
