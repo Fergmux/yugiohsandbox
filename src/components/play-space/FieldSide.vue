@@ -774,7 +774,7 @@ const rotate = computed(() => !i.value)
       />
       <!-- GRAVEYARD -->
       <card-slot
-        class="bg-gray-700"
+        class="bg-[url('/graveyard.png')] bg-contain bg-center bg-no-repeat bg-gray-700"
         :cards="getCards('graveyard')"
         :name="'Graveyard'"
         :hint="getCards('graveyard').length"
