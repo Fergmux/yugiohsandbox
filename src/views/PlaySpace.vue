@@ -13,6 +13,7 @@ import CoinFlip from '@/components/play-space/CoinFlip.vue'
 import FieldSide from '@/components/play-space/FieldSide.vue'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
+import { useConfetti } from '@/composables/crawler/useConfetti'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
@@ -486,6 +487,22 @@ const player = computed(() => {
 const playerKey: ComputedRef<'player1' | 'player2'> = computed(
   () => props.crawlPlayer ?? (player.value === 'player2' ? 'player2' : 'player1'),
 )
+
+const { celebrate } = useConfetti()
+watch(
+  () => {
+    const opponentKey = playerKey.value === 'player1' ? 'player2' : 'player1'
+    return gameState.value.lifePoints[opponentKey]
+  },
+  (lp) => {
+    if (lp <= 0) {
+      setTimeout(() => {
+        celebrate()
+      }, 1600)
+    }
+  },
+)
+
 const notesRef = ref<HTMLTextAreaElement | null>(null)
 const showNotes = ref(false)
 </script>
