@@ -11,15 +11,20 @@ const defaultCrawl: Crawl = {
   code: null,
   round: 0,
   duelId: null,
+  created: null,
   player1: {
     id: null,
+    name: null,
     deck: [],
     powers: [],
+    page: 0,
   },
   player2: {
     id: null,
+    name: null,
     deck: [],
     powers: [],
+    page: 0,
   },
 }
 
@@ -94,7 +99,9 @@ export const useCrawlManager = () => {
 
   const createGame = async () => {
     crawl.value.code = Math.floor(Math.random() * 10000)
+    crawl.value.created = new Date().toISOString()
     crawl.value.player1.id = userStore.user?.id ?? null
+    crawl.value.player1.name = userStore.user?.username ?? null
     try {
       const response = await fetch('/.netlify/functions/create-crawl', {
         method: 'POST',
@@ -123,6 +130,7 @@ export const useCrawlManager = () => {
       await sendUpdate({
         player2: {
           id: userStore.user?.id ?? null,
+          name: userStore.user?.username ?? null,
           deck: [],
           powers: [],
         },
@@ -154,6 +162,7 @@ export const useCrawlManager = () => {
       if (!isPending(`${self}.deck`)) crawl.value[self].deck = [...remote[self].deck]
       if (!isPending(`${self}.powers`)) crawl.value[self].powers = [...remote[self].powers]
       if (!isPending(`${self}.id`)) crawl.value[self].id = remote[self].id
+      if (!isPending(`${self}.page`)) crawl.value[self].page = remote[self].page
     })
   }
 
@@ -251,6 +260,53 @@ export const useCrawlManager = () => {
     }
   }
 
+  const updatePage = async (page: number) => {
+    if (!player.value) return
+    const p = player.value
+    const key = `${p}.page`
+    crawl.value[p].page = page
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: page })
+    } finally {
+      unmarkPending(key)
+    }
+  }
+
+  const loadCrawl = (crawlData: Crawl & { id: string }) => {
+    const { id, ...rest } = crawlData
+    gameId.value = id
+    gameCode.value = rest.code
+    crawl.value = rest
+    subscribe()
+  }
+
+  const deleteCrawl = async (id: string): Promise<void> => {
+    await fetch('/.netlify/functions/delete-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+  }
+
+  const getCrawls = async (): Promise<(Crawl & { id: string })[]> => {
+    const userId = userStore.user?.id
+    if (!userId) return []
+    try {
+      const response = await fetch(`/.netlify/functions/get-crawls/${userId}`)
+      if (!response.ok) return []
+      const data: (Crawl & { id: string })[] = await response.json()
+      return data.sort((a, b) => {
+        if (!a.created) return 1
+        if (!b.created) return -1
+        return new Date(b.created).getTime() - new Date(a.created).getTime()
+      })
+    } catch (e) {
+      console.error('Error fetching crawls:', e)
+      return []
+    }
+  }
+
   return {
     crawl,
     player,
@@ -269,5 +325,9 @@ export const useCrawlManager = () => {
     removePowerFromUser,
     addCardToDeck,
     removeCardFromDeck,
+    getCrawls,
+    deleteCrawl,
+    updatePage,
+    loadCrawl,
   }
 }

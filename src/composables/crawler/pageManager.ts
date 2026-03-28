@@ -2,12 +2,16 @@ import { computed, ref } from 'vue'
 
 import { createSharedComposable } from '@vueuse/core'
 
+import { useCrawlManager } from './crawlManager'
+
 export const usePageManager = createSharedComposable(() => {
+  const { updatePage } = useCrawlManager()
+
   const pages = ref<string[]>(['newGame', 'deckSelection', 'playSpace', 'rewards'])
   const currentPageIndex = ref<number | null>(0)
   const currentPage = computed(() => pages.value[currentPageIndex.value ?? 0])
 
-  const next = () => {
+  const next = async () => {
     switch (currentPageIndex.value) {
       case 0:
         currentPageIndex.value = 1
@@ -25,6 +29,7 @@ export const usePageManager = createSharedComposable(() => {
         currentPageIndex.value = 0
         break
     }
+    await updatePage(currentPageIndex.value ?? 0)
   }
 
   return {

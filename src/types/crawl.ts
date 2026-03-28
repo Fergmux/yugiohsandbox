@@ -8,14 +8,19 @@ export interface Crawl {
   code: number | null
   round: number
   duelId: string | null
+  created: string | null
   player1: {
     id: string | null
+    name: string | null
     deck: number[]
     powers: Power[]
+    page: number
   }
   player2: {
     id: string | null
+    name: string | null
     deck: number[]
     powers: Power[]
+    page: number
   }
 }

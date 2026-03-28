@@ -1,16 +1,58 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 
 import { useRoute } from 'vue-router'
 
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
+import { useUserStore } from '@/stores/user'
+import type { Crawl } from '@/types/crawl'
 
 const route = useRoute()
 const inputRef = ref<HTMLInputElement>()
+const userStore = useUserStore()
 
-const { crawl, gameCode, gameId, joinUrl, joinGame, createGame, leaveGame, copy } = useCrawlManager()
-const { next } = usePageManager()
+const {
+  crawl,
+  gameCode,
+  gameId,
+  joinUrl,
+  joinGame,
+  createGame,
+  leaveGame,
+  copy,
+  getCrawls,
+  deleteCrawl,
+  loadCrawl,
+} = useCrawlManager()
+const { next, currentPageIndex } = usePageManager()
+
+const pastCrawls = ref<(Crawl & { id: string })[]>([])
+
+function formatDate(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+async function handleDeleteCrawl(id: string) {
+  await deleteCrawl(id)
+  pastCrawls.value = pastCrawls.value.filter((p) => p.id !== id)
+}
+
+async function resumeCrawl(c: Crawl & { id: string }) {
+  // Resolve player/page from the raw data before touching reactive state
+  const myPlayer = c.player1.id === userStore.user?.id ? 'player1' : 'player2'
+  const myPage = c[myPlayer]?.page ?? 1
+  loadCrawl(c)
+  // Wait for the DOM update caused by gameId changing before triggering navigation,
+  // otherwise the currentPage watcher fires (pre-flush) while NewGame.vue still has
+  // a pending patch, causing Vue to insertBefore into a null parent.
+  await nextTick()
+  currentPageIndex.value = myPage
+}
 
 onMounted(async () => {
   inputRef.value?.focus()
@@ -18,6 +60,7 @@ onMounted(async () => {
     gameCode.value = Number(route.params.gameCode)
     await joinGame()
   }
+  pastCrawls.value = await getCrawls()
 })
 </script>
 
@@ -42,7 +85,31 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div v-else class="m-auto w-fit text-center">
+    <!-- PAST CRAWLS -->
+    <div v-if="!gameId && pastCrawls.length" class="m-auto mt-8 w-full max-w-md">
+      <h2 class="mb-3 text-center text-sm font-semibold tracking-wide text-gray-500 uppercase">Your past crawls</h2>
+      <ul class="flex flex-col gap-4">
+        <li
+          v-for="c in pastCrawls"
+          :key="c.id"
+          class="flex items-center justify-between rounded-md border border-gray-300 p-4 text-sm"
+        >
+          <div class="flex flex-1 cursor-pointer items-center gap-6 hover:opacity-70" @click="resumeCrawl(c)">
+            <span class="font-medium">{{ c.player1.name ?? '—' }} vs {{ c.player2.name ?? '—' }}</span>
+            <span class="text-gray-500">Round {{ c.round }}</span>
+            <span class="text-gray-400">{{ formatDate(c.created) }}</span>
+          </div>
+          <button
+            @click="handleDeleteCrawl(c.id)"
+            class="ml-4 cursor-pointer rounded-md border border-gray-300 px-2 py-0.5 active:bg-red-400"
+          >
+            Delete
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <div v-else-if="gameId" class="m-auto w-fit text-center">
       <p class="text-lg">
         Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
       </p>
