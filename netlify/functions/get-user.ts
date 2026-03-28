@@ -17,7 +17,7 @@ const handler = async (event: { path: string }) => {
 
     if (name) {
       const usersRef = collection(db, 'users')
-      const q = query(usersRef, where('username', '==', name.toLowerCase()))
+      const q = query(usersRef, where('userKey', '==', name.toLowerCase()))
       const querySnapshot = await getDocs(q)
 
       if (querySnapshot.empty) throw new Error('User not found')

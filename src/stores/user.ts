@@ -3,7 +3,7 @@ import { ref } from 'vue'
 
 import { defineStore } from 'pinia'
 
-import type { User } from '@/types/user'
+import type { Friend, User } from '@/types/user'
 import { useStorage } from '@vueuse/core'
 
 export const useUserStore = defineStore('user', () => {
@@ -46,5 +46,48 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  return { user, loadingUser, addUser, getUser, loginExisting }
+  const updateUser = async (data: Partial<User>) => {
+    if (!user.value) return
+    const response = await fetch('/.netlify/functions/update-user', {
+      method: 'POST',
+      body: JSON.stringify({ id: user.value.id, ...data }),
+    })
+    const result = await response.json()
+    if (response.status !== 200) throw new Error(result.message)
+  }
+
+  const updateUsername = async (newUsername: string) => {
+    if (!user.value) return
+    await updateUser({ username: newUsername })
+    user.value.username = newUsername
+    savedUsername.value = newUsername.toLowerCase()
+  }
+
+  const addFriend = async (friendUsername: string): Promise<Friend> => {
+    if (!user.value) throw new Error('Not logged in')
+
+    const response = await fetch(`/.netlify/functions/get-user/${friendUsername.toLowerCase()}`)
+    const userData = await response.json()
+    if (response.status !== 200) throw new Error('User not found')
+
+    const friend: Friend = { id: userData.id, username: userData.username }
+
+    if (user.value.friends?.some((f) => f.id === friend.id)) {
+      throw new Error('Already friends')
+    }
+
+    const updatedFriends = [...(user.value.friends || []), friend]
+    await updateUser({ friends: updatedFriends })
+    user.value.friends = updatedFriends
+    return friend
+  }
+
+  const removeFriend = async (friendId: string) => {
+    if (!user.value) return
+    const updatedFriends = (user.value.friends || []).filter((f) => f.id !== friendId)
+    await updateUser({ friends: updatedFriends })
+    user.value.friends = updatedFriends
+  }
+
+  return { user, loadingUser, addUser, getUser, loginExisting, updateUsername, addFriend, removeFriend }
 })

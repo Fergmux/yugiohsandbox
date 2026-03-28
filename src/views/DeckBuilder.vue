@@ -11,7 +11,7 @@ import DeckSelect from '@/components/deckbuilder/DeckSelect.vue'
 import SearchFilters from '@/components/filters/SearchFilters.vue'
 import InspectModal from '@/components/InspectModal.vue'
 import { useDeckStore } from '@/stores/deck'
-import { extraDeckTypes, frameTypeOptions } from '@/types/filters'
+import { extraDeckTypes, frameTypeOptions, mainDeckTypes } from '@/types/filters'
 import type { BanlistFormat, YugiohCard } from '@/types/yugiohCard'
 
 const deckStore = useDeckStore()
@@ -88,9 +88,7 @@ const sortCardsByFrameTypeAndName = (a: YugiohCard, b: YugiohCard) => {
 }
 
 const cardsInNormalDeck = computed(() =>
-  cardsInDeck.value
-    ?.filter((card) => !extraDeckTypes.includes(card.type) && card.type !== 'Token')
-    .sort(sortCardsByFrameTypeAndName),
+  cardsInDeck.value?.filter((card) => mainDeckTypes.includes(card.type)).sort(sortCardsByFrameTypeAndName),
 )
 
 const cardsInExtraDeck = computed(() =>

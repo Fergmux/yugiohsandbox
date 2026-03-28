@@ -6,19 +6,23 @@ const handler = async (event: { body: string }) => {
   try {
     const body = JSON.parse(event.body)
 
+    const { username } = body
+    const usernameLower = username.toLowerCase()
+
     const usersRef = collection(db, 'users')
-    const q = query(usersRef, where('username', '==', body.username.toLowerCase()))
+    const q = query(usersRef, where('userKey', '==', usernameLower))
     const querySnapshot = await getDocs(q)
 
     if (!querySnapshot.empty) throw new Error('User already exists')
 
     const docRef = await addDoc(usersRef, {
-      username: body.username.toLowerCase(),
+      username,
+      userKey: usernameLower,
     })
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ id: docRef.id, username: body.username }),
+      body: JSON.stringify({ id: docRef.id, username }),
       headers: {
         'Content-Type': 'application/json',
       },

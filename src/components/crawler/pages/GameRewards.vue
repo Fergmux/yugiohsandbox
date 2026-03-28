@@ -10,6 +10,7 @@ import { useCrawlStore } from '@/stores/crawl'
 import { useDeckStore } from '@/stores/deck'
 import type { Power } from '@/types/crawl'
 import type { Deck } from '@/types/deck'
+import { mainDeckTypes } from '@/types/filters'
 import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
@@ -20,7 +21,9 @@ const crawlStore = useCrawlStore()
 const { getPowers, getAdminDecks } = crawlStore
 const { rewardDecks, powerRewards } = storeToRefs(crawlStore)
 
-const deckCards = computed(() => allCards.value.filter((card) => deck.value.includes(card.id)))
+const deckCards = computed(() =>
+  allCards.value.filter((card) => deck.value.includes(card.id) && mainDeckTypes.includes(card.type)),
+)
 const selectedCard = ref<YugiohCard | null>(null)
 
 const selectedReward = ref<string | null>(null)

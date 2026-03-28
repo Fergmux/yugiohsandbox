@@ -13,10 +13,13 @@ const loadingDecks = ref(false)
 const saving = ref(false)
 
 const editingPower = ref<Power | null>(null)
-const showForm = ref(false)
+const showAddForm = ref(false)
 
 const formName = ref('')
 const formDescription = ref('')
+
+const editName = ref('')
+const editDescription = ref('')
 
 const fetchPowers = async () => {
   loading.value = true
@@ -53,54 +56,64 @@ const toggleDeckType = async (deck: Deck, type: 'starter' | 'reward') => {
 }
 
 const openAddForm = () => {
-  editingPower.value = null
   formName.value = ''
   formDescription.value = ''
-  showForm.value = true
+  showAddForm.value = true
 }
 
-const openEditForm = (power: Power) => {
+const closeAddForm = () => {
+  showAddForm.value = false
+  formName.value = ''
+  formDescription.value = ''
+}
+
+const startEditing = (power: Power) => {
   editingPower.value = power
-  formName.value = power.name
-  formDescription.value = power.description
-  showForm.value = true
+  editName.value = power.name
+  editDescription.value = power.description
 }
 
-const closeForm = () => {
-  showForm.value = false
+const cancelEditing = () => {
   editingPower.value = null
-  formName.value = ''
-  formDescription.value = ''
+  editName.value = ''
+  editDescription.value = ''
 }
 
-const savePower = async () => {
+const saveEdit = async () => {
+  if (!editingPower.value || !editName.value.trim() || !editDescription.value.trim()) return
+  saving.value = true
+  try {
+    const response = await fetch('/.netlify/functions/update-power', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: editingPower.value.id,
+        name: editName.value.trim(),
+        description: editDescription.value.trim(),
+      }),
+    })
+    const updated: Power = await response.json()
+    const index = powers.value.findIndex((p) => p.id === updated.id)
+    if (index !== -1) powers.value[index] = updated
+    cancelEditing()
+  } finally {
+    saving.value = false
+  }
+}
+
+const addPower = async () => {
   if (!formName.value.trim() || !formDescription.value.trim()) return
   saving.value = true
   try {
-    if (editingPower.value) {
-      const response = await fetch('/.netlify/functions/update-power', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: editingPower.value.id,
-          name: formName.value.trim(),
-          description: formDescription.value.trim(),
-        }),
-      })
-      const updated: Power = await response.json()
-      const index = powers.value.findIndex((p) => p.id === updated.id)
-      if (index !== -1) powers.value[index] = updated
-    } else {
-      const response = await fetch('/.netlify/functions/add-power', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: formName.value.trim(),
-          description: formDescription.value.trim(),
-        }),
-      })
-      const created: Power = await response.json()
-      powers.value.push(created)
-    }
-    closeForm()
+    const response = await fetch('/.netlify/functions/add-power', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: formName.value.trim(),
+        description: formDescription.value.trim(),
+      }),
+    })
+    const created: Power = await response.json()
+    powers.value.push(created)
+    closeAddForm()
   } finally {
     saving.value = false
   }
@@ -147,25 +160,58 @@ onMounted(() => {
       <li
         v-for="power in powers"
         :key="power.id"
-        class="flex items-start justify-between gap-4 rounded-md border-1 border-gray-300 p-4"
+        class="rounded-md border-1 border-gray-300 p-4"
       >
-        <div class="min-w-0 flex-1">
-          <h2 class="text-xl font-medium">{{ power.name }}</h2>
-          <p class="mt-1 text-gray-400">{{ power.description }}</p>
+        <div v-if="editingPower?.id === power.id" class="flex items-start justify-between gap-4">
+          <div class="min-w-0 flex-1 flex flex-col gap-2">
+            <input
+              v-model="editName"
+              type="text"
+              class="w-full rounded-md border-1 border-gray-300 bg-transparent p-2 text-xl font-medium outline-none focus:border-white"
+              placeholder="Power name"
+            />
+            <textarea
+              v-model="editDescription"
+              rows="2"
+              class="w-full resize-none rounded-md border-1 border-gray-300 bg-transparent p-2 text-gray-400 outline-none focus:border-white"
+              placeholder="Power description"
+            />
+          </div>
+          <div class="flex shrink-0 gap-2">
+            <button
+              class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 transition-colors"
+              @click="cancelEditing"
+            >
+              Cancel
+            </button>
+            <button
+              :disabled="saving || !editName.trim() || !editDescription.trim()"
+              class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              @click="saveEdit"
+            >
+              {{ saving ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
         </div>
-        <div class="flex shrink-0 gap-2">
-          <button
-            class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 transition-colors"
-            @click="openEditForm(power)"
-          >
-            Edit
-          </button>
-          <button
-            class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 transition-colors"
-            @click="deletePower(power)"
-          >
-            Delete
-          </button>
+        <div v-else class="flex items-start justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <h2 class="text-xl font-medium">{{ power.name }}</h2>
+            <p class="mt-1 text-gray-400">{{ power.description }}</p>
+          </div>
+          <div class="flex shrink-0 gap-2">
+            <button
+              class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 transition-colors"
+              @click="startEditing(power)"
+            >
+              Edit
+            </button>
+            <button
+              class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 transition-colors"
+              @click="deletePower(power)"
+            >
+              Delete
+            </button>
+          </div>
         </div>
       </li>
     </ul>
@@ -246,17 +292,15 @@ onMounted(() => {
       </ul>
     </div>
 
-    <!-- Add/Edit Form Modal -->
+    <!-- Add Power Modal -->
     <div
-      v-if="showForm"
+      v-if="showAddForm"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      @click.self="closeForm"
+      @click.self="closeAddForm"
     >
       <div class="w-full max-w-md rounded-md border-1 border-gray-300 bg-neutral-900 p-6">
-        <h2 class="mb-4 text-2xl font-semibold">
-          {{ editingPower ? 'Edit Power' : 'Add Power' }}
-        </h2>
-        <form @submit.prevent="savePower" class="flex flex-col gap-4">
+        <h2 class="mb-4 text-2xl font-semibold">Add Power</h2>
+        <form @submit.prevent="addPower" class="flex flex-col gap-4">
           <div>
             <label class="mb-1 block text-sm text-gray-400">Name</label>
             <input
@@ -279,7 +323,7 @@ onMounted(() => {
             <button
               type="button"
               class="cursor-pointer rounded-md border-1 border-gray-300 px-4 py-2 transition-colors"
-              @click="closeForm"
+              @click="closeAddForm"
             >
               Cancel
             </button>
@@ -288,7 +332,7 @@ onMounted(() => {
               :disabled="saving || !formName.trim() || !formDescription.trim()"
               class="cursor-pointer rounded-md border-1 border-gray-300 px-4 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {{ saving ? 'Saving...' : editingPower ? 'Update' : 'Create' }}
+              {{ saving ? 'Saving...' : 'Create' }}
             </button>
           </div>
         </form>

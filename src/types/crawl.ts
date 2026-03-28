@@ -15,6 +15,7 @@ export interface Crawl {
     deck: number[]
     powers: Power[]
     page: number
+    wins: number
   }
   player2: {
     id: string | null
@@ -22,5 +23,6 @@ export interface Crawl {
     deck: number[]
     powers: Power[]
     page: number
+    wins: number
   }
 }

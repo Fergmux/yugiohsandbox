@@ -18,6 +18,7 @@ const defaultCrawl: Crawl = {
     deck: [],
     powers: [],
     page: 0,
+    wins: 0,
   },
   player2: {
     id: null,
@@ -25,6 +26,7 @@ const defaultCrawl: Crawl = {
     deck: [],
     powers: [],
     page: 0,
+    wins: 0,
   },
 }
 
@@ -200,6 +202,23 @@ export const useCrawlManager = () => {
     }
   }
 
+  const winDuel = async () => {
+    if (!player.value) return
+    const p = player.value
+    const winsKey = `${p}.wins`
+    const newWins = (crawl.value[p].wins ?? 0) + 1
+    crawl.value[p].wins = newWins
+    crawl.value.duelId = null
+    markPending(winsKey)
+    markPending('duelId')
+    try {
+      await sendUpdate({ [winsKey]: newWins, duelId: null })
+    } finally {
+      unmarkPending(winsKey)
+      unmarkPending('duelId')
+    }
+  }
+
   const addPowerToUser = async (power: Power) => {
     if (!player.value) return
     const p = player.value
@@ -321,6 +340,7 @@ export const useCrawlManager = () => {
     leaveGame,
     newDuel,
     finishDuel,
+    winDuel,
     addPowerToUser,
     removePowerFromUser,
     addCardToDeck,

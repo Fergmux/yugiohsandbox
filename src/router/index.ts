@@ -27,6 +27,11 @@ const router = createRouter({
       component: () => import('@/views/PlayGround.vue'),
     },
     {
+      path: '/user',
+      name: 'user',
+      component: () => import('@/views/UserProfile.vue'),
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/views/AdminPanel.vue'),

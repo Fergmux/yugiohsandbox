@@ -8,7 +8,7 @@ import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
 import { useCrawlStore } from '@/stores/crawl'
 import { useDeckStore } from '@/stores/deck'
-import { extraDeckTypes } from '@/types/filters'
+import { mainDeckTypes } from '@/types/filters'
 import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
@@ -24,7 +24,7 @@ const { starterDecks } = storeToRefs(crawlStore)
 const deckCards = computed(() =>
   allCards.value
     .filter((card) => selectedDeck.value?.cards.includes(card.id))
-    .filter((card) => !extraDeckTypes.includes(card.type) && card.type !== 'Token'),
+    .filter((card) => mainDeckTypes.includes(card.type)),
 )
 const selectedCard = ref<YugiohCard | null>(null)
 const selectedDeckId = ref<string | undefined>(undefined)

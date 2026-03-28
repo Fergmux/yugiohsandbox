@@ -46,12 +46,20 @@ const route = useRoute()
         Playground
       </button>
       <button
-        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'crawler' }"
+        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.matched.some(r => r.name === 'crawler') }"
         class="cursor-pointer p-1"
         v-if="userStore.user"
         @click="router.push('/crawler')"
       >
         Crawler
+      </button>
+      <button
+        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'user' }"
+        class="cursor-pointer p-1"
+        v-if="userStore.user"
+        @click="router.push('/user')"
+      >
+        User
       </button>
       <button
         :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'admin' }"

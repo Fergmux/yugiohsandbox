@@ -17,7 +17,7 @@ import { useConfetti } from '@/composables/crawler/useConfetti'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
-import { extraDeckTypes } from '@/types/filters'
+import { extraDeckTypes, mainDeckTypes } from '@/types/filters'
 import type { GameEdit, GameState, YugiohCard } from '@/types/yugiohCard'
 import { applyEdits } from '@/utils/applyEdit'
 import { useClipboard } from '@vueuse/core'
@@ -83,7 +83,7 @@ Playground
 - Rotate left/right?
 */
 
-const { newDuel, finishDuel, crawl } = useCrawlManager()
+const { newDuel, finishDuel, winDuel, crawl } = useCrawlManager()
 
 const { next } = usePageManager()
 
@@ -232,7 +232,13 @@ const leaveGame = () => {
   unsubscribe()
 }
 
-const endDuel = () => {
+const iWin = async () => {
+  await winDuel()
+  leaveGame()
+  next()
+}
+
+const iLose = () => {
   leaveGame()
   finishDuel()
   next()
@@ -330,7 +336,7 @@ const cardsInDeck: ComputedRef<YugiohCard[]> = computed(() => {
 
 const cardsInNormalDeck = computed(() =>
   cardsInDeck.value
-    .filter((card) => !extraDeckTypes.includes(card.type) && card.type !== 'Token')
+    .filter((card) => mainDeckTypes.includes(card.type))
     .map((card) => ({
       ...card,
       faceDown: true,
@@ -359,7 +365,7 @@ const setDeck = (id: string | number[]) => {
     deckId.value = uuidv4()
     const deckCards = cardIdsToCards(id)
       .filter((c): c is YugiohCard => c !== undefined)
-      .filter((c) => !extraDeckTypes.includes(c.type) && c.type !== 'Token')
+      .filter((c) => mainDeckTypes.includes(c.type))
       .map((c) => ({ ...c, faceDown: true }))
     crawlDeckCards.value = deckCards
     const shuffledDeck = deckCards.sort(() => Math.random() - 0.5)
@@ -432,6 +438,7 @@ const joinGame = async (id?: string) => {
     }
     const gameData = (await response.json()) as GameState & { id: string }
     gameId.value = gameData.id
+    gameCode.value = gameData.code || undefined
     serverSnapshot.value = gameData
     pendingEdits.value = []
     inflightBatches.value = []
@@ -487,12 +494,13 @@ const player = computed(() => {
 const playerKey: ComputedRef<'player1' | 'player2'> = computed(
   () => props.crawlPlayer ?? (player.value === 'player2' ? 'player2' : 'player1'),
 )
-
+const opponentKey: ComputedRef<'player1' | 'player2'> = computed(() => {
+  return playerKey.value === 'player1' ? 'player2' : 'player1'
+})
 const { celebrate } = useConfetti()
 watch(
   () => {
-    const opponentKey = playerKey.value === 'player1' ? 'player2' : 'player1'
-    return gameState.value.lifePoints[opponentKey]
+    return gameState.value.lifePoints[opponentKey.value]
   },
   (lp) => {
     if (lp <= 0) {
@@ -582,11 +590,19 @@ const showNotes = ref(false)
       <p class="text-lg">
         Round: <span class="text-lg font-bold">{{ crawl.round }}</span>
       </p>
+      <p class="text-lg">Score</p>
+      <p class="text-lg">
+        You: <span class="font-bold">{{ crawl[playerKey].wins ?? 0 }}</span> - {{ crawl[opponentKey].name }}:
+        <span class="font-bold">{{ crawl[opponentKey].wins ?? 0 }}</span>
+      </p>
+      <button @click="iWin" class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
+        I Win
+      </button>
       <button
-        @click="endDuel"
+        @click="iLose"
         class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
       >
-        End Duel
+        I Lose
       </button>
       <button
         @click="viewDeck = !viewDeck"
@@ -612,6 +628,27 @@ const showNotes = ref(false)
 
     <br />
     <coin-flip ref="coinRef" class="mx-auto mt-2" @flip="flipCoin" />
+    <template v-if="props.crawlPlayer && crawl[opponentKey].powers.length">
+      <p class="mx-auto my-4 max-w-full text-center break-words">
+        {{ powerDescription ? powerDescription : "Opponent's powers" }}
+      </p>
+      <div class="mx-auto mt-4 flex w-max gap-4">
+        <div
+          v-for="power in crawl[opponentKey].powers"
+          @mouseover="powerDescription = power.description"
+          @mouseleave="powerDescription = null"
+          :key="power.id"
+          class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+        >
+          <!-- TODO: track opponent's activated powers
+          :class="{ 'bg-yellow-600': activatedPowerIds.has(power.id) }"
+          @click="
+            activatedPowerIds.has(power.id) ? activatedPowerIds.delete(power.id) : activatedPowerIds.add(power.id)
+          " -->
+          {{ power.name }}
+        </div>
+      </div>
+    </template>
   </div>
 
   <!-- PICK DECK -->
@@ -670,19 +707,18 @@ const showNotes = ref(false)
         :viewer="player === null"
         :crawl="props.crawlPlayer !== null"
         @edit="handleEdit"
-        class="mb-20"
+        class="mb-2"
       />
       <template v-if="props.crawlPlayer && crawl[props.crawlPlayer].powers.length">
         <br />
-        <p class="mx-auto w-max">{{ powerDescription ? powerDescription : 'Powers' }}</p>
-        <div class="mx-auto mt-4 mb-40 flex w-max gap-4">
+        <div class="mx-auto flex w-max gap-4">
           <div
             v-for="power in crawl[props.crawlPlayer].powers"
             @mouseover="powerDescription = power.description"
             @mouseleave="powerDescription = null"
             :key="power.id"
             class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-            :class="{ 'bg-yellow-500': activatedPowerIds.has(power.id) }"
+            :class="{ 'bg-yellow-600': activatedPowerIds.has(power.id) }"
             @click="
               activatedPowerIds.has(power.id) ? activatedPowerIds.delete(power.id) : activatedPowerIds.add(power.id)
             "
@@ -690,6 +726,9 @@ const showNotes = ref(false)
             {{ power.name }}
           </div>
         </div>
+        <p class="mx-auto mt-4 mb-40 max-w-full text-center break-words">
+          {{ powerDescription ? powerDescription : 'Your powers' }}
+        </p>
       </template>
     </div>
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
