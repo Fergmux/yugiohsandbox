@@ -18,7 +18,7 @@ jobs:
       - run: npm install @aws-sdk/client-s3 axios
         working-directory: scripts
 
-      - run: node yugiohs3upload.js
+      - run: node yugiohs3upload.cjs
         working-directory: scripts
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
