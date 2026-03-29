@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 
 import { debounce, zip } from 'lodash'
 
 import InspectModal from '@/components/InspectModal.vue'
 import CardSlot from '@/components/play-space/CardSlot.vue'
 import LifePoints from '@/components/play-space/LifePoints.vue'
+import { useCardInspection } from '@/composables/useCardInspection'
+import { useCardMovement } from '@/composables/useCardMovement'
 import { type DragData, type DropZone, useDragDrop } from '@/composables/useDragDrop'
 import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import type { CardSelection } from '@/types/crawl'
@@ -14,9 +16,11 @@ import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
 import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
-import IconButton from './IconButton.vue'
+import HandCard from './HandCard.vue'
 
 type CardLocation = keyof BoardSide | 'attached'
+
+// ── Props & emits ───────────────────────────────────────────────────────────
 
 const props = defineProps<{
   gameState: GameState
@@ -27,9 +31,6 @@ const props = defineProps<{
   opponentSelectedCard?: CardSelection
   mySelectedOpponentCard?: CardSelection
 }>()
-const i = computed(() => props.interactive || undefined)
-const iv = computed(() => i.value || props.viewer || undefined)
-const hideInspectControls = ref(false)
 
 const emit = defineEmits<{
   (e: 'edit', edits: GameEdit[], logText?: string): void
@@ -37,29 +38,201 @@ const emit = defineEmits<{
   (e: 'cardSelected'): void
 }>()
 
+// ── Derived state ───────────────────────────────────────────────────────────
+
+const isInteractive = computed(() => props.interactive || undefined)
+const canView = computed(() => isInteractive.value || props.viewer || undefined)
+const isCrawl = computed(() => !!props.crawl)
+const rotate = computed(() => !isInteractive.value)
+
 const gameState = computed(() => props.gameState)
+const playerKey = computed(() => props.player)
+const opponentPlayerKey = computed(() => (props.player === 'player1' ? 'player2' : 'player1'))
+
+// ── Card data accessors ─────────────────────────────────────────────────────
+
+const getCardData = (key: Player) => gameState.value.cards[key]
+const cards = computed(() => getCardData(props.player))
+const opponentCards = computed(() => getCardData(opponentPlayerKey.value))
+const getCards = (location: keyof BoardSide) => cards.value[location]
+const getCard = (location: keyof BoardSide, index: number) => getCards(location)[index]
+
+const extraZones = computed(() =>
+  gameState.value.cards[props.player].zones.map((zone, index) =>
+    zone === null ? gameState.value.cards[opponentPlayerKey.value].zones[index] : zone,
+  ),
+)
+
+// ── Field layout ────────────────────────────────────────────────────────────
+
+const topRow = computed(() => getCards('field').slice(0, 6))
+
+const bottomRowIndices = Array(5)
+  .fill(0)
+  .map((_, i) => i + 6)
+const bottomRow = computed(
+  () => zip(getCards('field').slice(6), bottomRowIndices) as [YugiohCard, number][],
+)
+
+// ── Edit helpers ────────────────────────────────────────────────────────────
 
 const sendEdit = (edits: GameEdit[], logText?: string) => {
   emit('edit', edits, logText)
+}
+
+const updateLifePoints = (value: number, player: Player) => {
+  const newValue = gameState.value.lifePoints[player] + value
+  sendEdit(
+    [{ type: 'set_life_points', player, value: newValue }],
+    `set their life points to ${newValue}`,
+  )
+}
+
+// ── Card selection ──────────────────────────────────────────────────────────
+
+const selectedCard: Ref<YugiohCard | undefined> = ref()
+const selectedCardLocation: Ref<CardLocation | undefined> = ref()
+const selectedCardIndex: Ref<number | undefined> = ref()
+
+const isSelected = (location: keyof BoardSide, index: number) =>
+  selectedCardLocation.value === location && selectedCardIndex.value === index
+
+const selectCard = (location?: CardLocation, index?: number) => {
+  if (location == null || index == null) return
+  if (selectedCardLocation.value === location && selectedCardIndex.value === index) {
+    resetSelectedCard()
+  } else {
+    selectedCard.value = getCard(location, index) ?? undefined
+    selectedCardLocation.value = location
+    selectedCardIndex.value = index
+    emit('cardSelected')
+  }
+}
+
+const resetSelectedCard = () => {
+  selectedCard.value = undefined
+  selectedCardLocation.value = undefined
+  selectedCardIndex.value = undefined
+}
+
+defineExpose({ resetSelectedCard })
+
+const isOpponentSelected = (location: keyof BoardSide, index: number) =>
+  props.opponentSelectedCard?.location === location && props.opponentSelectedCard?.index === index
+
+const isMyOpponentSelected = (location: keyof BoardSide, index: number) =>
+  props.mySelectedOpponentCard?.location === location &&
+  props.mySelectedOpponentCard?.index === index
+
+const handleOpponentCardClick = (location: keyof BoardSide, index: number) => {
+  const card = getCard(location, index)
+  if (!card) return
+  emit('selectOpponentCard', location, index)
+}
+
+// ── Card movement composable ────────────────────────────────────────────────
+
+const {
+  cardName,
+  zoneName,
+  findCardOnField,
+  findCardLocation,
+  findMiddleFreeSlot,
+  moveCard,
+  logMoveCard,
+  flipCard,
+  drawCard,
+} = useCardMovement({
+  player: playerKey,
+  getCards,
+  getCard,
+  sendEdit,
+  selectedCard,
+  selectedCardLocation,
+  selectedCardIndex,
+  resetSelectedCard,
+  isCrawl,
+})
+
+// ── Card inspection composable ──────────────────────────────────────────────
+
+const {
+  inspectedCardsList,
+  inspectedCardsLocation,
+  inspectedFieldIndex,
+  visibleCards,
+  revealDeck,
+  hideInspectControls,
+  inspectCard,
+  inspectCards,
+  closeInspectModal,
+} = useCardInspection({
+  player: playerKey,
+  getCards,
+  getCardData,
+  extraZones,
+  isCrawl,
+})
+
+const selectInspectedCard = (index: number) => {
+  if (inspectedCardsLocation.value === 'attached') {
+    if (index === 0) {
+      // First card is the parent monster — find it on the field
+      const card = Array.isArray(inspectedCardsList.value)
+        ? inspectedCardsList.value[0]
+        : inspectedCardsList.value
+      const fieldIndex = getCards('field').findIndex((c) => c?.uid === card?.uid)
+      const zoneIndex =
+        fieldIndex === -1
+          ? getCards('zones').findIndex((c) => c?.uid === card?.uid)
+          : fieldIndex
+      const location = fieldIndex === -1 ? 'zones' : 'field'
+      selectCard(location, zoneIndex)
+    } else {
+      // Selecting an attached card
+      const card = Array.isArray(inspectedCardsList.value)
+        ? inspectedCardsList.value[index]
+        : inspectedCardsList.value
+      selectCard(
+        'attached',
+        getCards('attached').findIndex((c) => c?.uid === card?.uid),
+      )
+    }
+  } else {
+    selectCard(inspectedCardsLocation.value, index)
+  }
+}
+
+const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown?: boolean) => {
+  const card = Array.isArray(inspectedCardsList.value)
+    ? inspectedCardsList.value[index]
+    : inspectedCardsList.value
+  let resolvedIndex = index
+  if (inspectedCardsLocation.value === 'attached') {
+    resolvedIndex = getCards('attached').findIndex((c) => c?.uid === card?.uid)
+  }
+
+  selectCard(inspectedCardsLocation.value, resolvedIndex)
+  logMoveCard(destination, undefined, { faceDown })
+
+  // Refresh inspection after drawing
+  if (inspectedCardsLocation.value === 'attached') {
+    inspectCard(
+      Array.isArray(inspectedCardsList.value)
+        ? inspectedCardsList.value[0]
+        : (inspectedCardsList.value ?? null),
+      'field',
+    )
+  } else {
+    inspectCards(inspectedCardsLocation.value)
+  }
 }
 
 const revealCard = () => {
   sendEdit([], `revealed a card in ${zoneName(inspectedCardsLocation.value)}`)
 }
 
-const cardName = (card?: YugiohCard) => (card?.faceDown ? 'a card' : card?.name)
-const zoneNameMap: Record<keyof BoardSide, string> = {
-  field: 'the field',
-  zones: 'an extra zone',
-  hand: 'their hand',
-  banished: 'the banished zone',
-  deck: 'the deck',
-  extra: 'the extra deck',
-  tokens: 'the token deck',
-  graveyard: 'the graveyard',
-  attached: 'a monster',
-}
-const zoneName = (zone?: keyof BoardSide) => (zone ? zoneNameMap[zone] : undefined)
+// ── Stat updates ────────────────────────────────────────────────────────────
 
 const debouncedUpdateCardStats = debounce((name: string, stat?: 'attack' | 'defence') => {
   const card = findCardOnField(name)
@@ -79,55 +252,22 @@ const debouncedUpdateCardStats = debounce((name: string, stat?: 'attack' | 'defe
   }
 }, 1000)
 
-function findCardOnField(name: string): YugiohCard | undefined {
-  for (const loc of ['field', 'zones'] as (keyof BoardSide)[]) {
-    const found = cards.value[loc].find((c: YugiohCard | null) => c?.name === name)
-    if (found) return found as YugiohCard
-  }
-  return undefined
+const handleIncrement = (count: number, location: keyof BoardSide, index: number) => {
+  const card = getCard(location, index)
+  if (!card) return
+  const newCount = Math.max(0, (card.counters || 0) + count)
+  sendEdit([
+    {
+      type: 'update_card',
+      player: props.player,
+      cardUid: card.uid,
+      location,
+      updates: { counters: newCount },
+    },
+  ])
 }
 
-function findCardLocation(uid: string): keyof BoardSide | undefined {
-  for (const loc of [
-    'field',
-    'zones',
-    'hand',
-    'graveyard',
-    'banished',
-    'extra',
-    'deck',
-    'tokens',
-    'attached',
-  ] as (keyof BoardSide)[]) {
-    if (cards.value[loc].some((c: YugiohCard | null) => c?.uid === uid)) return loc
-  }
-  return undefined
-}
-
-const extraZones = computed(() =>
-  gameState.value.cards[props.player].zones.map((zone, index) =>
-    zone === null ? gameState.value.cards[opponentPlayerKey.value].zones[index] : zone,
-  ),
-)
-
-const updateLifePoints = (value: number, player: Player) => {
-  const newValue = gameState.value.lifePoints[player] + value
-  sendEdit([{ type: 'set_life_points', player, value: newValue }], `set their life points to ${newValue}`)
-}
-
-// Utility functions
-
-const getCardData = (key: Player) => gameState.value.cards[key]
-const cards = computed(() => getCardData(props.player))
-const opponentCards = computed(() => getCardData(opponentPlayerKey.value))
-const opponentPlayerKey = computed(() => (props.player === 'player1' ? 'player2' : 'player1'))
-
-const getCards = (location: keyof BoardSide) => cards.value[location]
-
-const getCard = (location: keyof BoardSide, index: number) => getCards(location)[index]
-
-const isSelected = (location: keyof BoardSide, index: number) =>
-  selectedCardLocation.value === location && selectedCardIndex.value === index
+// ── Field slot helpers ──────────────────────────────────────────────────────
 
 const getActions = (location: keyof BoardSide, index: number) => {
   const targetCard = getCard(location, index)
@@ -141,137 +281,60 @@ const getActions = (location: keyof BoardSide, index: number) => {
   }
 }
 
-const topRow = computed(() => getCards('field').slice(0, 6))
-const bottomRowIndexes = Array(5)
-  .fill(0)
-  .map((_, i) => i + 6)
-const bottomRow = computed(() => zip(getCards('field').slice(6), bottomRowIndexes) as [YugiohCard, number][])
-
 const deckActions = computed(() =>
   selectedCard.value ? ['shuffle-in', 'place-top', 'place-bottom'] : ['shuffle', 'search'],
 )
 
 const zoneIsFree = (index: number) => opponentCards.value.zones[index] === null
 
-// Selecting card
-const selectedCard: Ref<YugiohCard | undefined> = ref()
-const inspectedCard: Ref<YugiohCard | undefined> = ref()
-const inspectedCardsLocation: Ref<CardLocation | undefined> = ref()
-const inspectedCardsPlayerKey: Ref<Player | undefined> = ref()
-const selectedCardLocation: Ref<CardLocation | undefined> = ref()
-const selectedCardIndex: Ref<number | undefined> = ref()
-const revealDeck = ref(false)
+// ── Field click handlers ────────────────────────────────────────────────────
 
-const cardIndex = computed(() => {
-  const fieldIndex = getCards('field').findIndex(
-    (c) => c?.uid === (Array.isArray(inspectedCards.value) ? inspectedCards.value[0]?.uid : inspectedCards.value?.uid),
-  )
-
-  const zoneIndex = getCards('zones').findIndex(
-    (c) => c?.uid === (Array.isArray(inspectedCards.value) ? inspectedCards.value[0]?.uid : inspectedCards.value?.uid),
-  )
-
-  return inspectedCardsLocation.value === 'field' ||
-    inspectedCardsLocation.value === 'zones' ||
-    inspectedCardsLocation.value === 'attached'
-    ? fieldIndex === -1
-      ? zoneIndex
-      : fieldIndex
-    : undefined
-})
-
-const selectCard = (location?: CardLocation, index?: number) => {
-  if (location == null || index == null) return
-  if (selectedCardLocation.value === location && selectedCardIndex.value === index) {
-    resetSelectedCard()
-  } else {
-    selectedCard.value = getCard(location, index) ?? undefined
-    selectedCardLocation.value = location
-    selectedCardIndex.value = index
-    emit('cardSelected')
-  }
-}
-
-const selectInspectedCard = (index: number) => {
-  if (inspectedCardsLocation.value === 'attached') {
-    if (index === 0) {
-      const card = Array.isArray(inspectedCards.value) ? inspectedCards.value[0] : inspectedCards.value
-      const fieldIndex = getCards('field').findIndex((c) => c?.uid === card?.uid)
-      const index = fieldIndex === -1 ? getCards('zones').findIndex((c) => c?.uid === card?.uid) : fieldIndex
-      const location = fieldIndex === -1 ? 'zones' : 'field'
-      selectCard(location, index)
+const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
+  const card = getCard(zone, index)
+  if (card) {
+    if (isShiftHeld.value) {
+      selectCard(zone, index)
+      logMoveCard('graveyard')
     } else {
-      const card = Array.isArray(inspectedCards.value) ? inspectedCards.value[index] : inspectedCards.value
-      selectCard(
-        'attached',
-        getCards('attached').findIndex((c) => c?.uid === card?.uid),
-      )
+      selectCard(zone, index)
     }
-  } else {
-    selectCard(inspectedCardsLocation.value, index)
+  } else if (selectedCard.value) {
+    let logText: string
+    if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
+      logText = `moved ${cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(zone)}`
+    } else {
+      logText = `summoned ${selectedCard.value?.name} from ${zoneName(selectedCardLocation.value)}`
+    }
+    const edits = moveCard(zone, index)
+    if (edits.length) sendEdit(edits, logText)
   }
 }
 
-const resetSelectedCard = () => {
-  selectedCard.value = undefined
-  selectedCardLocation.value = undefined
-  selectedCardIndex.value = undefined
-}
-
-defineExpose({ resetSelectedCard })
-
-const isOpponentSelected = (location: keyof BoardSide, index: number) =>
-  props.opponentSelectedCard?.location === location && props.opponentSelectedCard?.index === index
-
-const isMyOpponentSelected = (location: keyof BoardSide, index: number) =>
-  props.mySelectedOpponentCard?.location === location && props.mySelectedOpponentCard?.index === index
-
-const handleOpponentCardClick = (location: keyof BoardSide, index: number) => {
-  const card = getCard(location, index)
+const shiftRightClickFieldCard = (index: number) => {
+  if (index === 0) return
+  const card = getCard('field', index)
   if (!card) return
-  emit('selectOpponentCard', location, index)
-}
 
-onMounted(() => {
-  window.addEventListener('keyup', handleKeyUp, true)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keyup', handleKeyUp, true)
-})
-
-const handleKeyUp = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    if (!inspectedCards.value) {
-      resetSelectedCard()
-    }
+  if (spellTrapTypes.includes(card.type) || card.faceDown) {
+    flipCard(card)
+  } else {
+    const newDefence = !card.defence
+    sendEdit(
+      [
+        {
+          type: 'update_card',
+          player: props.player,
+          cardUid: card.uid,
+          location: 'field',
+          updates: { defence: newDefence },
+        },
+      ],
+      `changed ${cardName(card)} to ${newDefence ? 'defence' : 'attack'} mode`,
+    )
   }
 }
 
-const findMiddleFreeSlot = (indices: number[]): number => {
-  const field = getCards('field')
-  const mid = indices[Math.floor(indices.length / 2)]
-  return [...indices].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid)).find((i) => field[i] === null) ?? -1
-}
-
-const shiftRightClickHandCard = (index: number) => {
-  const card = getCard('hand', index)
-  if (!card || card.race === 'Field') return
-
-  if (mainDeckMonsterTypes.includes(card.type)) {
-    const freeIndex = findMiddleFreeSlot([1, 2, 3, 4, 5])
-    if (freeIndex === -1) return
-    selectCard('hand', index)
-    const edits = moveCard('field', freeIndex, { faceDown: true, defence: true })
-    if (edits.length) sendEdit(edits, `set ${card.name} face down`)
-  } else if (spellTrapTypes.includes(card.type)) {
-    const freeIndex = findMiddleFreeSlot([6, 7, 8, 9, 10])
-    if (freeIndex === -1) return
-    selectCard('hand', index)
-    const edits = moveCard('field', freeIndex, { faceDown: true })
-    if (edits.length) sendEdit(edits, `set ${card.name} face down`)
-  }
-}
+// ── Hand quick-play handlers (shift+click shortcuts) ────────────────────────
 
 const shiftClickHandCard = (index: number) => {
   const card = getCard('hand', index)
@@ -297,288 +360,32 @@ const shiftClickHandCard = (index: number) => {
   }
 }
 
-const shiftRightClickFieldCard = (index: number) => {
-  if (index === 0) return // exclude field spell zone
-  const card = getCard('field', index)
-  if (!card) return
-
-  if (spellTrapTypes.includes(card.type)) {
-    flipCard(card)
-  } else if (card.faceDown) {
-    flipCard(card)
-  } else {
-    const newDefence = !card.defence
-    sendEdit(
-      [
-        {
-          type: 'update_card',
-          player: props.player,
-          cardUid: card.uid,
-          location: 'field',
-          updates: { defence: newDefence },
-        },
-      ],
-      `changed ${cardName(card)} to ${newDefence ? 'defence' : 'attack'} mode`,
-    )
-  }
-}
-
-const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
-  const card = getCard(zone, index)
-  if (card) {
-    if (isShiftHeld.value) {
-      selectCard(zone, index)
-      logMoveCard('graveyard')
-    } else {
-      selectCard(zone, index)
-    }
-  } else {
-    if (selectedCard.value) {
-      let logText: string
-      if (selectedCardLocation.value === 'field' || selectedCardLocation.value === 'zones') {
-        logText = `moved ${cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(zone)}`
-      } else {
-        logText = `summoned ${selectedCard.value?.name} from ${zoneName(selectedCardLocation.value)}`
-      }
-      const edits = moveCard(zone, index)
-      if (edits.length) sendEdit(edits, logText)
-    }
-  }
-}
-
-const inspectCard = (card: YugiohCard | null, location: keyof BoardSide | null) => {
-  const attachedCards = getCards('attached').filter((c) => c?.attached === card?.uid) as YugiohCard[]
-  inspectedCard.value = card ?? undefined
-  inspectedCardsLocation.value = attachedCards.length ? 'attached' : (location ?? undefined)
-}
-
-const inspectCards = (location?: CardLocation, playerKey?: Player) => {
-  if (!location) return
-  inspectedCardsLocation.value = location ?? undefined
-  inspectedCardsPlayerKey.value = playerKey ?? props.player
-}
-
-const inspectedCards = computed(() => {
-  if (inspectedCard.value) {
-    const attachedCards = getCards('attached').filter((c) => c?.attached === inspectedCard.value?.uid)
-    return attachedCards.length && inspectedCard.value
-      ? ([inspectedCard.value, ...attachedCards].filter(Boolean) as YugiohCard[])
-      : inspectedCard.value
-  }
-  if (!inspectedCardsLocation.value || !inspectedCardsPlayerKey.value) return undefined
-  const cardsToInspect = getCardData(inspectedCardsPlayerKey.value)[inspectedCardsLocation.value].filter(
-    Boolean,
-  ) as YugiohCard[]
-  if (props.crawl && inspectedCardsLocation.value === 'deck' && revealDeck.value) {
-    return cardsToInspect.sort(() => Math.random() - 0.5)
-  } else {
-    return cardsToInspect
-  }
-})
-
-const showToOpponent = (index: number) => {
+const shiftRightClickHandCard = (index: number) => {
   const card = getCard('hand', index)
-  if (!card) return
-  sendEdit(
-    [
-      {
-        type: 'update_card',
-        player: props.player,
-        cardUid: card.uid,
-        location: 'hand',
-        updates: { revealed: !card.revealed },
-      },
-    ],
-    `revealed ${card.name}`,
-  )
-}
-const giveToOpponent = (index: number) => {
-  const card = getCard('hand', index)
-  if (!card) return
-  const cardData = { ...card, faceDown: false }
-  sendEdit(
-    [
-      {
-        type: 'transfer_card',
-        fromPlayer: props.player,
-        toPlayer: opponentPlayerKey.value,
-        cardUid: card.uid,
-        fromLocation: 'hand',
-        toLocation: 'hand',
-        cardData,
-      },
-    ],
-    `gave ${card.name} to their opponent`,
-  )
-}
+  if (!card || card.race === 'Field') return
 
-// Moving cards
-const drawCard = (source: keyof BoardSide) => {
-  if (!getCards(source).length) {
-    if (props.crawl && source === 'deck') {
-      const shuffled = [...getCards('graveyard')]
-        .sort(() => Math.random() - 0.5)
-        .map((c) => ({ ...c, faceDown: true }) as YugiohCard)
-      sendEdit(
-        [
-          { type: 'set_zone', player: props.player, location: 'deck', cards: shuffled },
-          { type: 'set_zone', player: props.player, location: 'graveyard', cards: [] },
-        ],
-        `moved their graveyard into deck`,
-      )
-      return
-    } else {
-      return
-    }
-  }
-  const card = getCards(source)[0]
-  if (!card) return
-  const cardData = { ...card, faceDown: true }
-  sendEdit(
-    [
-      {
-        type: 'move_card',
-        player: props.player,
-        cardUid: card.uid,
-        fromLocation: source,
-        toLocation: 'hand',
-        cardData,
-      },
-    ],
-    `drew a card from ${zoneName(source)}`,
-  )
-}
-
-const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown?: boolean) => {
-  const card = Array.isArray(inspectedCards.value) ? inspectedCards.value[index] : inspectedCards.value
-  let newIndex = index
-  if (inspectedCardsLocation.value === 'attached') {
-    newIndex = getCards('attached').findIndex((c) => c?.uid === card?.uid)
-  }
-
-  selectCard(inspectedCardsLocation.value, newIndex)
-  logMoveCard(destination, undefined, { faceDown })
-  if (inspectedCardsLocation.value === 'attached') {
-    inspectCard(Array.isArray(inspectedCards.value) ? inspectedCards.value[0] : (inspectedCards.value ?? null), 'field')
-  } else {
-    inspectCards(inspectedCardsLocation.value)
+  if (mainDeckMonsterTypes.includes(card.type)) {
+    const freeIndex = findMiddleFreeSlot([1, 2, 3, 4, 5])
+    if (freeIndex === -1) return
+    selectCard('hand', index)
+    const edits = moveCard('field', freeIndex, { faceDown: true, defence: true })
+    if (edits.length) sendEdit(edits, `set ${card.name} face down`)
+  } else if (spellTrapTypes.includes(card.type)) {
+    const freeIndex = findMiddleFreeSlot([6, 7, 8, 9, 10])
+    if (freeIndex === -1) return
+    selectCard('hand', index)
+    const edits = moveCard('field', freeIndex, { faceDown: true })
+    if (edits.length) sendEdit(edits, `set ${card.name} face down`)
   }
 }
 
-const buildCardForDestination = (
-  card: YugiohCard,
-  destination: keyof BoardSide,
-  currentLocation: keyof BoardSide,
-  index?: number,
-  options?: {
-    faceDown?: boolean
-    defence?: boolean
-    newAttack?: number | null
-    newDefence?: number | null
-    attached?: string
-  },
-): YugiohCard => {
-  const opts = { ...options }
-  if (destination !== 'field' && destination !== 'zones') {
-    opts.newAttack = null
-    opts.newDefence = null
-  }
-
-  if (index !== undefined) {
-    const target = getCard(destination, index)
-    if (target === null) {
-      const orientationOptions =
-        currentLocation === 'field' || currentLocation === 'zones' ? {} : { faceDown: false, defence: false }
-      return { ...card, ...orientationOptions, ...opts }
-    }
-    return { ...card, faceDown: true, defence: false, counters: 0, ...opts }
-  }
-
-  if (destination === 'deck' || destination === 'extra' || destination === 'tokens') {
-    return { ...card, faceDown: true, defence: false, counters: 0, ...opts }
-  }
-  // const orientationOptions = destination === 'banished' ? {} : {  }
-  return { ...card, defence: false, counters: 0, ...opts, faceDown: false }
-}
-
-const moveCard = (
-  destination: keyof BoardSide,
-  index?: number,
-  options?: { faceDown?: boolean; defence?: boolean; attached?: string },
-): GameEdit[] => {
-  options = options ?? {}
-  if (!selectedCardLocation.value || selectedCardIndex.value === undefined) return []
-  const card = getCard(selectedCardLocation.value, selectedCardIndex.value)
-  if (!card) return []
-
-  if (destination === 'tokens' && card.type !== 'Token') return []
-  if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return []
-
-  const edits: GameEdit[] = []
-  const fromLocation = selectedCardLocation.value as keyof BoardSide
-
-  const attachedCards = getCards('attached').filter((c) => c?.attached === card?.uid) as YugiohCard[]
-  if (destination !== 'field' && destination !== 'zones' && attachedCards.length) {
-    attachedCards.forEach((c) => {
-      const attachedCardData = buildCardForDestination(c, destination, 'attached', undefined, options)
-      edits.push({
-        type: 'move_card',
-        player: props.player,
-        cardUid: c.uid,
-        fromLocation: 'attached',
-        toLocation: destination,
-        cardData: attachedCardData,
-      })
-    })
-  }
-
-  const cardData = buildCardForDestination(card, destination, fromLocation, index, options)
-  edits.push({
-    type: 'move_card',
-    player: props.player,
-    cardUid: card.uid,
-    fromLocation,
-    toLocation: destination,
-    toIndex: index,
-    cardData,
-  })
-
-  resetSelectedCard()
-  return edits
-}
-
-const logMoveCard = (
-  destination: keyof BoardSide,
-  index?: number,
-  options?: { faceDown?: boolean; defence?: boolean },
-) => {
-  options = options ?? {}
-  if (!selectedCard.value || !selectedCardLocation.value) return
-  const logText = `moved ${destination === 'graveyard' ? selectedCard.value.name : cardName(selectedCard.value)} from ${zoneName(selectedCardLocation.value)} to ${zoneName(destination)}`
-  const edits = moveCard(destination, index, options)
-  if (edits.length) sendEdit(edits, logText)
-}
-
-const flipCard = (card: YugiohCard) => {
-  const location = findCardLocation(card.uid) ?? 'field'
-  sendEdit(
-    [
-      {
-        type: 'update_card',
-        player: props.player,
-        cardUid: card.uid,
-        location,
-        updates: { faceDown: !card.faceDown },
-      },
-    ],
-    `flipped ${card.name} ${!card.faceDown ? 'face down' : 'face up'}`,
-  )
-}
+// ── Action dispatchers ──────────────────────────────────────────────────────
 
 const handleAction = (action: string, destination: keyof BoardSide, index: number) => {
   switch (action) {
     case 'set': {
-      const defence = selectedCard.value?.type !== 'Trap Card' && selectedCard.value?.type !== 'Spell Card'
+      const defence =
+        selectedCard.value?.type !== 'Trap Card' && selectedCard.value?.type !== 'Spell Card'
       const logText = `set ${cardName(selectedCard.value)} face down`
       const edits = moveCard(destination, index, { faceDown: true, defence })
       if (edits.length) sendEdit(edits, logText)
@@ -592,8 +399,7 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
     }
     case 'flip': {
       const cardToFlip = getCard(destination, index)
-      if (!cardToFlip) return
-      flipCard(cardToFlip)
+      if (cardToFlip) flipCard(cardToFlip)
       break
     }
     case 'position': {
@@ -616,26 +422,31 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
     }
     case 'attach': {
       if (!selectedCard.value) return
-      const cardsAttachedToSelected = getCards('attached').filter((c) => c?.attached === selectedCard.value?.uid)
       const destinationCard = getCard(destination, index)
       const destinationCardUid = destinationCard?.uid
       const attachEdits: GameEdit[] = []
 
-      if (cardsAttachedToSelected.length) {
-        cardsAttachedToSelected.forEach((c) => {
-          if (c) {
-            attachEdits.push({
-              type: 'update_card',
-              player: props.player,
-              cardUid: c.uid,
-              location: 'attached',
-              updates: { attached: destinationCardUid },
-            })
-          }
-        })
-      }
+      // Re-parent any cards attached to the selected card
+      const cardsAttachedToSelected = getCards('attached').filter(
+        (c) => c?.attached === selectedCard.value?.uid,
+      )
+      cardsAttachedToSelected.forEach((c) => {
+        if (c) {
+          attachEdits.push({
+            type: 'update_card',
+            player: props.player,
+            cardUid: c.uid,
+            location: 'attached',
+            updates: { attached: destinationCardUid },
+          })
+        }
+      })
+
       const logText = `attached ${selectedCard.value?.name} to ${destinationCard?.name}`
-      const moveEdits = moveCard('attached', undefined, { faceDown: false, attached: destinationCardUid })
+      const moveEdits = moveCard('attached', undefined, {
+        faceDown: false,
+        attached: destinationCardUid,
+      })
       if (moveEdits.length) sendEdit([...attachEdits, ...moveEdits], logText)
       break
     }
@@ -643,33 +454,37 @@ const handleAction = (action: string, destination: keyof BoardSide, index: numbe
 }
 
 const handleDeckAction = (action: string) => {
-  const options = { faceDown: true, defence: false }
+  const faceDownOptions = { faceDown: true, defence: false }
+
   switch (action) {
     case 'shuffle-in': {
       if (!selectedCard.value) return
       const randomIndex = Math.floor(Math.random() * (getCards('deck').length + 1))
       const logText = `shuffled ${cardName(selectedCard.value)} into their deck`
-      const edits = moveCard('deck', randomIndex, options)
+      const edits = moveCard('deck', randomIndex, faceDownOptions)
       if (edits.length) sendEdit(edits, logText)
       break
     }
     case 'place-top': {
       if (!selectedCard.value) return
       const logText = `placed ${cardName(selectedCard.value)} on top of their deck`
-      const edits = moveCard('deck', 0, options)
+      const edits = moveCard('deck', 0, faceDownOptions)
       if (edits.length) sendEdit(edits, logText)
       break
     }
     case 'place-bottom': {
       if (!selectedCard.value) return
       const logText = `placed ${cardName(selectedCard.value)} on the bottom of their deck`
-      const edits = moveCard('deck', getCards('deck').length, options)
+      const edits = moveCard('deck', getCards('deck').length, faceDownOptions)
       if (edits.length) sendEdit(edits, logText)
       break
     }
     case 'shuffle': {
       const shuffled = [...getCards('deck')].sort(() => Math.random() - 0.5)
-      sendEdit([{ type: 'set_zone', player: props.player, location: 'deck', cards: shuffled }], `shuffled their deck`)
+      sendEdit(
+        [{ type: 'set_zone', player: props.player, location: 'deck', cards: shuffled }],
+        `shuffled their deck`,
+      )
       break
     }
     case 'search': {
@@ -682,71 +497,63 @@ const handleDeckAction = (action: string) => {
 }
 
 const handleBanishedAction = (action: string) => {
-  switch (action) {
-    case 'face-down': {
-      if (!selectedCard.value) return
-      const logText = `banished ${cardName(selectedCard.value)} face down`
-      const edits = moveCard('banished', 0, { faceDown: true })
-      if (edits.length) sendEdit(edits, logText)
-      break
-    }
-    // case 'face-up': {
-    //   if (!selectedCard.value) return
-    //   const logText = `banished ${selectedCard.value?.name} face up`
-    //   const edits = moveCard('banished', 0, { faceDown: false })
-    //   if (edits.length) sendEdit(edits, logText)
-    //   break
-    // }
+  if (action === 'face-down' && selectedCard.value) {
+    const logText = `banished ${cardName(selectedCard.value)} face down`
+    const edits = moveCard('banished', 0, { faceDown: true })
+    if (edits.length) sendEdit(edits, logText)
   }
 }
 
-const handleIncrement = (count: number, location: keyof BoardSide, index: number) => {
-  const card = getCard(location, index)
+// ── Hand card actions ───────────────────────────────────────────────────────
+
+const showToOpponent = (index: number) => {
+  const card = getCard('hand', index)
   if (!card) return
-  const newCount = Math.max(0, (card.counters || 0) + count)
-  sendEdit([
-    {
-      type: 'update_card',
-      player: props.player,
-      cardUid: card.uid,
-      location,
-      updates: { counters: newCount },
-    },
-  ])
+  sendEdit(
+    [
+      {
+        type: 'update_card',
+        player: props.player,
+        cardUid: card.uid,
+        location: 'hand',
+        updates: { revealed: !card.revealed },
+      },
+    ],
+    `revealed ${card.name}`,
+  )
 }
 
-const closeInspectModal = async () => {
-  revealDeck.value = false
-  hideInspectControls.value = false
-  await nextTick()
-  inspectCard(null, null)
+const giveToOpponent = (index: number) => {
+  const card = getCard('hand', index)
+  if (!card) return
+  sendEdit(
+    [
+      {
+        type: 'transfer_card',
+        fromPlayer: props.player,
+        toPlayer: opponentPlayerKey.value,
+        cardUid: card.uid,
+        fromLocation: 'hand',
+        toLocation: 'hand',
+        cardData: { ...card, faceDown: false },
+      },
+    ],
+    `gave ${card.name} to their opponent`,
+  )
 }
 
-const showCards = computed(() => {
-  const revealedCards = [
-    ...getCards('extra'),
-    ...getCards('tokens'),
-    ...getCards('field'),
-    ...getCards('hand'),
-    ...getCards('attached'),
-    ...extraZones.value,
-  ]
-  const cards = revealDeck.value ? [...revealedCards, ...getCards('deck')] : revealedCards
-  return cards.filter(Boolean) as YugiohCard[]
-})
+// ── Keyboard shortcuts ──────────────────────────────────────────────────────
 
-const rotate = computed(() => !i.value)
+const { isShiftHeld, registerShortcut } = useFieldShortcuts()
 
 const playerLpRef = ref<{ focus: () => void }>()
 const opponentLpRef = ref<{ focus: () => void }>()
 
-const { isShiftHeld, registerShortcut } = useFieldShortcuts()
-
-registerShortcut('l', () => i.value && playerLpRef.value?.focus())
-registerShortcut('o', () => i.value && opponentLpRef.value?.focus())
+registerShortcut('l', () => isInteractive.value && playerLpRef.value?.focus())
+registerShortcut('o', () => isInteractive.value && opponentLpRef.value?.focus())
 
 registerShortcut('g', () => {
-  if (!i.value) return
+  if (!isInteractive.value) return
   if (selectedCard.value) {
     logMoveCard('graveyard')
   } else {
@@ -754,41 +561,57 @@ registerShortcut('g', () => {
   }
 })
 registerShortcut('h', () => {
-  if (!i.value || !selectedCard.value) return
+  if (!isInteractive.value || !selectedCard.value) return
   logMoveCard('hand')
 })
 registerShortcut('b', () => {
-  if (!i.value || !selectedCard.value) return
+  if (!isInteractive.value || !selectedCard.value) return
   logMoveCard('banished')
 })
 registerShortcut('f', () => {
-  if (!i.value || !selectedCard.value) return
+  if (!isInteractive.value || !selectedCard.value) return
   if (getCard('field', 0) !== null) return
   logMoveCard('field', 0)
 })
 registerShortcut('d', () => {
-  if (!i.value || selectedCard.value) return
+  if (!isInteractive.value || selectedCard.value) return
   drawCard('deck')
 })
 registerShortcut('s', () => {
-  if (!i.value || selectedCard.value) return
+  if (!isInteractive.value || selectedCard.value) return
   handleDeckAction('search')
 })
 registerShortcut('G', () => {
-  if (!i.value || !selectedCard.value || selectedCardLocation.value !== 'hand') return
+  if (!isInteractive.value || !selectedCard.value || selectedCardLocation.value !== 'hand') return
   if (selectedCardIndex.value === undefined) return
   giveToOpponent(selectedCardIndex.value)
 })
 
-// Drag and drop
+// Escape to deselect
+onMounted(() => window.addEventListener('keyup', handleKeyUp, true))
+onBeforeUnmount(() => window.removeEventListener('keyup', handleKeyUp, true))
+
+const handleKeyUp = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && !inspectedCardsList.value) {
+    resetSelectedCard()
+  }
+}
+
+// ── Drag and drop ───────────────────────────────────────────────────────────
+
 const fieldRef = ref<HTMLElement>()
 
 const handleDrop = (drag: DragData, drop: DropZone) => {
-  if (drag.sourceLocation === drop.location && (drop.index === undefined || drag.sourceIndex === drop.index)) return
+  if (
+    drag.sourceLocation === drop.location &&
+    (drop.index === undefined || drag.sourceIndex === drop.index)
+  )
+    return
 
   const card = getCard(drag.sourceLocation, drag.sourceIndex)
   if (!card || card.uid !== drag.card.uid) return
 
+  // Set selection to the dragged card for moveCard to use
   selectedCard.value = card
   selectedCardLocation.value = drag.sourceLocation
   selectedCardIndex.value = drag.sourceIndex
@@ -825,7 +648,12 @@ const handleDrop = (drag: DragData, drop: DropZone) => {
 
 const { dragging, dragX, dragY, hoverZone, didDrag, startDrag } = useDragDrop(handleDrop)
 
-const startCardDrag = (card: YugiohCard, location: keyof BoardSide, index: number, event: PointerEvent) => {
+const startCardDrag = (
+  card: YugiohCard,
+  location: keyof BoardSide,
+  index: number,
+  event: PointerEvent,
+) => {
   const showFace = location === 'hand' || !card.faceDown
   startDrag(
     {
@@ -848,6 +676,7 @@ provide(
   computed(() => dragging.value?.card.uid),
 )
 
+// Suppress click events that fire immediately after a drag ends
 const suppressClickAfterDrag = (e: MouseEvent) => {
   if (didDrag.value) {
     e.stopPropagation()
@@ -855,145 +684,117 @@ const suppressClickAfterDrag = (e: MouseEvent) => {
   }
 }
 
-onMounted(() => {
-  fieldRef.value?.addEventListener('click', suppressClickAfterDrag, true)
-})
-onBeforeUnmount(() => {
-  fieldRef.value?.removeEventListener('click', suppressClickAfterDrag, true)
-})
+onMounted(() => fieldRef.value?.addEventListener('click', suppressClickAfterDrag, true))
+onBeforeUnmount(() => fieldRef.value?.removeEventListener('click', suppressClickAfterDrag, true))
+
+// ── Extra zone helpers ──────────────────────────────────────────────────────
+
+const extraZoneCards = (zoneIndex: number) => [
+  extraZones.value[zoneIndex],
+  ...(getCards('attached').filter((c) => c?.attached === getCard('zones', zoneIndex)?.uid) ?? []),
+]
+
+const attachedSelectedIndex = (parentUid?: string) =>
+  isInteractive.value &&
+  selectedCardLocation.value === 'attached' &&
+  selectedCard.value?.attached === parentUid &&
+  selectedCardIndex.value !== undefined
+    ? selectedCardIndex.value + 1
+    : undefined
 </script>
+
 <template>
-  <!-- PLAYER -->
   <div class="select-none" ref="fieldRef">
     <div class="grid grid-cols-7 gap-2">
-      <!-- BANISHED/EXTRA -->
-      <template v-if="i || (viewer && props.player === 'player1')">
-        <!-- OPPONENT BANISHED -->
+      <!-- ── Banished / Life Points / Extra Zones / Tokens row ─────────── -->
+      <template v-if="isInteractive || (viewer && props.player === 'player1')">
+        <!-- Opponent banished -->
         <card-slot
           class="bg-gray-200"
-          :name="'Banished Zone'"
+          name="Banished Zone"
           :cards="opponentCards.banished"
           :hint="opponentCards.banished.length"
           @click.right.prevent="(hideInspectControls = true) && inspectCards('banished', opponentPlayerKey)"
           :rotate
         />
+
+        <!-- Opponent life points -->
         <life-points
           ref="opponentLpRef"
           :life-points="gameState.lifePoints[opponentPlayerKey]"
           @update="updateLifePoints($event, opponentPlayerKey)"
         />
-        <!-- EXTRA 0 -->
+
+        <!-- Extra monster zones -->
         <card-slot
-          :card="extraZones[0]"
-          :cards="[
-            extraZones[0],
-            ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 0)?.uid) ?? []),
-          ]"
-          :name="'Extra Monster Zone'"
-          @click="i ? zoneIsFree(0) && handleFieldClick(0, 'zones') : handleOpponentCardClick('zones', 0)"
-          @click.right.prevent="
-            (!extraZones[0]?.faceDown || zoneIsFree(0) || viewer) && inspectCard(extraZones[0], 'zones')
-          "
+          v-for="zoneIndex in [0, 1]"
+          :key="`extra-zone-${zoneIndex}`"
+          :card="extraZones[zoneIndex]"
+          :cards="extraZoneCards(zoneIndex)"
+          name="Extra Monster Zone"
           class="bg-blue-800"
-          :selected="isSelected('zones', 0)"
-          :selected-index="
-            i &&
-            selectedCardLocation === 'attached' &&
-            selectedCard?.attached === extraZones[0]?.uid &&
-            selectedCardIndex !== undefined
-              ? selectedCardIndex + 1
-              : undefined
-          "
-          :actions="zoneIsFree(0) ? getActions('zones', 0) : []"
-          :hint="(viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined"
-          :controls="!!getCard('zones', 0)"
-          :counters="extraZones[0]?.counters"
-          :opponent-selected="isOpponentSelected('zones', 0) || isMyOpponentSelected('zones', 0)"
-          @action="(evt) => i && handleAction(evt, 'zones', 0)"
-          @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
-          @update="debouncedUpdateCardStats"
+          :selected="isSelected('zones', zoneIndex)"
+          :selected-index="attachedSelectedIndex(extraZones[zoneIndex]?.uid)"
+          :actions="isInteractive && zoneIsFree(zoneIndex) ? getActions('zones', zoneIndex) : []"
+          :hint="(viewer || zoneIsFree(zoneIndex)) && extraZones[zoneIndex]?.faceDown ? extraZones[zoneIndex]?.name : undefined"
+          :controls="!!getCard('zones', zoneIndex)"
+          :counters="extraZones[zoneIndex]?.counters"
+          :opponent-selected="isOpponentSelected('zones', zoneIndex) || isMyOpponentSelected('zones', zoneIndex)"
           :rotate
-          :drop-zone="i && zoneIsFree(0) ? 'zones' : undefined"
-          :drop-index="i && zoneIsFree(0) ? 0 : undefined"
-          @pointerdown="i && getCard('zones', 0) && startCardDrag(getCard('zones', 0)!, 'zones', 0, $event)"
+          :drop-zone="isInteractive && zoneIsFree(zoneIndex) ? 'zones' : undefined"
+          :drop-index="isInteractive && zoneIsFree(zoneIndex) ? zoneIndex : undefined"
+          @click="isInteractive ? zoneIsFree(zoneIndex) && handleFieldClick(zoneIndex, 'zones') : handleOpponentCardClick('zones', zoneIndex)"
+          @click.right.prevent="(!extraZones[zoneIndex]?.faceDown || zoneIsFree(zoneIndex) || viewer) && inspectCard(extraZones[zoneIndex], 'zones')"
+          @action="(evt) => isInteractive && handleAction(evt, 'zones', zoneIndex)"
+          @increment="(evt) => isInteractive && handleIncrement(evt, 'zones', zoneIndex)"
+          @update="debouncedUpdateCardStats"
+          @pointerdown="isInteractive && getCard('zones', zoneIndex) && startCardDrag(getCard('zones', zoneIndex)!, 'zones', zoneIndex, $event)"
         />
-        <!-- TOKENS -->
+
+        <!-- Tokens -->
         <card-slot
-          class=""
-          :name="'Tokens'"
+          name="Tokens"
           :cards="getCards('tokens')"
           :hint="getCards('tokens').length"
-          @click.right.prevent="iv && inspectCards('tokens')"
-          @click.stop="i && (selectedCard ? logMoveCard('tokens') : drawCard('tokens'))"
-          :selected-index="i && selectedCardLocation === 'tokens' && selectedCardIndex"
+          :selected-index="isInteractive && selectedCardLocation === 'tokens' && selectedCardIndex"
           :rotate
-          :drop-zone="i ? 'tokens' : undefined"
+          :drop-zone="isInteractive ? 'tokens' : undefined"
+          @click.right.prevent="canView && inspectCards('tokens')"
+          @click.stop="isInteractive && (selectedCard ? logMoveCard('tokens') : drawCard('tokens'))"
         />
-        <!-- EXTRA 1 -->
-        <card-slot
-          :card="extraZones[1]"
-          :cards="[
-            extraZones[1],
-            ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 1)?.uid) ?? []),
-          ]"
-          :name="'Extra Monster Zone'"
-          @click="i ? zoneIsFree(1) && handleFieldClick(1, 'zones') : handleOpponentCardClick('zones', 1)"
-          @click.right.prevent="
-            (!extraZones[1]?.faceDown || zoneIsFree(1) || viewer) && inspectCard(extraZones[1], 'zones')
-          "
-          class="bg-blue-800"
-          :selected="isSelected('zones', 1)"
-          :selected-index="
-            i &&
-            selectedCardLocation === 'attached' &&
-            selectedCard?.attached === extraZones[1]?.uid &&
-            selectedCardIndex !== undefined
-              ? selectedCardIndex + 1
-              : undefined
-          "
-          :actions="i && zoneIsFree(1) ? getActions('zones', 1) : []"
-          :hint="(viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined"
-          :controls="!!getCard('zones', 1)"
-          :counters="extraZones[1]?.counters"
-          :opponent-selected="isOpponentSelected('zones', 1) || isMyOpponentSelected('zones', 1)"
-          @action="(evt) => handleAction(evt, 'zones', 1)"
-          @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
-          @update="debouncedUpdateCardStats"
-          :rotate
-          :drop-zone="i && zoneIsFree(1) ? 'zones' : undefined"
-          :drop-index="i && zoneIsFree(1) ? 1 : undefined"
-          @pointerdown="i && getCard('zones', 1) && startCardDrag(getCard('zones', 1)!, 'zones', 1, $event)"
-        />
+
+        <!-- Player life points -->
         <life-points
           ref="playerLpRef"
           :life-points="gameState.lifePoints[props.player]"
           reverse
           @update="updateLifePoints($event, props.player)"
         />
-        <!-- BANISHED -->
+
+        <!-- Player banished -->
         <card-slot
           class="bg-gray-200"
+          name="Banished Zone"
           :cards="getCards('banished')"
-          :name="'Banished Zone'"
+          :hint="getCards('banished').length"
+          :actions="isInteractive && selectedCard ? ['face-down'] : []"
+          :selected-index="isInteractive && selectedCardLocation === 'banished' && selectedCardIndex"
+          :opponent-selected="isOpponentSelected('banished', 0) || isMyOpponentSelected('banished', 0)"
+          :rotate
+          :drop-zone="isInteractive ? 'banished' : undefined"
           @click.stop="
-            i
+            isInteractive
               ? selectedCard
                 ? logMoveCard('banished')
                 : selectCard('banished', 0)
               : handleOpponentCardClick('banished', 0)
           "
           @click.right.prevent="inspectCards('banished')"
-          :hint="getCards('banished').length"
-          :actions="i && selectedCard ? ['face-down'] : []"
-          @action="(evt) => i && handleBanishedAction(evt)"
-          :selected-index="i && selectedCardLocation === 'banished' && selectedCardIndex"
-          :opponent-selected="isOpponentSelected('banished', 0) || isMyOpponentSelected('banished', 0)"
-          :rotate
-          :drop-zone="i ? 'banished' : undefined"
+          @action="(evt) => isInteractive && handleBanishedAction(evt)"
         />
       </template>
 
-      <!-- TOP ROW -->
+      <!-- ── Top row: field spell + 5 monster zones ────────────────────── -->
       <card-slot
         v-for="(card, index) in topRow"
         :key="index"
@@ -1001,178 +802,132 @@ onBeforeUnmount(() => {
         :card="card"
         :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
         :class="index === 0 ? 'bg-green-600' : 'bg-yellow-700'"
-        @click.stop="i ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
-        @click.right.prevent="i && isShiftHeld && index !== 0 ? shiftRightClickFieldCard(index) : (!card?.faceDown || iv) && inspectCard(card, 'field')"
-        :selected="i && isSelected('field', index)"
-        :selected-index="
-          i &&
-          selectedCardLocation === 'attached' &&
-          selectedCard?.attached === card?.uid &&
-          selectedCardIndex !== undefined
-            ? selectedCardIndex + 1
-            : undefined
-        "
-        :actions="i && getActions('field', index)"
-        :hint="iv && card?.faceDown ? card?.name : undefined"
-        :controls="i && !!card"
+        :selected="isInteractive && isSelected('field', index)"
+        :selected-index="attachedSelectedIndex(card?.uid)"
+        :actions="isInteractive && getActions('field', index)"
+        :hint="canView && card?.faceDown ? card?.name : undefined"
+        :controls="isInteractive && !!card"
         :counters="card?.counters"
         :opponent-selected="isOpponentSelected('field', index) || isMyOpponentSelected('field', index)"
-        @action="(evt) => i && handleAction(evt, 'field', index)"
-        @increment="(evt) => i && handleIncrement(evt, 'field', index)"
-        @update="debouncedUpdateCardStats"
         :rotate
-        :drop-zone="i ? 'field' : undefined"
-        :drop-index="i ? index : undefined"
-        @pointerdown="i && card && startCardDrag(card, 'field', index, $event)"
+        :drop-zone="isInteractive ? 'field' : undefined"
+        :drop-index="isInteractive ? index : undefined"
+        @click.stop="isInteractive ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
+        @click.right.prevent="isInteractive && isShiftHeld && index !== 0 ? shiftRightClickFieldCard(index) : (!card?.faceDown || canView) && inspectCard(card, 'field')"
+        @action="(evt) => isInteractive && handleAction(evt, 'field', index)"
+        @increment="(evt) => isInteractive && handleIncrement(evt, 'field', index)"
+        @update="debouncedUpdateCardStats"
+        @pointerdown="isInteractive && card && startCardDrag(card, 'field', index, $event)"
       />
-      <!-- GRAVEYARD -->
+
+      <!-- Graveyard -->
       <card-slot
         class="bg-gray-700"
+        name="Graveyard"
         :cards="getCards('graveyard')"
-        :name="'Graveyard'"
         :hint="getCards('graveyard').length"
-        :selected-index="i && selectedCardLocation === 'graveyard' && selectedCardIndex"
+        :selected-index="isInteractive && selectedCardLocation === 'graveyard' && selectedCardIndex"
+        :opponent-selected="isOpponentSelected('graveyard', 0) || isMyOpponentSelected('graveyard', 0)"
+        :rotate
+        :drop-zone="isInteractive ? 'graveyard' : undefined"
         @click.stop="
-          i
+          isInteractive
             ? selectedCard
               ? logMoveCard('graveyard')
               : selectCard('graveyard', 0)
             : handleOpponentCardClick('graveyard', 0)
         "
         @click.right.prevent="inspectCards('graveyard')"
-        :opponent-selected="isOpponentSelected('graveyard', 0) || isMyOpponentSelected('graveyard', 0)"
-        :rotate
-        :drop-zone="i ? 'graveyard' : undefined"
       />
-      <!-- EXTRA DECK -->
+
+      <!-- Extra deck -->
       <card-slot
         class="bg-violet-800"
+        name="Extra Deck Zone"
         :cards="getCards('extra')"
-        :name="'Extra Deck Zone'"
         :hint="getCards('extra').length"
-        @click.right.prevent="iv && inspectCards('extra')"
-        @click.stop="i && (selectedCard ? logMoveCard('extra') : inspectCards('extra'))"
-        :selected-index="i && selectedCardLocation === 'extra' && selectedCardIndex"
+        :selected-index="isInteractive && selectedCardLocation === 'extra' && selectedCardIndex"
         :rotate
-        :drop-zone="i ? 'extra' : undefined"
+        :drop-zone="isInteractive ? 'extra' : undefined"
+        @click.right.prevent="canView && inspectCards('extra')"
+        @click.stop="isInteractive && (selectedCard ? logMoveCard('extra') : inspectCards('extra'))"
       />
-      <!-- BOTTOM ROW -->
+
+      <!-- ── Bottom row: 5 spell/trap zones ────────────────────────────── -->
       <card-slot
         v-for="[card, index] in bottomRow"
         :key="index"
         :card="card"
         :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
-        :name="'Spell & Trap Card Zone'"
+        name="Spell & Trap Card Zone"
         class="bg-teal-600"
-        @click.stop="i ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
-        @click.right.prevent="i && isShiftHeld ? shiftRightClickFieldCard(index) : (!card?.faceDown || iv) && inspectCard(card, 'field')"
-        :selected="i && isSelected('field', index)"
-        :selected-index="
-          i &&
-          selectedCardLocation === 'attached' &&
-          selectedCard?.attached === card?.uid &&
-          selectedCardIndex !== undefined
-            ? selectedCardIndex + 1
-            : undefined
-        "
-        :actions="i && getActions('field', index)"
-        :hint="iv && card?.faceDown ? card?.name : undefined"
-        :controls="i && !!card"
+        :selected="isInteractive && isSelected('field', index)"
+        :selected-index="attachedSelectedIndex(card?.uid)"
+        :actions="isInteractive && getActions('field', index)"
+        :hint="canView && card?.faceDown ? card?.name : undefined"
+        :controls="isInteractive && !!card"
         :counters="card?.counters"
         :opponent-selected="isOpponentSelected('field', index) || isMyOpponentSelected('field', index)"
-        @action="(evt) => i && handleAction(evt, 'field', index)"
-        @increment="(evt) => i && handleIncrement(evt, 'field', index)"
-        @update="debouncedUpdateCardStats"
         :rotate
-        :drop-zone="i ? 'field' : undefined"
-        :drop-index="i ? index : undefined"
-        @pointerdown="i && card && startCardDrag(card as YugiohCard, 'field', index, $event)"
+        :drop-zone="isInteractive ? 'field' : undefined"
+        :drop-index="isInteractive ? index : undefined"
+        @click.stop="isInteractive ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
+        @click.right.prevent="isInteractive && isShiftHeld ? shiftRightClickFieldCard(index) : (!card?.faceDown || canView) && inspectCard(card, 'field')"
+        @action="(evt) => isInteractive && handleAction(evt, 'field', index)"
+        @increment="(evt) => isInteractive && handleIncrement(evt, 'field', index)"
+        @update="debouncedUpdateCardStats"
+        @pointerdown="isInteractive && card && startCardDrag(card as YugiohCard, 'field', index, $event)"
       />
-      <!-- DECK -->
+
+      <!-- Deck -->
       <card-slot
         class="bg-amber-900"
+        name="Deck Zone"
         :cards="getCards('deck')"
-        :name="'Deck Zone'"
         :hint="getCards('deck').length"
-        @click.stop="i && drawCard('deck')"
-        @click.right.prevent="iv && inspectCards('deck')"
-        :actions="i && deckActions"
-        @action="(evt) => i && handleDeckAction(evt)"
-        :selected-index="i && selectedCardLocation === 'deck' && selectedCardIndex"
+        :actions="isInteractive && deckActions"
+        :selected-index="isInteractive && selectedCardLocation === 'deck' && selectedCardIndex"
         :rotate
-        :drop-zone="i ? 'deck' : undefined"
+        :drop-zone="isInteractive ? 'deck' : undefined"
+        @click.stop="isInteractive && drawCard('deck')"
+        @click.right.prevent="canView && inspectCards('deck')"
+        @action="(evt) => isInteractive && handleDeckAction(evt)"
       />
     </div>
+
+    <!-- ── Hand ──────────────────────────────────────────────────────────── -->
     <div
       data-drop-zone="hand"
       :class="{ 'rounded ring-2 ring-yellow-400 ring-inset': !!dragging && hoverZone?.location === 'hand' }"
-      @click="i && logMoveCard('hand')"
+      @click="isInteractive && logMoveCard('hand')"
       class="mt-4 flex h-[min(20vw,20vh)] w-full justify-center"
     >
-      <div
+      <hand-card
         v-for="(card, index) in getCards('hand')"
         :key="`${card?.id}+${index}`"
-        :style="
-          i
-            ? {
-                transform: `rotate(${(index - (getCards('hand').length - 1) / 2) * 5}deg) translateY(${Math.abs(index - (getCards('hand').length - 1) / 2) * 10}px)`,
-              }
-            : undefined
-        "
-        :class="i ? 'group/card z-[140] origin-bottom hover:z-[150]' : ''"
-      >
-        <div class="relative">
-          <div
-            :class="
-              i
-                ? 'pointer-events-none origin-bottom transition-transform duration-200 group-hover/card:z-50 group-hover/card:scale-[2]'
-                : ''
-            "
-          >
-            <img
-              v-if="card"
-              :class="{
-                'border-4 border-yellow-200': isSelected('hand', index),
-                'border-4 border-red-500': isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index),
-                'opacity-30': dragging?.card.uid === card?.uid,
-              }"
-              class="h-full max-h-42 max-w-full min-w-0 object-contain"
-              :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
-            />
-          </div>
-          <div
-            :class="
-              i
-                ? 'absolute top-0 left-0 h-full w-full opacity-0 group-hover/card:opacity-100'
-                : 'absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100'
-            "
-            @pointerdown="i && card && startCardDrag(card, 'hand', index, $event)"
-            @click.stop="
-              i
-                ? isShiftHeld
-                  ? shiftClickHandCard(index)
-                  : selectCard('hand', index)
-                : handleOpponentCardClick('hand', index)
-            "
-            @click.right.prevent="
-              i && isShiftHeld ? shiftRightClickHandCard(index) : (iv || card?.revealed) && inspectCard(card, 'hand')
-            "
-            @dragstart.prevent=""
-          >
-            <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
-              <icon-button title="Reveal" @click.stop="showToOpponent(index)">
-                {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
-              </icon-button>
-              <icon-button title="Give" @click.stop="giveToOpponent(index)"> volunteer_activism </icon-button>
-            </div>
-          </div>
-        </div>
-      </div>
+        :card="card!"
+        :index="index"
+        :hand-length="getCards('hand').length"
+        :is-interactive="!!isInteractive"
+        :can-view="!!canView"
+        :selected="isSelected('hand', index)"
+        :opponent-highlighted="isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index)"
+        :dragging-uid="dragging?.card.uid"
+        @select="isInteractive ? selectCard('hand', index) : handleOpponentCardClick('hand', index)"
+        @inspect="(canView || card?.revealed) && inspectCard(card, 'hand')"
+        @shift-click="shiftClickHandCard(index)"
+        @shift-right-click="shiftRightClickHandCard(index)"
+        @reveal="showToOpponent(index)"
+        @give="giveToOpponent(index)"
+        @start-drag="(evt) => card && startCardDrag(card, 'hand', index, evt)"
+      />
     </div>
+
+    <!-- ── Inspect modal ─────────────────────────────────────────────────── -->
     <inspect-modal
-      v-if="inspectedCards"
-      :cards="inspectedCards"
-      :show-cards="showCards"
+      v-if="inspectedCardsList"
+      :cards="inspectedCardsList"
+      :show-cards="visibleCards"
       :inspected-cards-location="inspectedCardsLocation"
       :selected-index="
         selectedCardLocation === inspectedCardsLocation ||
@@ -1181,14 +936,16 @@ onBeforeUnmount(() => {
           ? selectedCardIndex
           : undefined
       "
-      :card-index
-      :controls="i && !hideInspectControls"
+      :card-index="inspectedFieldIndex"
+      :controls="isInteractive && !hideInspectControls"
       @close="closeInspectModal"
       @select="selectInspectedCard"
       @draw="drawFromInspected"
       @reveal="revealCard"
       @flip="flipCard"
     />
+
+    <!-- Drag ghost image -->
     <Teleport to="body">
       <img
         v-if="dragging"

@@ -10,9 +10,9 @@ import { useRoute } from 'vue-router'
 
 import InspectModal from '@/components/InspectModal.vue'
 import InviteFriendsModal from '@/components/InviteFriendsModal.vue'
-import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import CoinFlip from '@/components/play-space/CoinFlip.vue'
 import FieldSide from '@/components/play-space/FieldSide.vue'
+import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
 import { useConfetti } from '@/composables/crawler/useConfetti'
@@ -89,7 +89,7 @@ Playground
 
 const { newDuel, finishDuel, winDuel, crawl, setSelectedOpponentCard } = useCrawlManager()
 
-const { next } = usePageManager()
+const { next, endCrawl } = usePageManager()
 
 const props = defineProps<{
   crawlPlayer?: 'player1' | 'player2' | null
@@ -240,13 +240,21 @@ const leaveGame = () => {
 const iWin = async () => {
   await winDuel()
   leaveGame()
-  next()
+  if (crawl.value[playerKey.value].wins >= 5) {
+    endCrawl()
+  } else {
+    next()
+  }
 }
 
 const iLose = () => {
   leaveGame()
   finishDuel()
-  next()
+  if (crawl.value[opponentKey.value].wins >= 5) {
+    endCrawl()
+  } else {
+    next()
+  }
 }
 
 type CoinFlipComponent = {
@@ -266,7 +274,7 @@ const flipCoin = (result: 'heads' | 'tails') => {
 watch(
   () => gameState.value.coinFlip?.[1],
   (count, oldCount) => {
-    if (count !== undefined && oldCount !== undefined && count !== oldCount) {
+    if (count !== undefined && count !== oldCount) {
       coinRef.value?.flip(gameState.value.coinFlip![0])
     }
   },
@@ -786,7 +794,7 @@ onUnmounted(() => {
   </div>
 
   <!-- WHOLE PLAYSPACE -->
-  <div v-if="gameId && (deckId || player === null)" class="mt-20 mb-40 flex h-screen items-center justify-center gap-2">
+  <div v-if="gameId && (deckId || player === null)" class="mt-40 mb-40 flex h-screen items-center justify-center gap-2">
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="setTurn(0)">
         {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}

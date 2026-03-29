@@ -1,8 +1,7 @@
 import confetti from 'canvas-confetti'
 
 export function useConfetti() {
-  function celebrate() {
-    const duration = 500
+  function celebrate(duration: number = 500) {
     const end = Date.now() + duration
 
     const frame = () => {

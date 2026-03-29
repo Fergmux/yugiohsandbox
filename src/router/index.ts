@@ -37,6 +37,11 @@ const router = createRouter({
       component: () => import('@/views/AdminPanel.vue'),
     },
     {
+      path: '/endScreen',
+      name: 'endScreen',
+      component: () => import('@/views/EndScreen.vue'),
+    },
+    {
       path: '/crawler',
       name: 'crawler',
       component: () => import('@/views/YugiCrawler.vue'),

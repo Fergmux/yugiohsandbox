@@ -72,6 +72,8 @@ export const useCrawlManager = () => {
     return null
   })
 
+  const opponent = computed(() => (player.value === 'player1' ? 'player2' : 'player1'))
+
   const powers = computed(() => {
     if (player.value) {
       return crawl.value[player.value].powers
@@ -332,6 +334,7 @@ export const useCrawlManager = () => {
   return {
     crawl,
     player,
+    opponent,
     powers,
     deck,
     gameId,

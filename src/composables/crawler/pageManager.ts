@@ -7,7 +7,7 @@ import { useCrawlManager } from './crawlManager'
 export const usePageManager = createSharedComposable(() => {
   const { updatePage } = useCrawlManager()
 
-  const pages = ref<string[]>(['newGame', 'deckSelection', 'playSpace', 'rewards'])
+  const pages = ref<string[]>(['newGame', 'deckSelection', 'playSpace', 'rewards', 'endScreen'])
   const currentPageIndex = ref<number | null>(0)
   const currentPage = computed(() => pages.value[currentPageIndex.value ?? 0])
 
@@ -32,10 +32,16 @@ export const usePageManager = createSharedComposable(() => {
     await updatePage(currentPageIndex.value ?? 0)
   }
 
+  const endCrawl = () => {
+    currentPageIndex.value = 4
+    updatePage(currentPageIndex.value ?? 0)
+  }
+
   return {
     pages,
     currentPage,
     currentPageIndex,
     next,
+    endCrawl,
   }
 })

@@ -16,7 +16,9 @@ import { getS3ImageUrl } from '@/utils'
 
 const { next } = usePageManager()
 const { powers, deck, removeCardFromDeck, addPowerToUser, removePowerFromUser, addCardToDeck } = useCrawlManager()
-const { allCards } = storeToRefs(useDeckStore())
+const deckStore = useDeckStore()
+const { allCards } = storeToRefs(deckStore)
+const { getAllCards } = deckStore
 const crawlStore = useCrawlStore()
 const { getPowers, getAdminDecks } = crawlStore
 const { rewardDecks, powerRewards } = storeToRefs(crawlStore)
@@ -28,15 +30,23 @@ const selectedCard = ref<YugiohCard | null>(null)
 
 const selectedReward = ref<string | null>(null)
 const selectedRewardDeck = ref<Deck | null>(null)
+const viewDeck = ref(false)
+const rewardPoints = ref(3)
 
 onMounted(async () => {
   await getPowers()
   await getAdminDecks()
+  await getAllCards()
 })
 
 const newPower = ref<Power | null>(null)
 const pickRandomPower = () => {
-  const index = Math.floor(Math.random() * powerRewards.value.length)
+  rewardPoints.value -= 1
+  const randomIndex = () => Math.floor(Math.random() * powerRewards.value.length)
+  let index = randomIndex()
+  while (powers.value.map((power) => power.id).includes(powerRewards.value[index].id)) {
+    index = Math.floor(Math.random() * powerRewards.value.length)
+  }
   return powerRewards.value[index]
 }
 
@@ -58,6 +68,7 @@ const acceptRerolledPower = async (power: Power) => {
 }
 
 const selectRewardDeck = (deck: Deck) => {
+  rewardPoints.value -= deck.name.match('Staples') ? 2 : 1
   selectedRewardDeck.value = deck
   pickRandomCards()
 }
@@ -79,11 +90,18 @@ const pickCard = async (id: number) => {
   await addCardToDeck(id)
   selectedReward.value = null
   selectedRewardDeck.value = null
+  cardOptions.value = []
 }
 
 const removeCard = async (id: number) => {
+  rewardPoints.value -= 1
   await removeCardFromDeck(id)
   selectedReward.value = null
+}
+
+const closeInspect = () => {
+  selectedCard.value = null
+  viewDeck.value = false
 }
 </script>
 
@@ -91,17 +109,43 @@ const removeCard = async (id: number) => {
   <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
     <div class="text-center">
       <h1 class="text-2xl font-bold">Rewards</h1>
-      <p class="mt-1 text-sm text-gray-500">Choose your rewards</p>
+      <p class="mt-2 text-sm text-gray-500">Choose your rewards</p>
+      <p class="text-md mt-4">
+        You have <span class="font-semibold text-yellow-400">{{ rewardPoints }}</span> reward points
+      </p>
     </div>
 
     <!-- Reward selection -->
     <div v-if="!selectedReward" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <button
         @click="selectedReward = 'card'"
-        class="flex cursor-pointer flex-col items-center gap-2 rounded-md border-1 border-gray-300 p-4 transition-colors active:bg-gray-200"
+        :disabled="rewardPoints <= 0"
+        class="flex cursor-pointer flex-col items-center gap-2 rounded-md border-1 border-gray-300 p-4 transition-colors active:bg-gray-200 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
       >
         <span class="material-symbols-outlined text-3xl">style</span>
-        <span class="text-sm font-medium">Pick a Card</span>
+        <span class="text-sm font-medium"
+          >Pick a Card - <span class="font-semibold text-yellow-400">{{ '1/2' }}</span></span
+        >
+      </button>
+      <button
+        :disabled="rewardPoints <= 0"
+        @click="selectedReward = 'remove'"
+        class="flex cursor-pointer flex-col items-center gap-2 rounded-md border-1 border-gray-300 p-4 transition-colors active:bg-gray-200 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
+      >
+        <span class="material-symbols-outlined text-3xl">delete</span>
+        <span class="text-sm font-medium"
+          >Remove a Card - <span class="font-semibold text-yellow-400">{{ 1 }}</span></span
+        >
+      </button>
+      <button
+        :disabled="rewardPoints <= 0"
+        @click="selectedReward = 'reroll'"
+        class="flex cursor-pointer flex-col items-center gap-2 rounded-md border-1 border-gray-300 p-4 transition-colors active:bg-gray-200 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
+      >
+        <span class="material-symbols-outlined text-3xl">casino</span>
+        <span class="text-sm font-medium"
+          >Reroll a Power - <span class="font-semibold text-yellow-400">{{ 1 }}</span></span
+        >
       </button>
       <button
         @click="selectedReward = 'power'"
@@ -110,26 +154,13 @@ const removeCard = async (id: number) => {
         <span class="material-symbols-outlined text-3xl">auto_awesome</span>
         <span class="text-sm font-medium">Gain a Power</span>
       </button>
-      <button
-        @click="selectedReward = 'reroll'"
-        class="flex cursor-pointer flex-col items-center gap-2 rounded-md border-1 border-gray-300 p-4 transition-colors active:bg-gray-200"
-      >
-        <span class="material-symbols-outlined text-3xl">casino</span>
-        <span class="text-sm font-medium">Reroll a Power</span>
-      </button>
-      <button
-        @click="selectedReward = 'remove'"
-        class="flex cursor-pointer flex-col items-center gap-2 rounded-md border-1 border-gray-300 p-4 transition-colors active:bg-gray-200"
-      >
-        <span class="material-symbols-outlined text-3xl">delete</span>
-        <span class="text-sm font-medium">Remove a Card</span>
-      </button>
     </div>
 
     <!-- Pick a card -->
     <div v-if="selectedReward === 'card'" class="flex flex-col gap-4">
       <div>
         <button
+          v-if="!cardOptions.length"
           @click="selectedReward = null"
           class="mr-2 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border-1 border-gray-300 active:bg-gray-600"
         >
@@ -155,10 +186,11 @@ const removeCard = async (id: number) => {
                   {{ previewDeckId === deck.id ? 'Hide cards' : 'View cards' }}
                 </button>
                 <button
+                  :disabled="deck.name.match('Staples') ? rewardPoints < 2 : rewardPoints < 1"
                   @click="selectRewardDeck(deck)"
-                  class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 text-sm transition-colors active:bg-gray-200"
+                  class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 text-sm transition-colors active:bg-gray-200 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
                 >
-                  Select
+                  Select - <span class="font-semibold text-yellow-400">{{ deck.name.match('Staples') ? 2 : 1 }}</span>
                 </button>
               </div>
             </div>
@@ -261,7 +293,9 @@ const removeCard = async (id: number) => {
         >
           <span class="material-symbols-outlined text-xl">arrow_back</span>
         </button>
-        <h2 class="text-lg font-semibold">Reroll a Power</h2>
+        <h2 class="text-lg font-semibold">
+          Reroll a Power - <span class="font-semibold text-yellow-400">{{ 1 }}</span>
+        </h2>
       </div>
 
       <div v-if="!rerolledPower" class="flex flex-col gap-2">
@@ -328,13 +362,24 @@ const removeCard = async (id: number) => {
 
     <div class="border-t-1 border-gray-200 pt-4">
       <button
+        @click="viewDeck = !viewDeck"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        View Deck
+      </button>
+      <button
         @click="next"
-        class="float-right cursor-pointer rounded-md border-1 border-gray-300 px-6 py-2 transition-colors active:bg-gray-200"
+        :disabled="rewardPoints > 0"
+        class="float-right cursor-pointer rounded-md border-1 border-gray-300 px-6 py-2 transition-colors active:bg-gray-200 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
       >
         Finished
       </button>
     </div>
 
-    <inspect-modal v-if="selectedCard" :cards="[selectedCard]" @close="selectedCard = null" />
+    <inspect-modal
+      v-if="selectedCard || viewDeck"
+      :cards="viewDeck ? (deckCards ?? undefined) : (selectedCard ?? undefined)"
+      @close="closeInspect"
+    />
   </div>
 </template>

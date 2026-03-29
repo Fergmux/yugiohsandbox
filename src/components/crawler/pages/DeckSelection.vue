@@ -73,7 +73,7 @@ const confirm = async () => {
     </button>
     <ul
       v-if="selectedDeck"
-      class="mx-4 grid grid-cols-[repeat(auto-fill,minmax(80px,120px))] justify-around gap-4 sm:grid-cols-[repeat(auto-fill,minmax(100px,150px))]"
+      class="mx-auto grid w-full max-w-6xl grid-cols-[repeat(auto-fill,minmax(80px,120px))] justify-center gap-4 px-4 sm:grid-cols-[repeat(auto-fill,minmax(100px,150px))]"
     >
       <li
         v-for="(card, index) in deckCards"
