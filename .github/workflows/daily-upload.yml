@@ -15,8 +15,6 @@ jobs:
         with:
           node-version: '24'
 
-      - run: npm ci
-
       - run: npm install @aws-sdk/client-s3 axios
         working-directory: scripts
 
