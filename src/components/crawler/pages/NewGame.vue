@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref } from 'vue'
 
 import { useRoute } from 'vue-router'
 
+import InviteFriendsModal from '@/components/InviteFriendsModal.vue'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
 import { useUserStore } from '@/stores/user'
@@ -12,22 +13,14 @@ const route = useRoute()
 const inputRef = ref<HTMLInputElement>()
 const userStore = useUserStore()
 
-const {
-  crawl,
-  gameCode,
-  gameId,
-  joinUrl,
-  joinGame,
-  createGame,
-  leaveGame,
-  copy,
-  getCrawls,
-  deleteCrawl,
-  loadCrawl,
-} = useCrawlManager()
+const { crawl, gameCode, gameId, joinUrl, joinGame, createGame, leaveGame, copy, getCrawls, deleteCrawl, loadCrawl } =
+  useCrawlManager()
 const { next, currentPageIndex } = usePageManager()
 
 const pastCrawls = ref<(Crawl & { id: string })[]>([])
+const showInviteModal = ref(false)
+const localGameCode = ref<number | null>(null)
+const joinError = ref('')
 
 function formatDate(iso: string | null) {
   if (!iso) return '—'
@@ -35,6 +28,16 @@ function formatDate(iso: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
+}
+
+const tryJoinGame = async () => {
+  if (!localGameCode.value) return
+  joinError.value = ''
+  try {
+    await joinGame(localGameCode.value)
+  } catch {
+    joinError.value = 'Game not found'
+  }
 }
 
 async function handleDeleteCrawl(id: string) {
@@ -57,8 +60,11 @@ async function resumeCrawl(c: Crawl & { id: string }) {
 onMounted(async () => {
   inputRef.value?.focus()
   if (route.params.gameCode) {
-    gameCode.value = Number(route.params.gameCode)
-    await joinGame()
+    try {
+      await joinGame(Number(route.params.gameCode))
+    } catch {
+      joinError.value = 'Game not found'
+    }
   }
   pastCrawls.value = await getCrawls()
 })
@@ -68,16 +74,24 @@ onMounted(async () => {
   <div>
     <!-- JOIN/CREATE GAME -->
     <div v-if="!gameId" class="m-auto flex w-max flex-col items-center">
-      <div>
-        <input
-          v-model="gameCode"
-          ref="inputRef"
-          class="mt-2 mr-2 rounded-md border-1 border-gray-300 p-2"
-          @keyup.enter="joinGame"
-        />
-        <button @click="joinGame" class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
-          Join Game
-        </button>
+      <div class="flex flex-col items-center">
+        <div>
+          <input
+            v-model="localGameCode"
+            ref="inputRef"
+            class="mt-2 mr-2 rounded-md border-1 border-gray-300 p-2"
+            @keyup.enter="tryJoinGame"
+            @input="joinError = ''"
+          />
+          <button
+            :disabled="!localGameCode"
+            @click="tryJoinGame"
+            class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
+          >
+            Join Game
+          </button>
+        </div>
+        <p v-if="joinError" class="mt-2 text-sm text-red-400">{{ joinError }}</p>
       </div>
       <p class="m-4">or</p>
       <button @click="createGame" class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
@@ -90,17 +104,17 @@ onMounted(async () => {
       <h2 class="mb-3 text-center text-sm font-semibold tracking-wide text-gray-500 uppercase">Your past crawls</h2>
       <ul class="flex flex-col gap-4">
         <li
-          v-for="c in pastCrawls"
-          :key="c.id"
+          v-for="crwl in pastCrawls"
+          :key="crwl.id"
           class="flex items-center justify-between rounded-md border border-gray-300 p-4 text-sm"
         >
-          <div class="flex flex-1 cursor-pointer items-center gap-6 hover:opacity-70" @click="resumeCrawl(c)">
-            <span class="font-medium">{{ c.player1.name ?? '—' }} vs {{ c.player2.name ?? '—' }}</span>
-            <span class="text-gray-500">Round {{ c.round }}</span>
-            <span class="text-gray-400">{{ formatDate(c.created) }}</span>
+          <div class="flex flex-1 cursor-pointer items-center gap-6 hover:opacity-70" @click="resumeCrawl(crwl)">
+            <span class="font-medium">{{ crwl.player1.name ?? '—' }} vs {{ crwl.player2.name ?? '—' }}</span>
+            <span class="text-gray-500">Round {{ crwl.round }}</span>
+            <span class="text-gray-400">{{ formatDate(crwl.created) }}</span>
           </div>
           <button
-            @click="handleDeleteCrawl(c.id)"
+            @click="handleDeleteCrawl(crwl.id)"
             class="ml-4 cursor-pointer rounded-md border border-gray-300 px-2 py-0.5 active:bg-red-400"
           >
             Delete
@@ -122,6 +136,12 @@ onMounted(async () => {
       >
         Copy Link
       </button>
+      <button
+        @click="showInviteModal = true"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        Invite Friend
+      </button>
 
       <br />
       <button
@@ -132,5 +152,11 @@ onMounted(async () => {
         Start Game!
       </button>
     </div>
+    <invite-friends-modal
+      v-if="showInviteModal && gameCode"
+      type="crawl"
+      :game-code="String(gameCode)"
+      @close="showInviteModal = false"
+    />
   </div>
 </template>

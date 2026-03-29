@@ -30,13 +30,9 @@ const defaultCrawl: Crawl = {
   },
 }
 
+const crawl = ref<Crawl>(defaultCrawl)
+
 const gameId = ref<string | null>(null)
-const gameCode = ref<number | null>(null)
-const crawl = ref<Crawl>({
-  ...defaultCrawl,
-  player1: { ...defaultCrawl.player1 },
-  player2: { ...defaultCrawl.player2 },
-})
 
 let unsubscribe: () => void
 
@@ -64,6 +60,8 @@ function isPending(key: string) {
 
 export const useCrawlManager = () => {
   const userStore = useUserStore()
+
+  const gameCode = computed(() => crawl.value.code)
 
   const player = computed(() => {
     if (crawl.value.player1.id === userStore.user?.id) {
@@ -111,7 +109,6 @@ export const useCrawlManager = () => {
         body: JSON.stringify({ crawl: crawl.value }),
       })
       const data = await response.json()
-      gameCode.value = crawl.value.code
       gameId.value = data.id
       subscribe()
     } catch (e) {
@@ -119,27 +116,20 @@ export const useCrawlManager = () => {
     }
   }
 
-  const joinGame = async () => {
-    try {
-      const response = await fetch(`/.netlify/functions/get-crawl-by-code/${gameCode.value}`)
-      if (!response.ok) {
-        console.error('Game not found')
-        return
-      }
-      const gameData = await response.json()
-      gameId.value = gameData.id
-      subscribe()
-      await sendUpdate({
-        player2: {
-          id: userStore.user?.id ?? null,
-          name: userStore.user?.username ?? null,
-          deck: [],
-          powers: [],
-        },
-      })
-    } catch (e) {
-      console.error('Error joining game:', e)
-    }
+  const joinGame = async (code: number) => {
+    const response = await fetch(`/.netlify/functions/get-crawl-by-code/${code}`)
+    if (!response.ok) throw new Error('Game not found')
+    const gameData = await response.json()
+    gameId.value = gameData.id
+    subscribe()
+    await sendUpdate({
+      player2: {
+        id: userStore.user?.id ?? null,
+        name: userStore.user?.username ?? null,
+        deck: [],
+        powers: [],
+      },
+    })
   }
 
   const subscribe = () => {
@@ -170,7 +160,6 @@ export const useCrawlManager = () => {
 
   const leaveGame = () => {
     gameId.value = null
-    gameCode.value = null
     crawl.value = { ...defaultCrawl, player1: { ...defaultCrawl.player1 }, player2: { ...defaultCrawl.player2 } }
     pendingCounts.clear()
     if (unsubscribe) {
@@ -295,7 +284,6 @@ export const useCrawlManager = () => {
   const loadCrawl = (crawlData: Crawl & { id: string }) => {
     const { id, ...rest } = crawlData
     gameId.value = id
-    gameCode.value = rest.code
     crawl.value = rest
     subscribe()
   }

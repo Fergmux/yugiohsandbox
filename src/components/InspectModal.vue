@@ -105,7 +105,7 @@ const revealedCardObjects = computed(() => cardList.value.filter((card) => revea
             }"
           />
           <div class="absolute bottom-0 mb-2 flex w-full flex-wrap-reverse justify-center gap-2">
-            <IconButton
+            <icon-button
               v-if="
                 !(inspectedCardsLocation === 'attached' && index === 0) &&
                 inspectedCardsLocation !== 'hand' &&
@@ -116,8 +116,8 @@ const revealedCardObjects = computed(() => cardList.value.filter((card) => revea
               @click.stop="drawCard('hand', index, card)"
             >
               back_hand
-            </IconButton>
-            <IconButton
+            </icon-button>
+            <icon-button
               v-if="
                 !(inspectedCardsLocation === 'attached' && index === 0) &&
                 inspectedCardsLocation !== 'graveyard' &&
@@ -129,8 +129,8 @@ const revealedCardObjects = computed(() => cardList.value.filter((card) => revea
               @click.stop="drawCard('graveyard', index, card)"
             >
               skull
-            </IconButton>
-            <IconButton
+            </icon-button>
+            <icon-button
               v-if="
                 !(inspectedCardsLocation === 'attached' && index === 0) &&
                 inspectedCardsLocation !== 'banished' &&
@@ -142,8 +142,8 @@ const revealedCardObjects = computed(() => cardList.value.filter((card) => revea
               @click.stop="drawCard('banished', index, card)"
             >
               block
-            </IconButton>
-            <IconButton
+            </icon-button>
+            <icon-button
               v-if="
                 Array.isArray(cards) &&
                 controls &&
@@ -155,14 +155,14 @@ const revealedCardObjects = computed(() => cardList.value.filter((card) => revea
               :title="revealedCardIds.includes(card.uid) ? 'Hide' : 'Show'"
             >
               {{ revealedCardIds.includes(card.uid) ? 'visibility_off' : 'visibility' }}
-            </IconButton>
-            <IconButton
+            </icon-button>
+            <icon-button
               v-if="controls && Array.isArray(cards) && inspectedCardsLocation === 'banished'"
               title="Flip"
               @click.stop="emit('flip', card)"
             >
               flip
-            </IconButton>
+            </icon-button>
           </div>
         </div>
       </div>

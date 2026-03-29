@@ -1,7 +1,12 @@
 export type Invite = {
   id: string
-  username: string
+  usernameTo: string
+  userIdTo: string
+  usernameFrom: string
+  userIdFrom: string
   created: string
+  gameCode: string | null
+  type: 'game' | 'crawl' | 'friend'
 }
 export type Friend = {
   id: string

@@ -2,14 +2,26 @@ import type { Ref } from 'vue'
 import { ref } from 'vue'
 
 import { defineStore } from 'pinia'
+import { doc, onSnapshot } from 'firebase/firestore'
 
-import type { Friend, User } from '@/types/user'
+import { db } from '@/firebase/client'
+import type { Friend, Invite, User } from '@/types/user'
 import { useStorage } from '@vueuse/core'
 
 export const useUserStore = defineStore('user', () => {
   const user: Ref<User | undefined> = ref()
   const savedUsername = useStorage('username', '')
   const loadingUser = ref(false)
+  let unsubscribe: (() => void) | null = null
+
+  const subscribe = (userId: string) => {
+    if (unsubscribe) unsubscribe()
+    unsubscribe = onSnapshot(doc(db, 'users', userId), (snapshot) => {
+      if (!snapshot.exists()) return
+      const data = snapshot.data()
+      user.value = { id: snapshot.id, ...data } as User
+    })
+  }
 
   const loginExisting = async () => {
     if (savedUsername.value) await getUser(savedUsername.value)
@@ -25,6 +37,7 @@ export const useUserStore = defineStore('user', () => {
       if (response.status !== 200) throw new Error((userData as { message: string }).message)
       user.value = userData as User
       savedUsername.value = username
+      subscribe(user.value.id)
     } catch (err) {
       throw err
     }
@@ -39,6 +52,7 @@ export const useUserStore = defineStore('user', () => {
       if (response.status !== 200) throw new Error((userData as { message: string }).message)
       user.value = userData as User
       savedUsername.value = username
+      subscribe(user.value.id)
     } catch (err) {
       console.log('user not found')
     } finally {
@@ -63,31 +77,57 @@ export const useUserStore = defineStore('user', () => {
     savedUsername.value = newUsername.toLowerCase()
   }
 
-  const addFriend = async (friendUsername: string): Promise<Friend> => {
+  const sendInvite = async (recipientUsername: string, type: Invite['type'], gameCode?: string) => {
     if (!user.value) throw new Error('Not logged in')
 
-    const response = await fetch(`/.netlify/functions/get-user/${friendUsername.toLowerCase()}`)
-    const userData = await response.json()
-    if (response.status !== 200) throw new Error('User not found')
+    const response = await fetch('/.netlify/functions/send-invite', {
+      method: 'POST',
+      body: JSON.stringify({
+        senderId: user.value.id,
+        senderUsername: user.value.username,
+        recipientUsername,
+        type,
+        gameCode,
+      }),
+    })
+    const result = await response.json()
+    if (response.status !== 200) throw new Error(result.message)
 
-    const friend: Friend = { id: userData.id, username: userData.username }
+    return result as Invite
+  }
 
-    if (user.value.friends?.some((f) => f.id === friend.id)) {
-      throw new Error('Already friends')
-    }
+  const acceptInvite = async (invite: Invite) => {
+    if (!user.value) throw new Error('Not logged in')
 
-    const updatedFriends = [...(user.value.friends || []), friend]
-    await updateUser({ friends: updatedFriends })
-    user.value.friends = updatedFriends
-    return friend
+    const response = await fetch('/.netlify/functions/accept-invite', {
+      method: 'POST',
+      body: JSON.stringify({ invite }),
+    })
+    const result = await response.json()
+    if (response.status !== 200) throw new Error(result.message)
+  }
+
+  const declineInvite = async (invite: Invite) => {
+    if (!user.value) throw new Error('Not logged in')
+
+    const response = await fetch('/.netlify/functions/decline-invite', {
+      method: 'POST',
+      body: JSON.stringify({ invite }),
+    })
+    const result = await response.json()
+    if (response.status !== 200) throw new Error(result.message)
   }
 
   const removeFriend = async (friendId: string) => {
     if (!user.value) return
-    const updatedFriends = (user.value.friends || []).filter((f) => f.id !== friendId)
-    await updateUser({ friends: updatedFriends })
-    user.value.friends = updatedFriends
+
+    const response = await fetch('/.netlify/functions/remove-friend', {
+      method: 'POST',
+      body: JSON.stringify({ userId: user.value.id, friendId }),
+    })
+    const result = await response.json()
+    if (response.status !== 200) throw new Error(result.message)
   }
 
-  return { user, loadingUser, addUser, getUser, loginExisting, updateUsername, addFriend, removeFriend }
+  return { user, loadingUser, addUser, getUser, loginExisting, updateUsername, sendInvite, acceptInvite, declineInvite, removeFriend }
 })

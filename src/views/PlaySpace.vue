@@ -9,11 +9,13 @@ import { v4 as uuidv4 } from 'uuid'
 import { useRoute } from 'vue-router'
 
 import InspectModal from '@/components/InspectModal.vue'
+import InviteFriendsModal from '@/components/InviteFriendsModal.vue'
 import CoinFlip from '@/components/play-space/CoinFlip.vue'
 import FieldSide from '@/components/play-space/FieldSide.vue'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
 import { useConfetti } from '@/composables/crawler/useConfetti'
+import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
@@ -88,7 +90,7 @@ const { newDuel, finishDuel, winDuel, crawl } = useCrawlManager()
 const { next } = usePageManager()
 
 const props = defineProps<{
-  crawlPlayer: 'player1' | 'player2' | null
+  crawlPlayer?: 'player1' | 'player2' | null
 }>()
 
 const turnNameMap = ['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End']
@@ -279,26 +281,67 @@ const turn = computed(() => gameState.value.turn)
 const setTurn = (turn: number) => {
   sendEdits([{ type: 'set_turn', turn }, createLogEntry(`set turn to ${turnNameMap[turn % 6]}`)])
 }
+const { registerShortcut } = useFieldShortcuts()
+
+registerShortcut('Enter', () => {
+  if (!gameId.value || !props.crawlPlayer) return
+
+  const playerCards = gameState.value.cards[playerKey.value]
+  const steps: GameEdit[][] = []
+
+  // One step per hand card → graveyard
+  for (const card of playerCards.hand.filter(Boolean)) {
+    steps.push([{
+      type: 'move_card',
+      player: playerKey.value,
+      cardUid: card.uid,
+      fromLocation: 'hand',
+      toLocation: 'graveyard',
+      cardData: { ...card, faceDown: false, defence: false, counters: 0, newAttack: null, newDefence: null },
+    }])
+  }
+
+  // Simulate deck/graveyard state after hand is cleared, then build draw steps
+  let graveyard = [
+    ...playerCards.hand.filter(Boolean).map((c) => ({ ...c, faceDown: false })),
+    ...playerCards.graveyard,
+  ]
+  let deck = [...playerCards.deck]
+  let drawn = 0
+
+  while (drawn < 4) {
+    if (deck.length === 0) {
+      if (!graveyard.length) break
+      const shuffled = [...graveyard].sort(() => Math.random() - 0.5).map((c) => ({ ...c, faceDown: true }))
+      steps.push([
+        { type: 'set_zone', player: playerKey.value, location: 'deck', cards: shuffled },
+        { type: 'set_zone', player: playerKey.value, location: 'graveyard', cards: [] },
+      ])
+      deck = shuffled
+      graveyard = []
+    }
+    const card = deck[0]
+    steps.push([{
+      type: 'move_card',
+      player: playerKey.value,
+      cardUid: card.uid,
+      fromLocation: 'deck',
+      toLocation: 'hand',
+      cardData: { ...card, faceDown: true },
+    }])
+    deck = deck.slice(1)
+    drawn++
+  }
+
+  steps.forEach((edits, i) => setTimeout(() => sendEdits(edits), i * 200))
+})
+
 // Handle spacebar press to increment turn
 const handleKeyUp = (event: KeyboardEvent) => {
   if (event.code === 'Space' && gameId.value) {
     event.preventDefault()
     const newTurn = (turn.value + 1) % 12
     setTurn(newTurn)
-  }
-  if (event.code === 'Enter' && gameId.value && props.crawlPlayer) {
-    sendEdits([
-      { type: 'set_zone', player: playerKey.value, location: 'hand', cards: [] },
-      {
-        type: 'set_zone',
-        player: playerKey.value,
-        location: 'graveyard',
-        cards: [
-          ...gameState.value.cards[playerKey.value].hand.map((c) => ({ ...c, faceDown: false })),
-          ...gameState.value.cards[playerKey.value].graveyard,
-        ],
-      },
-    ])
   }
 }
 
@@ -513,6 +556,7 @@ watch(
 
 const notesRef = ref<HTMLTextAreaElement | null>(null)
 const showNotes = ref(false)
+const showInviteModal = ref(false)
 </script>
 <template>
   <div v-if="gameId && (deckId || player === null)" class="fixed right-0 bottom-0 z-[200]">
@@ -623,6 +667,12 @@ const showNotes = ref(false)
         class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
       >
         Copy Link
+      </button>
+      <button
+        @click="showInviteModal = true"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        Invite Friend
       </button>
     </template>
 
@@ -744,4 +794,10 @@ const showNotes = ref(false)
     </div>
     <inspect-modal v-if="viewDeck" :cards="crawlDeckCards" :showCards="crawlDeckCards" @close="viewDeck = false" />
   </div>
+  <invite-friends-modal
+    v-if="showInviteModal && gameCode"
+    type="game"
+    :game-code="String(gameCode)"
+    @close="showInviteModal = false"
+  />
 </template>

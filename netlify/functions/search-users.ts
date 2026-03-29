@@ -1,4 +1,4 @@
-import { collection, getDocs, limit, orderBy, query, startAt, endAt } from 'firebase/firestore'
+import { collection, endAt, getDocs, limit, orderBy, query, startAt } from 'firebase/firestore'
 
 import { db } from '../lib/firebase.js'
 
@@ -15,13 +15,7 @@ const handler = async (event: { queryStringParameters?: Record<string, string> }
     }
 
     const usersRef = collection(db, 'users')
-    const q = query(
-      usersRef,
-      orderBy('userKey'),
-      startAt(term),
-      endAt(term + '\uf8ff'),
-      limit(8),
-    )
+    const q = query(usersRef, orderBy('userKey'), startAt(term), endAt(term + '\uf8ff'), limit(8))
     const querySnapshot = await getDocs(q)
 
     const users = querySnapshot.docs.map((doc) => ({

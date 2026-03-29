@@ -68,6 +68,9 @@ export const mainDeckTypes = [
 ]
 export const otherDeckTypes = ['Skill Card', 'Token']
 
+export const spellTrapTypes = ['Spell Card', 'Trap Card']
+export const mainDeckMonsterTypes = mainDeckTypes.filter((type) => !spellTrapTypes.includes(type))
+
 export const fusionTypes = ['Fusion Monster', 'Pendulum Effect Fusion Monster']
 export const linkTypes = ['Link Monster']
 export const pendulumTypes = [

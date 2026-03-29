@@ -149,6 +149,7 @@ const cardDef = computed({
             type="number"
             class="max-w-[min(3vh,3vw)] bg-black text-center"
             @click.stop
+            @keyup.enter.stop="($event.target as HTMLInputElement).blur()"
             :class="
               topCard.newAttack && topCard.atk
                 ? topCard.newAttack < topCard.atk
@@ -166,6 +167,7 @@ const cardDef = computed({
             type="number"
             class="max-w-[min(3vh,3vw)] bg-black text-center"
             @click.stop
+            @keyup.enter.stop="($event.target as HTMLInputElement).blur()"
             :class="
               topCard.newDefence && topCard.def
                 ? topCard.newDefence < topCard.def
@@ -179,10 +181,10 @@ const cardDef = computed({
         </div>
       </div>
 
-      <div class="absolute top-0 z-[110] h-full w-full opacity-0 hover:opacity-100">
+      <div class="absolute top-0 z-[130] h-full w-full opacity-0 hover:opacity-100">
         <div v-if="controls" class="absolute top-0 right-0 flex w-min gap-1">
-          <IconButton :scale="0.6" title="remove" @click.stop="emit('increment', -1)"> remove </IconButton>
-          <IconButton :scale="0.6" title="add" @click.stop="emit('increment', 1)"> add </IconButton>
+          <icon-button :scale="0.6" title="Remove counter" @click.stop="emit('increment', -1)"> remove </icon-button>
+          <icon-button :scale="0.6" title="Add counter" @click.stop="emit('increment', 1)"> add </icon-button>
         </div>
 
         <p
@@ -193,14 +195,14 @@ const cardDef = computed({
           {{ hint }}
         </p>
         <div v-if="actions" class="absolute bottom-0 flex w-full justify-center gap-2">
-          <IconButton
+          <icon-button
             v-for="action in actions"
             :key="action"
             @click.stop="emit('action', action)"
             :title="actionTitleMap[action]"
           >
             {{ actionIconMap[action] }}
-          </IconButton>
+          </icon-button>
         </div>
       </div>
     </div>

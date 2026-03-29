@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+
+defineExpose({ focus: () => inputRef.value?.focus() })
 import NumberAnimation from 'vue-number-animation'
 
 const props = defineProps<{
@@ -13,6 +15,7 @@ const emit = defineEmits<{
 
 const lifePointsFrom = ref(props.lifePoints)
 const lifePointsInput = ref(0)
+const inputRef = ref<HTMLInputElement>()
 
 // const changeLifePointsInput = (value: number) => {
 //   lifePointsInput.value += value
@@ -73,10 +76,12 @@ watch(
         -
       </button>
       <input
+        ref="inputRef"
         class="mx-2 w-[min(4vh,4vw)] text-center text-[min(1vh,1vw)]"
         type="number"
         step="50"
         v-model="lifePointsInput"
+        @keyup.enter.stop="changeLifePoints($event.shiftKey ? 1 : -1); inputRef?.blur()"
       />
       <button
         class="h-[min(2vh,2vw)] w-[min(2vh,2vw)] cursor-pointer rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300"

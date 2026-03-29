@@ -7,6 +7,8 @@ import { debounce, zip } from 'lodash'
 import InspectModal from '@/components/InspectModal.vue'
 import CardSlot from '@/components/play-space/CardSlot.vue'
 import LifePoints from '@/components/play-space/LifePoints.vue'
+import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
+import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
 import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
@@ -122,12 +124,14 @@ const isSelected = (location: keyof BoardSide, index: number) =>
   selectedCardLocation.value === location && selectedCardIndex.value === index
 
 const getActions = (location: keyof BoardSide, index: number) => {
+  const targetCard = getCard(location, index)
   if (selectedCard.value) {
-    const targetCard = getCard(location, index)
-    const actions = targetCard?.uid !== selectedCard.value?.uid ? ['attach'] : []
-    return targetCard ? actions : ['set', 'defence']
+    const attach = targetCard?.uid !== selectedCard.value?.uid ? ['attach'] : []
+    const actions = index < 6 && index > 0 ? ['set', 'defence'] : ['set']
+    return targetCard ? attach : actions
   } else {
-    return getCard(location, index) ? ['flip', 'position'] : []
+    const actions = index < 6 && index > 0 ? ['flip', 'position'] : ['flip']
+    return targetCard ? actions : []
   }
 }
 
@@ -223,10 +227,64 @@ const handleKeyUp = (e: KeyboardEvent) => {
   }
 }
 
+const findMiddleFreeSlot = (indices: number[]): number => {
+  const field = getCards('field')
+  const mid = indices[Math.floor(indices.length / 2)]
+  return [...indices].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid)).find((i) => field[i] === null) ?? -1
+}
+
+const shiftRightClickHandCard = (index: number) => {
+  const card = getCard('hand', index)
+  if (!card || card.race === 'Field') return
+
+  if (mainDeckMonsterTypes.includes(card.type)) {
+    const freeIndex = findMiddleFreeSlot([1, 2, 3, 4, 5])
+    if (freeIndex === -1) return
+    selectCard('hand', index)
+    const edits = moveCard('field', freeIndex, { faceDown: true, defence: true })
+    if (edits.length) sendEdit(edits, `set ${card.name} face down`)
+  } else if (spellTrapTypes.includes(card.type)) {
+    const freeIndex = findMiddleFreeSlot([6, 7, 8, 9, 10])
+    if (freeIndex === -1) return
+    selectCard('hand', index)
+    const edits = moveCard('field', freeIndex, { faceDown: true })
+    if (edits.length) sendEdit(edits, `set ${card.name} face down`)
+  }
+}
+
+const shiftClickHandCard = (index: number) => {
+  const card = getCard('hand', index)
+  if (!card) return
+
+  if (card.race === 'Field') {
+    if (getCard('field', 0) !== null) return
+    selectCard('hand', index)
+    const edits = moveCard('field', 0, { faceDown: false })
+    if (edits.length) sendEdit(edits, `played ${card.name}`)
+  } else if (spellTrapTypes.includes(card.type)) {
+    const freeIndex = findMiddleFreeSlot([6, 7, 8, 9, 10])
+    if (freeIndex === -1) return
+    selectCard('hand', index)
+    const edits = moveCard('field', freeIndex, { faceDown: false })
+    if (edits.length) sendEdit(edits, `played ${card.name}`)
+  } else if (mainDeckMonsterTypes.includes(card.type)) {
+    const freeIndex = findMiddleFreeSlot([1, 2, 3, 4, 5])
+    if (freeIndex === -1) return
+    selectCard('hand', index)
+    const edits = moveCard('field', freeIndex)
+    if (edits.length) sendEdit(edits, `summoned ${card.name}`)
+  }
+}
+
 const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
   const card = getCard(zone, index)
   if (card) {
-    selectCard(zone, index)
+    if (isShiftHeld.value) {
+      selectCard(zone, index)
+      logMoveCard('graveyard')
+    } else {
+      selectCard(zone, index)
+    }
   } else {
     if (selectedCard.value) {
       let logText: string
@@ -631,10 +689,48 @@ const showCards = computed(() => {
 })
 
 const rotate = computed(() => !i.value)
+
+const playerLpRef = ref<{ focus: () => void }>()
+const opponentLpRef = ref<{ focus: () => void }>()
+
+const { isShiftHeld, registerShortcut } = useFieldShortcuts()
+
+registerShortcut('l', () => i.value && playerLpRef.value?.focus())
+registerShortcut('o', () => i.value && opponentLpRef.value?.focus())
+
+registerShortcut('g', () => {
+  if (!i.value) return
+  if (selectedCard.value) {
+    logMoveCard('graveyard')
+  } else {
+    inspectCards('graveyard')
+  }
+})
+registerShortcut('h', () => {
+  if (!i.value || !selectedCard.value) return
+  logMoveCard('hand')
+})
+registerShortcut('b', () => {
+  if (!i.value || !selectedCard.value) return
+  logMoveCard('banished')
+})
+registerShortcut('f', () => {
+  if (!i.value || !selectedCard.value) return
+  if (getCard('field', 0) !== null) return
+  logMoveCard('field', 0)
+})
+registerShortcut('d', () => {
+  if (!i.value || selectedCard.value) return
+  drawCard('deck')
+})
+registerShortcut('k', () => {
+  if (!i.value || selectedCard.value) return
+  handleDeckAction('search')
+})
 </script>
 <template>
   <!-- PLAYER -->
-  <div>
+  <div class="select-none">
     <div class="grid grid-cols-7 gap-2">
       <!-- BANISHED/EXTRA -->
       <template v-if="i || (viewer && props.player === 'player1')">
@@ -648,6 +744,7 @@ const rotate = computed(() => !i.value)
           :rotate
         />
         <life-points
+          ref="opponentLpRef"
           :life-points="gameState.lifePoints[opponentPlayerKey]"
           @update="updateLifePoints($event, opponentPlayerKey)"
         />
@@ -725,6 +822,7 @@ const rotate = computed(() => !i.value)
           :rotate
         />
         <life-points
+          ref="playerLpRef"
           :life-points="gameState.lifePoints[props.player]"
           reverse
           @update="updateLifePoints($event, props.player)"
@@ -848,15 +946,17 @@ const rotate = computed(() => !i.value)
         />
         <div
           class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
-          @click.stop="i && selectCard('hand', index)"
-          @click.right.prevent="(iv || card?.revealed) && inspectCard(card, 'hand')"
+          @click.stop="i && (isShiftHeld ? shiftClickHandCard(index) : selectCard('hand', index))"
+          @click.right.prevent="
+            i && isShiftHeld ? shiftRightClickHandCard(index) : (iv || card?.revealed) && inspectCard(card, 'hand')
+          "
           @dragstart.prevent=""
         >
           <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
-            <IconButton title="Reveal" @click.stop="showToOpponent(index)">
+            <icon-button title="Reveal" @click.stop="showToOpponent(index)">
               {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
-            </IconButton>
-            <IconButton title="Give" @click.stop="giveToOpponent(index)"> volunteer_activism </IconButton>
+            </icon-button>
+            <icon-button title="Give" @click.stop="giveToOpponent(index)"> volunteer_activism </icon-button>
           </div>
         </div>
       </div>
