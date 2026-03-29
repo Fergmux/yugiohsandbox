@@ -10,6 +10,7 @@ import LifePoints from '@/components/play-space/LifePoints.vue'
 import { type DragData, type DropZone, useDragDrop } from '@/composables/useDragDrop'
 import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
+import type { CardSelection } from '@/types/crawl'
 import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
@@ -23,6 +24,8 @@ const props = defineProps<{
   interactive?: boolean
   viewer?: boolean
   crawl?: boolean
+  opponentSelectedCard?: CardSelection
+  mySelectedOpponentCard?: CardSelection
 }>()
 const i = computed(() => props.interactive || undefined)
 const iv = computed(() => i.value || props.viewer || undefined)
@@ -30,6 +33,8 @@ const hideInspectControls = ref(false)
 
 const emit = defineEmits<{
   (e: 'edit', edits: GameEdit[], logText?: string): void
+  (e: 'selectOpponentCard', location: keyof BoardSide, index: number): void
+  (e: 'cardSelected'): void
 }>()
 
 const gameState = computed(() => props.gameState)
@@ -183,6 +188,7 @@ const selectCard = (location?: CardLocation, index?: number) => {
     selectedCard.value = getCard(location, index) ?? undefined
     selectedCardLocation.value = location
     selectedCardIndex.value = index
+    emit('cardSelected')
   }
 }
 
@@ -210,6 +216,20 @@ const resetSelectedCard = () => {
   selectedCard.value = undefined
   selectedCardLocation.value = undefined
   selectedCardIndex.value = undefined
+}
+
+defineExpose({ resetSelectedCard })
+
+const isOpponentSelected = (location: keyof BoardSide, index: number) =>
+  props.opponentSelectedCard?.location === location && props.opponentSelectedCard?.index === index
+
+const isMyOpponentSelected = (location: keyof BoardSide, index: number) =>
+  props.mySelectedOpponentCard?.location === location && props.mySelectedOpponentCard?.index === index
+
+const handleOpponentCardClick = (location: keyof BoardSide, index: number) => {
+  const card = getCard(location, index)
+  if (!card) return
+  emit('selectOpponentCard', location, index)
 }
 
 onMounted(() => {
@@ -839,7 +859,7 @@ onBeforeUnmount(() => {
             ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 0)?.uid) ?? []),
           ]"
           :name="'Extra Monster Zone'"
-          @click="i && zoneIsFree(0) && handleFieldClick(0, 'zones')"
+          @click="i ? (zoneIsFree(0) && handleFieldClick(0, 'zones')) : handleOpponentCardClick('zones', 0)"
           @click.right.prevent="
             (!extraZones[0]?.faceDown || zoneIsFree(0) || viewer) && inspectCard(extraZones[0], 'zones')
           "
@@ -857,6 +877,7 @@ onBeforeUnmount(() => {
           :hint="(viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined"
           :controls="!!getCard('zones', 0)"
           :counters="extraZones[0]?.counters"
+          :opponent-selected="isOpponentSelected('zones', 0) || isMyOpponentSelected('zones', 0)"
           @action="(evt) => i && handleAction(evt, 'zones', 0)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
           @update="debouncedUpdateCardStats"
@@ -885,7 +906,7 @@ onBeforeUnmount(() => {
             ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 1)?.uid) ?? []),
           ]"
           :name="'Extra Monster Zone'"
-          @click="i && zoneIsFree(1) && handleFieldClick(1, 'zones')"
+          @click="i ? (zoneIsFree(1) && handleFieldClick(1, 'zones')) : handleOpponentCardClick('zones', 1)"
           @click.right.prevent="
             (!extraZones[1]?.faceDown || zoneIsFree(1) || viewer) && inspectCard(extraZones[1], 'zones')
           "
@@ -903,6 +924,7 @@ onBeforeUnmount(() => {
           :hint="(viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined"
           :controls="!!getCard('zones', 1)"
           :counters="extraZones[1]?.counters"
+          :opponent-selected="isOpponentSelected('zones', 1) || isMyOpponentSelected('zones', 1)"
           @action="(evt) => handleAction(evt, 'zones', 1)"
           @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
           @update="debouncedUpdateCardStats"
@@ -922,12 +944,13 @@ onBeforeUnmount(() => {
           class="bg-gray-200"
           :cards="getCards('banished')"
           :name="'Banished Zone'"
-          @click.stop="i && (selectedCard ? logMoveCard('banished') : selectCard('banished', 0))"
+          @click.stop="i ? (selectedCard ? logMoveCard('banished') : selectCard('banished', 0)) : handleOpponentCardClick('banished', 0)"
           @click.right.prevent="inspectCards('banished')"
           :hint="getCards('banished').length"
           :actions="i && selectedCard ? ['face-down'] : []"
           @action="(evt) => i && handleBanishedAction(evt)"
           :selected-index="i && selectedCardLocation === 'banished' && selectedCardIndex"
+          :opponent-selected="isOpponentSelected('banished', 0) || isMyOpponentSelected('banished', 0)"
           :rotate
           :drop-zone="i ? 'banished' : undefined"
         />
@@ -941,7 +964,7 @@ onBeforeUnmount(() => {
         :card="card"
         :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
         :class="index === 0 ? 'bg-green-600' : 'bg-yellow-700'"
-        @click.stop="i && handleFieldClick(index)"
+        @click.stop="i ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
         @click.right.prevent="(!card?.faceDown || iv) && inspectCard(card, 'field')"
         :selected="i && isSelected('field', index)"
         :selected-index="
@@ -956,6 +979,7 @@ onBeforeUnmount(() => {
         :hint="iv && card?.faceDown ? card?.name : undefined"
         :controls="i && !!card"
         :counters="card?.counters"
+        :opponent-selected="isOpponentSelected('field', index) || isMyOpponentSelected('field', index)"
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
         @update="debouncedUpdateCardStats"
@@ -971,8 +995,9 @@ onBeforeUnmount(() => {
         :name="'Graveyard'"
         :hint="getCards('graveyard').length"
         :selected-index="i && selectedCardLocation === 'graveyard' && selectedCardIndex"
-        @click.stop="i && (selectedCard ? logMoveCard('graveyard') : selectCard('graveyard', 0))"
+        @click.stop="i ? (selectedCard ? logMoveCard('graveyard') : selectCard('graveyard', 0)) : handleOpponentCardClick('graveyard', 0)"
         @click.right.prevent="inspectCards('graveyard')"
+        :opponent-selected="isOpponentSelected('graveyard', 0) || isMyOpponentSelected('graveyard', 0)"
         :rotate
         :drop-zone="i ? 'graveyard' : undefined"
       />
@@ -996,7 +1021,7 @@ onBeforeUnmount(() => {
         :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
         :name="'Spell & Trap Card Zone'"
         class="bg-teal-600"
-        @click.stop="i && handleFieldClick(index)"
+        @click.stop="i ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
         @click.right.prevent="(!card?.faceDown || iv) && inspectCard(card, 'field')"
         :selected="i && isSelected('field', index)"
         :selected-index="
@@ -1011,6 +1036,7 @@ onBeforeUnmount(() => {
         :hint="iv && card?.faceDown ? card?.name : undefined"
         :controls="i && !!card"
         :counters="card?.counters"
+        :opponent-selected="isOpponentSelected('field', index) || isMyOpponentSelected('field', index)"
         @action="(evt) => i && handleAction(evt, 'field', index)"
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
         @update="debouncedUpdateCardStats"
@@ -1045,6 +1071,7 @@ onBeforeUnmount(() => {
           v-if="card"
           :class="{
             'border-4 border-yellow-200': isSelected('hand', index),
+            'border-4 border-red-500': isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index),
             'opacity-30': dragging?.card.uid === card?.uid,
           }"
           class="h-full max-h-80 max-w-full min-w-0 object-contain"
@@ -1053,7 +1080,9 @@ onBeforeUnmount(() => {
         <div
           class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
           @pointerdown="i && card && startCardDrag(card, 'hand', index, $event)"
-          @click.stop="i && (isShiftHeld ? shiftClickHandCard(index) : selectCard('hand', index))"
+          @click.stop="
+            i ? (isShiftHeld ? shiftClickHandCard(index) : selectCard('hand', index)) : handleOpponentCardClick('hand', index)
+          "
           @click.right.prevent="
             i && isShiftHeld ? shiftRightClickHandCard(index) : (iv || card?.revealed) && inspectCard(card, 'hand')
           "

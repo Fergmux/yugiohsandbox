@@ -4,7 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 
 import { db } from '@/firebase/client'
 import { useUserStore } from '@/stores/user'
-import type { Crawl, Power } from '@/types/crawl'
+import type { CardSelection, Crawl, Power } from '@/types/crawl'
 import { useClipboard } from '@vueuse/core'
 
 const defaultCrawl: Crawl = {
@@ -155,6 +155,8 @@ export const useCrawlManager = () => {
       if (!isPending(`${self}.powers`)) crawl.value[self].powers = [...remote[self].powers]
       if (!isPending(`${self}.id`)) crawl.value[self].id = remote[self].id
       if (!isPending(`${self}.page`)) crawl.value[self].page = remote[self].page
+      if (!isPending(`${self}.selectedOpponentCard`))
+        crawl.value[self].selectedOpponentCard = remote[self].selectedOpponentCard ?? null
     })
   }
 
@@ -281,6 +283,19 @@ export const useCrawlManager = () => {
     }
   }
 
+  const setSelectedOpponentCard = async (selection: CardSelection) => {
+    if (!player.value) return
+    const p = player.value
+    const key = `${p}.selectedOpponentCard`
+    crawl.value[p].selectedOpponentCard = selection
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: selection })
+    } finally {
+      unmarkPending(key)
+    }
+  }
+
   const loadCrawl = (crawlData: Crawl & { id: string }) => {
     const { id, ...rest } = crawlData
     gameId.value = id
@@ -335,6 +350,7 @@ export const useCrawlManager = () => {
     removeCardFromDeck,
     getCrawls,
     deleteCrawl,
+    setSelectedOpponentCard,
     updatePage,
     loadCrawl,
   }

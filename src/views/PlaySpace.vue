@@ -20,7 +20,8 @@ import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
 import { extraDeckTypes, mainDeckTypes } from '@/types/filters'
-import type { GameEdit, GameState, YugiohCard } from '@/types/yugiohCard'
+import type { CardSelection } from '@/types/crawl'
+import type { BoardSide, GameEdit, GameState, YugiohCard } from '@/types/yugiohCard'
 import { applyEdits } from '@/utils/applyEdit'
 import { useClipboard } from '@vueuse/core'
 
@@ -85,7 +86,7 @@ Playground
 - Rotate left/right?
 */
 
-const { newDuel, finishDuel, winDuel, crawl } = useCrawlManager()
+const { newDuel, finishDuel, winDuel, crawl, setSelectedOpponentCard } = useCrawlManager()
 
 const { next } = usePageManager()
 
@@ -557,6 +558,54 @@ watch(
 const notesRef = ref<HTMLTextAreaElement | null>(null)
 const showNotes = ref(false)
 const showInviteModal = ref(false)
+
+type FieldSideInstance = { resetSelectedCard: () => void }
+const playerFieldRef = ref<FieldSideInstance | null>(null)
+const opponentFieldRef = ref<FieldSideInstance | null>(null)
+const gameSpaceRef = ref<HTMLElement | null>(null)
+
+const mySelectedOpponentCard = computed<CardSelection>(() => {
+  if (!props.crawlPlayer) return null
+  return crawl.value[playerKey.value]?.selectedOpponentCard ?? null
+})
+
+const opponentSelectedMyCard = computed<CardSelection>(() => {
+  if (!props.crawlPlayer) return null
+  return crawl.value[opponentKey.value]?.selectedOpponentCard ?? null
+})
+
+const handleOpponentCardSelect = (_location: keyof BoardSide, _index: number) => {
+  if (!props.crawlPlayer) return
+  playerFieldRef.value?.resetSelectedCard()
+  const current = crawl.value[playerKey.value]?.selectedOpponentCard
+  if (current?.location === _location && current?.index === _index) {
+    setSelectedOpponentCard(null)
+  } else {
+    setSelectedOpponentCard({ location: _location, index: _index })
+  }
+}
+
+const clearOpponentSelection = () => {
+  if (!props.crawlPlayer) return
+  if (crawl.value[playerKey.value]?.selectedOpponentCard) {
+    setSelectedOpponentCard(null)
+  }
+}
+
+const handleClickOutsideGameSpace = (e: MouseEvent) => {
+  if (!gameSpaceRef.value?.contains(e.target as Node)) {
+    playerFieldRef.value?.resetSelectedCard()
+    opponentFieldRef.value?.resetSelectedCard()
+    clearOpponentSelection()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutsideGameSpace)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutsideGameSpace)
+})
 </script>
 <template>
   <div v-if="gameId && (deckId || player === null)" class="fixed right-0 bottom-0 z-[200]">
@@ -737,26 +786,32 @@ const showInviteModal = ref(false)
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">End phase</div>
     </div>
     <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
-    <div class="w-[70vh]">
+    <div class="w-[70vh]" ref="gameSpaceRef">
       <!-- OPPONENT -->
       <field-side
+        ref="opponentFieldRef"
         v-if="gameId"
         :game-state="gameState"
         :player="playerKey === 'player2' ? 'player1' : 'player2'"
         :viewer="player === null"
         :crawl="props.crawlPlayer !== null"
+        :my-selected-opponent-card="mySelectedOpponentCard"
         @edit="handleEdit"
+        @select-opponent-card="handleOpponentCardSelect"
         class="mb-2 rotate-180"
       />
       <!-- PLAYER -->
       <field-side
+        ref="playerFieldRef"
         v-if="gameId"
         :game-state="gameState"
         :player="playerKey"
         :interactive="player !== null"
         :viewer="player === null"
         :crawl="props.crawlPlayer !== null"
+        :opponent-selected-card="opponentSelectedMyCard"
         @edit="handleEdit"
+        @card-selected="clearOpponentSelection"
         class="mb-2"
       />
       <template v-if="props.crawlPlayer && crawl[props.crawlPlayer].powers.length">

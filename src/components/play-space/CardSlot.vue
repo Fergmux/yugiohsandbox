@@ -51,6 +51,7 @@ const props = defineProps<{
   rotate?: boolean
   dropZone?: string
   dropIndex?: number
+  opponentSelected?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'action', name: string): void
@@ -81,6 +82,7 @@ const getClassStyle = (card: YugiohCard, index: number) => {
   return {
     class: {
       'border-4 border-yellow-200': props.selected || index === props.selectedIndex,
+      'border-4 border-red-600': props.opponentSelected,
       'rotate-90': rotated,
     },
     style: {
