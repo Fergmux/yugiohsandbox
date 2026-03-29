@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 
 import { debounce, zip } from 'lodash'
 
 import InspectModal from '@/components/InspectModal.vue'
 import CardSlot from '@/components/play-space/CardSlot.vue'
 import LifePoints from '@/components/play-space/LifePoints.vue'
+import { type DragData, type DropZone, useDragDrop } from '@/composables/useDragDrop'
 import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
 import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
@@ -450,8 +451,8 @@ const buildCardForDestination = (
   if (destination === 'deck' || destination === 'extra' || destination === 'tokens') {
     return { ...card, faceDown: true, defence: false, counters: 0, ...opts }
   }
-  const orientationOptions = destination === 'banished' ? {} : { faceDown: false }
-  return { ...card, defence: false, counters: 0, ...opts, ...orientationOptions }
+  // const orientationOptions = destination === 'banished' ? {} : {  }
+  return { ...card, defence: false, counters: 0, ...opts, faceDown: false }
 }
 
 const moveCard = (
@@ -643,13 +644,13 @@ const handleBanishedAction = (action: string) => {
       if (edits.length) sendEdit(edits, logText)
       break
     }
-    case 'face-up': {
-      if (!selectedCard.value) return
-      const logText = `banished ${selectedCard.value?.name} face up`
-      const edits = moveCard('banished', 0, { faceDown: false })
-      if (edits.length) sendEdit(edits, logText)
-      break
-    }
+    // case 'face-up': {
+    //   if (!selectedCard.value) return
+    //   const logText = `banished ${selectedCard.value?.name} face up`
+    //   const edits = moveCard('banished', 0, { faceDown: false })
+    //   if (edits.length) sendEdit(edits, logText)
+    //   break
+    // }
   }
 }
 
@@ -727,10 +728,92 @@ registerShortcut('k', () => {
   if (!i.value || selectedCard.value) return
   handleDeckAction('search')
 })
+
+// Drag and drop
+const fieldRef = ref<HTMLElement>()
+
+const handleDrop = (drag: DragData, drop: DropZone) => {
+  if (drag.sourceLocation === drop.location && (drop.index === undefined || drag.sourceIndex === drop.index)) return
+
+  const card = getCard(drag.sourceLocation, drag.sourceIndex)
+  if (!card || card.uid !== drag.card.uid) return
+
+  selectedCard.value = card
+  selectedCardLocation.value = drag.sourceLocation
+  selectedCardIndex.value = drag.sourceIndex
+
+  switch (drop.location) {
+    case 'field':
+    case 'zones': {
+      if (drop.index === undefined) return
+      const targetCard = getCard(drop.location, drop.index)
+      if (targetCard && targetCard.uid !== card.uid) {
+        handleAction('attach', drop.location, drop.index)
+      } else if (!targetCard) {
+        const logText =
+          drag.sourceLocation === 'field' || drag.sourceLocation === 'zones'
+            ? `moved ${cardName(card)} from ${zoneName(drag.sourceLocation)} to ${zoneName(drop.location)}`
+            : `summoned ${card.name} from ${zoneName(drag.sourceLocation)}`
+        const edits = moveCard(drop.location, drop.index)
+        if (edits.length) sendEdit(edits, logText)
+      }
+      break
+    }
+    case 'graveyard':
+    case 'banished':
+    case 'hand':
+    case 'extra':
+    case 'tokens':
+      logMoveCard(drop.location)
+      break
+    case 'deck':
+      handleDeckAction('place-top')
+      break
+  }
+}
+
+const { dragging, dragX, dragY, hoverZone, didDrag, startDrag } = useDragDrop(handleDrop)
+
+const startCardDrag = (card: YugiohCard, location: keyof BoardSide, index: number, event: PointerEvent) => {
+  const showFace = location === 'hand' || !card.faceDown
+  startDrag(
+    {
+      card,
+      sourceLocation: location,
+      sourceIndex: index,
+      imageUrl: getS3ImageUrl(showFace ? card.id : 0),
+    },
+    event,
+  )
+}
+
+provide('dragHoverZone', hoverZone)
+provide(
+  'isDragActive',
+  computed(() => !!dragging.value),
+)
+provide(
+  'draggingCardUid',
+  computed(() => dragging.value?.card.uid),
+)
+
+const suppressClickAfterDrag = (e: MouseEvent) => {
+  if (didDrag.value) {
+    e.stopPropagation()
+    e.preventDefault()
+  }
+}
+
+onMounted(() => {
+  fieldRef.value?.addEventListener('click', suppressClickAfterDrag, true)
+})
+onBeforeUnmount(() => {
+  fieldRef.value?.removeEventListener('click', suppressClickAfterDrag, true)
+})
 </script>
 <template>
   <!-- PLAYER -->
-  <div class="select-none">
+  <div class="select-none" ref="fieldRef">
     <div class="grid grid-cols-7 gap-2">
       <!-- BANISHED/EXTRA -->
       <template v-if="i || (viewer && props.player === 'player1')">
@@ -778,6 +861,9 @@ registerShortcut('k', () => {
           @increment="(evt) => i && handleIncrement(evt, 'zones', 0)"
           @update="debouncedUpdateCardStats"
           :rotate
+          :drop-zone="i && zoneIsFree(0) ? 'zones' : undefined"
+          :drop-index="i && zoneIsFree(0) ? 0 : undefined"
+          @pointerdown="i && getCard('zones', 0) && startCardDrag(getCard('zones', 0)!, 'zones', 0, $event)"
         />
         <!-- TOKENS -->
         <card-slot
@@ -789,6 +875,7 @@ registerShortcut('k', () => {
           @click.stop="i && (selectedCard ? logMoveCard('tokens') : drawCard('tokens'))"
           :selected-index="i && selectedCardLocation === 'tokens' && selectedCardIndex"
           :rotate
+          :drop-zone="i ? 'tokens' : undefined"
         />
         <!-- EXTRA 1 -->
         <card-slot
@@ -820,6 +907,9 @@ registerShortcut('k', () => {
           @increment="(evt) => i && handleIncrement(evt, 'zones', 1)"
           @update="debouncedUpdateCardStats"
           :rotate
+          :drop-zone="i && zoneIsFree(1) ? 'zones' : undefined"
+          :drop-index="i && zoneIsFree(1) ? 1 : undefined"
+          @pointerdown="i && getCard('zones', 1) && startCardDrag(getCard('zones', 1)!, 'zones', 1, $event)"
         />
         <life-points
           ref="playerLpRef"
@@ -835,10 +925,11 @@ registerShortcut('k', () => {
           @click.stop="i && (selectedCard ? logMoveCard('banished') : selectCard('banished', 0))"
           @click.right.prevent="inspectCards('banished')"
           :hint="getCards('banished').length"
-          :actions="i && selectedCard ? ['face-down', 'face-up'] : []"
+          :actions="i && selectedCard ? ['face-down'] : []"
           @action="(evt) => i && handleBanishedAction(evt)"
           :selected-index="i && selectedCardLocation === 'banished' && selectedCardIndex"
           :rotate
+          :drop-zone="i ? 'banished' : undefined"
         />
       </template>
 
@@ -869,6 +960,9 @@ registerShortcut('k', () => {
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
         @update="debouncedUpdateCardStats"
         :rotate
+        :drop-zone="i ? 'field' : undefined"
+        :drop-index="i ? index : undefined"
+        @pointerdown="i && card && startCardDrag(card, 'field', index, $event)"
       />
       <!-- GRAVEYARD -->
       <card-slot
@@ -880,6 +974,7 @@ registerShortcut('k', () => {
         @click.stop="i && (selectedCard ? logMoveCard('graveyard') : selectCard('graveyard', 0))"
         @click.right.prevent="inspectCards('graveyard')"
         :rotate
+        :drop-zone="i ? 'graveyard' : undefined"
       />
       <!-- EXTRA DECK -->
       <card-slot
@@ -891,6 +986,7 @@ registerShortcut('k', () => {
         @click.stop="i && (selectedCard ? logMoveCard('extra') : inspectCards('extra'))"
         :selected-index="i && selectedCardLocation === 'extra' && selectedCardIndex"
         :rotate
+        :drop-zone="i ? 'extra' : undefined"
       />
       <!-- BOTTOM ROW -->
       <card-slot
@@ -919,6 +1015,9 @@ registerShortcut('k', () => {
         @increment="(evt) => i && handleIncrement(evt, 'field', index)"
         @update="debouncedUpdateCardStats"
         :rotate
+        :drop-zone="i ? 'field' : undefined"
+        :drop-index="i ? index : undefined"
+        @pointerdown="i && card && startCardDrag(card as YugiohCard, 'field', index, $event)"
       />
       <!-- DECK -->
       <card-slot
@@ -932,20 +1031,28 @@ registerShortcut('k', () => {
         @action="(evt) => i && handleDeckAction(evt)"
         :selected-index="i && selectedCardLocation === 'deck' && selectedCardIndex"
         :rotate
+        :drop-zone="i ? 'deck' : undefined"
       />
     </div>
-    <div @click="i && logMoveCard('hand')" class="mt-4 flex h-[min(20vw,20vh)] w-full justify-center">
+    <div
+      data-drop-zone="hand"
+      :class="{ 'rounded ring-2 ring-yellow-400 ring-inset': !!dragging && hoverZone?.location === 'hand' }"
+      @click="i && logMoveCard('hand')"
+      class="mt-4 flex h-[min(20vw,20vh)] w-full justify-center"
+    >
       <div v-for="(card, index) in getCards('hand')" :key="`${card?.id}+${index}`" class="relative">
         <img
           v-if="card"
           :class="{
             'border-4 border-yellow-200': isSelected('hand', index),
+            'opacity-30': dragging?.card.uid === card?.uid,
           }"
           class="h-full max-h-80 max-w-full min-w-0 object-contain"
           :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
         />
         <div
           class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
+          @pointerdown="i && card && startCardDrag(card, 'hand', index, $event)"
           @click.stop="i && (isShiftHeld ? shiftClickHandCard(index) : selectCard('hand', index))"
           @click.right.prevent="
             i && isShiftHeld ? shiftRightClickHandCard(index) : (iv || card?.revealed) && inspectCard(card, 'hand')
@@ -981,5 +1088,13 @@ registerShortcut('k', () => {
       @reveal="revealCard"
       @flip="flipCard"
     />
+    <Teleport to="body">
+      <img
+        v-if="dragging"
+        :src="dragging.imageUrl"
+        class="pointer-events-none fixed z-[10000] h-28 -translate-x-1/2 -translate-y-1/2 rounded shadow-2xl"
+        :style="{ left: `${dragX}px`, top: `${dragY}px` }"
+      />
+    </Teleport>
   </div>
 </template>

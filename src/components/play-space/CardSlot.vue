@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import type { Ref } from 'vue'
+import { computed, inject } from 'vue'
 
 import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
@@ -48,12 +49,30 @@ const props = defineProps<{
   counters?: number
   name?: string
   rotate?: boolean
+  dropZone?: string
+  dropIndex?: number
 }>()
 const emit = defineEmits<{
   (e: 'action', name: string): void
   (e: 'increment', count: number): void
   (e: 'update', name: string, stat?: 'attack' | 'defence'): void
 }>()
+
+const dragHoverZone = inject<Ref<{ location: string; index?: number } | null>>('dragHoverZone')
+const isDragActive = inject<Ref<boolean>>('isDragActive')
+const draggingCardUid = inject<Ref<string | undefined>>('draggingCardUid')
+
+const isDropHighlighted = computed(() => {
+  if (!isDragActive?.value || !dragHoverZone?.value || !props.dropZone) return false
+  if (dragHoverZone.value.location !== props.dropZone) return false
+  if (props.dropIndex !== undefined) return dragHoverZone.value.index === props.dropIndex
+  return true
+})
+
+const isDragSource = computed(() => {
+  return !!draggingCardUid?.value && props.card?.uid === draggingCardUid.value
+})
+
 const cardList = computed(() => props.cards ?? [props.card])
 
 const getClassStyle = (card: YugiohCard, index: number) => {
@@ -107,7 +126,12 @@ const cardDef = computed({
 </script>
 
 <template>
-  <div class="relative aspect-square border-1 border-gray-300 p-px">
+  <div
+    class="relative aspect-square border-1 border-gray-300 p-px"
+    :class="{ 'ring-2 ring-yellow-400 ring-inset': isDropHighlighted }"
+    :data-drop-zone="dropZone"
+    :data-drop-index="dropIndex"
+  >
     <div
       v-if="name"
       class="absolute top-1/2 left-1/2 w-full -translate-x-1/2 -translate-y-1/2 text-center text-[min(1vh,1vw)] font-bold text-gray-400 opacity-70"
@@ -122,6 +146,7 @@ const cardDef = computed({
         :src="getS3ImageUrl(card.faceDown ? 0 : card.id)"
         v-bind="getClassStyle(card, index)"
         class="absolute m-auto max-h-full -translate-x-1/2"
+        :class="{ 'opacity-30': isDragSource }"
       />
     </template>
     <div class="relative h-full w-full">
