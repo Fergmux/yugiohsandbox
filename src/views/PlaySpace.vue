@@ -777,7 +777,7 @@ onUnmounted(() => {
   </div>
 
   <!-- WHOLE PLAYSPACE -->
-  <div v-if="gameId && (deckId || player === null)" class="mt-20 flex h-screen items-center justify-center gap-2">
+  <div v-if="gameId && (deckId || player === null)" class="mt-20 mb-40 flex h-screen items-center justify-center gap-2">
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="setTurn(0)">
         {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}
@@ -790,7 +790,7 @@ onUnmounted(() => {
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">End phase</div>
     </div>
     <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
-    <div class="w-[100vh]" ref="gameSpaceRef">
+    <div class="w-[90vh]" ref="gameSpaceRef">
       <!-- OPPONENT -->
       <field-side
         ref="opponentFieldRef"

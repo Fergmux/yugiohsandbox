@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
-defineExpose({ focus: () => inputRef.value?.focus() })
 import NumberAnimation from 'vue-number-animation'
+
+defineExpose({ focus: () => inputRef.value?.focus() })
 
 const props = defineProps<{
   lifePoints: number
@@ -34,6 +35,11 @@ const formatLifePoints = (number: number) => {
 
 const beat = new Audio('/life_points.mp3')
 
+const enterHandler = (shiftKey: boolean) => {
+  changeLifePoints(shiftKey ? 1 : -1)
+  inputRef.value?.blur()
+}
+
 watch(
   () => props.lifePoints,
   () => {
@@ -45,8 +51,8 @@ watch(
 
 <template>
   <div class="flex flex-col items-center justify-around">
-    <h3 class="text-[min(1vh,1vw)] font-semibold text-white" v-if="reverse">Your LP</h3>
-    <h3 class="text-[min(1vh,1vw)] font-semibold text-white" v-if="!reverse">Opponent's LP</h3>
+    <h3 class="text-[min(1.2vh,1.2vw)] font-semibold text-white" v-if="reverse">Your LP</h3>
+    <h3 class="text-[min(1.2vh,1.2vw)] font-semibold text-white" v-if="!reverse">Opponent's LP</h3>
     <!-- <span class="text-lg font-bold text-yellow-300 md:text-xl lg:text-2xl xl:text-3xl" -->
     <!-- <input
       type="number"
@@ -56,9 +62,7 @@ watch(
       @keyup.escape="resetLifePoints"
       v-model="lifePointsInput"
     /> -->
-    <span
-      class="mx-auto w-[min(8vw,8vh)] text-center text-[min(1.75vh,1.75vw)] font-bold text-yellow-300"
-    >
+    <span class="mx-auto w-[min(8vw,8vh)] text-center text-[min(1.8vh,1.8vw)] font-bold text-yellow-300">
       <NumberAnimation
         :from="lifePointsFrom"
         :to="props.lifePoints"
@@ -77,11 +81,11 @@ watch(
       </button>
       <input
         ref="inputRef"
-        class="mx-2 w-[min(4vh,4vw)] text-center text-[min(1vh,1vw)]"
+        class="mx-2 w-[min(4vh,4vw)] text-center text-[min(1.2vh,1.2vw)]"
         type="number"
         step="50"
         v-model="lifePointsInput"
-        @keyup.enter.stop="changeLifePoints($event.shiftKey ? 1 : -1); inputRef?.blur()"
+        @keyup.enter.stop="enterHandler($event.shiftKey)"
       />
       <button
         class="h-[min(2vh,2vw)] w-[min(2vh,2vw)] cursor-pointer rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300"

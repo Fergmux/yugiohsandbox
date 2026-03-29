@@ -1076,27 +1076,45 @@ onBeforeUnmount(() => {
       data-drop-zone="hand"
       :class="{ 'rounded ring-2 ring-yellow-400 ring-inset': !!dragging && hoverZone?.location === 'hand' }"
       @click="i && logMoveCard('hand')"
-      class="mt-4 flex h-[min(10vw,10vh)] w-full justify-center"
+      class="mt-4 flex h-[min(20vw,20vh)] w-full justify-center"
     >
       <div
         v-for="(card, index) in getCards('hand')"
         :key="`${card?.id}+${index}`"
-        :style="{ transform: `rotate(${(index - (getCards('hand').length - 1) / 2) * 5}deg) translateY(${Math.abs(index - (getCards('hand').length - 1) / 2) * 10}px)` }"
-        class="z-[140] origin-bottom hover:z-[150]"
+        :style="
+          i
+            ? {
+                transform: `rotate(${(index - (getCards('hand').length - 1) / 2) * 5}deg) translateY(${Math.abs(index - (getCards('hand').length - 1) / 2) * 10}px)`,
+              }
+            : undefined
+        "
+        :class="i ? 'group/card z-[140] origin-bottom hover:z-[150]' : ''"
       >
-        <div class="relative origin-bottom transition-transform duration-200 hover:z-50 hover:scale-[3]">
-          <img
-            v-if="card"
-            :class="{
-              'border-4 border-yellow-200': isSelected('hand', index),
-              'border-4 border-red-500': isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index),
-              'opacity-30': dragging?.card.uid === card?.uid,
-            }"
-            class="h-full max-h-24 max-w-full min-w-0 object-contain"
-            :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
-          />
+        <div class="relative">
           <div
-            class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
+            :class="
+              i
+                ? 'pointer-events-none origin-bottom transition-transform duration-200 group-hover/card:z-50 group-hover/card:scale-[2]'
+                : ''
+            "
+          >
+            <img
+              v-if="card"
+              :class="{
+                'border-4 border-yellow-200': isSelected('hand', index),
+                'border-4 border-red-500': isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index),
+                'opacity-30': dragging?.card.uid === card?.uid,
+              }"
+              class="h-full max-h-42 max-w-full min-w-0 object-contain"
+              :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
+            />
+          </div>
+          <div
+            :class="
+              i
+                ? 'absolute top-0 left-0 h-full w-full opacity-0 group-hover/card:opacity-100'
+                : 'absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100'
+            "
             @pointerdown="i && card && startCardDrag(card, 'hand', index, $event)"
             @click.stop="
               i
