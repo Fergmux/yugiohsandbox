@@ -216,9 +216,7 @@ onMounted(() => {
     <div class="mt-10">
       <h2 class="mb-4 text-2xl font-semibold">Starter Decks</h2>
       <div v-if="loadingDecks" class="py-6 text-center text-gray-400">Loading decks...</div>
-      <div v-else-if="starterDecks.length === 0" class="py-6 text-center text-gray-400">
-        No starter decks assigned!.
-      </div>
+      <div v-else-if="starterDecks.length === 0" class="py-6 text-center text-gray-400">No starter decks assigned.</div>
       <ul v-else class="flex flex-col gap-2">
         <li
           v-for="deck in starterDecks"

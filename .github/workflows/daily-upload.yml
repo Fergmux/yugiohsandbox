@@ -1,4 +1,4 @@
-name: Daily S3 Upload
+name: Yugioh S3 Upload
 
 on:
   schedule:
@@ -13,8 +13,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '24'
 
       - run: npm ci
 
