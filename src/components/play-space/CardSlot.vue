@@ -129,11 +129,16 @@ const cardDef = computed({
 
 <template>
   <div
-    class="relative aspect-square border-1 border-gray-300 p-px"
+    class="relative aspect-square overflow-hidden border-1 border-gray-300 p-px"
     :class="{ 'ring-2 ring-yellow-400 ring-inset': isDropHighlighted }"
     :data-drop-zone="dropZone"
     :data-drop-index="dropIndex"
   >
+    <div
+      class="pointer-events-none absolute inset-0 z-0 bg-contain bg-center bg-no-repeat opacity-60 grayscale"
+      :style="{ backgroundImage: `url('${getS3ImageUrl(0)}')` }"
+      aria-hidden="true"
+    />
     <div
       v-if="name"
       class="absolute top-1/2 left-1/2 w-full -translate-x-1/2 -translate-y-1/2 text-center text-[min(1vh,1vw)] font-bold text-gray-400 opacity-70"
