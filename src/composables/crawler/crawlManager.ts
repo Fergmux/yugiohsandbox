@@ -19,6 +19,7 @@ const defaultCrawl: Crawl = {
     powers: [],
     page: 0,
     wins: 0,
+    actionPoints: 2,
   },
   player2: {
     id: null,
@@ -27,6 +28,7 @@ const defaultCrawl: Crawl = {
     powers: [],
     page: 0,
     wins: 0,
+    actionPoints: 2,
   },
 }
 
@@ -157,6 +159,8 @@ export const useCrawlManager = () => {
       if (!isPending(`${self}.powers`)) crawl.value[self].powers = [...remote[self].powers]
       if (!isPending(`${self}.id`)) crawl.value[self].id = remote[self].id
       if (!isPending(`${self}.page`)) crawl.value[self].page = remote[self].page
+      if (!isPending(`${self}.actionPoints`))
+        crawl.value[self].actionPoints = remote[self].actionPoints ?? 2
       if (!isPending(`${self}.selectedOpponentCard`))
         crawl.value[self].selectedOpponentCard = remote[self].selectedOpponentCard ?? null
     })
@@ -314,6 +318,33 @@ export const useCrawlManager = () => {
     }
   }
 
+  const setActionPoints = async (value: number) => {
+    if (!player.value) return
+    const p = player.value
+    const key = `${p}.actionPoints`
+    crawl.value[p].actionPoints = value
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: value })
+    } finally {
+      unmarkPending(key)
+    }
+  }
+
+  const decrementActionPoint = async () => {
+    if (!player.value) return
+    const p = player.value
+    const key = `${p}.actionPoints`
+    const next = (crawl.value[p].actionPoints ?? 2) - 1
+    crawl.value[p].actionPoints = next
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: next })
+    } finally {
+      unmarkPending(key)
+    }
+  }
+
   const loadCrawl = (crawlData: Crawl & { id: string }) => {
     const { id, ...rest } = crawlData
     gameId.value = id
@@ -371,6 +402,8 @@ export const useCrawlManager = () => {
     getCrawls,
     deleteCrawl,
     setSelectedOpponentCard,
+    setActionPoints,
+    decrementActionPoint,
     updatePage,
     loadCrawl,
   }

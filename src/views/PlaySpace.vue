@@ -87,7 +87,16 @@ Playground
 - Rotate left/right?
 */
 
-const { newDuel, finishDuel, winDuel, crawl, setSelectedOpponentCard, togglePowerUsed } = useCrawlManager()
+const {
+  newDuel,
+  finishDuel,
+  winDuel,
+  crawl,
+  setSelectedOpponentCard,
+  togglePowerUsed,
+  setActionPoints,
+  decrementActionPoint,
+} = useCrawlManager()
 
 const { next, endCrawl } = usePageManager()
 
@@ -149,6 +158,9 @@ const userStore = useUserStore()
 const route = useRoute()
 
 const inputRef = ref<HTMLInputElement>()
+const actionPoints = computed(() => crawl.value[playerKey.value].actionPoints ?? 2)
+const opponentActionPoints = computed(() => crawl.value[opponentKey.value].actionPoints ?? 2)
+
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
   inputRef.value?.focus()
@@ -295,6 +307,8 @@ const { registerShortcut } = useFieldShortcuts()
 
 registerShortcut('Enter', () => {
   if (!gameId.value || !props.crawlPlayer) return
+
+  void setActionPoints(2)
 
   const playerCards = gameState.value.cards[playerKey.value]
   const steps: GameEdit[][] = []
@@ -789,8 +803,8 @@ onUnmounted(() => {
   </div>
 
   <!-- WHOLE PLAYSPACE -->
-  <div v-if="gameId && (deckId || player === null)" class="mt-40 mb-40 flex h-screen items-center justify-center gap-2">
-    <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
+  <div v-if="gameId && (deckId || player === null)" class="mt-40 mb-80 flex h-screen items-center justify-center gap-2">
+    <div class="flex flex-col items-end gap-2 text-[min(1vh,1vw)] font-bold text-white">
       <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="setTurn(0)">
         {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}
       </p>
@@ -800,6 +814,10 @@ onUnmounted(() => {
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 3 }" @click="setTurn(3)">Battle phase</div>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 4 }" @click="setTurn(4)">Main phase 2</div>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">End phase</div>
+      <div class="mt-8 max-w-40 text-center text-lg font-semibold text-gray-300">
+        <p>Opponent's action points</p>
+        <p class="font-bold text-yellow-500">{{ `${opponentActionPoints}/2` }}</p>
+      </div>
     </div>
     <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
     <div class="w-[90vh]" ref="gameSpaceRef">
@@ -828,6 +846,7 @@ onUnmounted(() => {
         :opponent-selected-card="opponentSelectedMyCard"
         @edit="handleEdit"
         @card-selected="clearOpponentSelection"
+        @use-action-point="decrementActionPoint"
         class="mb-2"
       />
       <template v-if="props.crawlPlayer && crawl[props.crawlPlayer].powers.length">
@@ -845,7 +864,7 @@ onUnmounted(() => {
             {{ power.name }}
           </div>
         </div>
-        <p class="mx-auto mt-4 mb-40 max-w-full text-center break-words">
+        <p class="mx-auto mt-4 mb-4 max-w-full text-center break-words">
           {{ powerDescription ? powerDescription : 'Your powers' }}
         </p>
       </template>
@@ -860,7 +879,12 @@ onUnmounted(() => {
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 9 }" @click="setTurn(9)">Battle phase</div>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 10 }" @click="setTurn(10)">Main phase 2</div>
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 11 }" @click="setTurn(11)">End phase</div>
+      <div class="mt-8 max-w-40 text-center text-lg font-semibold text-gray-300">
+        <p>Your action points</p>
+        <p class="font-bold text-yellow-500">{{ `${actionPoints}/2` }}</p>
+      </div>
     </div>
+
     <inspect-modal v-if="viewDeck" :cards="crawlDeckCards" :showCards="crawlDeckCards" @close="viewDeck = false" />
   </div>
   <invite-friends-modal

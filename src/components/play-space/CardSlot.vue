@@ -129,7 +129,7 @@ const cardDef = computed({
 
 <template>
   <div
-    class="relative aspect-square overflow-hidden border-1 border-gray-300 p-px"
+    class="relative aspect-square overflow-hidden border-1 border-gray-400 p-px"
     :class="{ 'ring-2 ring-yellow-400 ring-inset': isDropHighlighted }"
     :data-drop-zone="dropZone"
     :data-drop-index="dropIndex"

@@ -26,6 +26,7 @@ export interface Crawl {
     page: number
     wins: number
     selectedOpponentCard?: CardSelection
+    actionPoints: number
   }
   player2: {
     id: string | null
@@ -35,5 +36,6 @@ export interface Crawl {
     page: number
     wins: number
     selectedOpponentCard?: CardSelection
+    actionPoints: number
   }
 }
