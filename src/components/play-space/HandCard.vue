@@ -17,7 +17,7 @@ const props = defineProps<{
   draggingUid?: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'select'): void
   (e: 'inspect'): void
   (e: 'shiftClick'): void
@@ -26,6 +26,20 @@ defineEmits<{
   (e: 'give'): void
   (e: 'startDrag', event: PointerEvent): void
 }>()
+
+function onOverlayClick(e: MouseEvent) {
+  if (props.isInteractive) {
+    if (e.shiftKey) emit('shiftClick')
+    else emit('select')
+  } else {
+    emit('select')
+  }
+}
+
+function onOverlayRightClick(e: MouseEvent) {
+  if (e.shiftKey) emit('shiftRightClick')
+  else emit('inspect')
+}
 
 // Fan-out rotation based on position in hand
 const fanStyle = computed(() => {
@@ -75,16 +89,16 @@ const isDragging = computed(() => props.draggingUid === props.card?.uid)
             ? 'absolute top-0 left-0 h-full w-full opacity-0 group-hover/card:opacity-100'
             : 'absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100'
         "
-        @pointerdown="isInteractive && $emit('startDrag', $event)"
-        @click.stop="isInteractive ? $emit(($event as KeyboardEvent).shiftKey ? 'shiftClick' : 'select') : $emit('select')"
-        @click.right.prevent="$emit(($event as KeyboardEvent).shiftKey ? 'shiftRightClick' : 'inspect')"
+        @pointerdown="isInteractive && emit('startDrag', $event)"
+        @click.stop="onOverlayClick($event)"
+        @click.right.prevent="onOverlayRightClick($event)"
         @dragstart.prevent=""
       >
         <div v-if="isInteractive" class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
-          <icon-button title="Reveal" @click.stop="$emit('reveal')">
+          <icon-button title="Reveal" @click.stop="emit('reveal')">
             {{ card.revealed ? 'visibility_off' : 'visibility' }}
           </icon-button>
-          <icon-button title="Give" @click.stop="$emit('give')">
+          <icon-button title="Give" @click.stop="emit('give')">
             volunteer_activism
           </icon-button>
         </div>

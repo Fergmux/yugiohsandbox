@@ -159,8 +159,7 @@ export const useCrawlManager = () => {
       if (!isPending(`${self}.powers`)) crawl.value[self].powers = [...remote[self].powers]
       if (!isPending(`${self}.id`)) crawl.value[self].id = remote[self].id
       if (!isPending(`${self}.page`)) crawl.value[self].page = remote[self].page
-      if (!isPending(`${self}.actionPoints`))
-        crawl.value[self].actionPoints = remote[self].actionPoints ?? 2
+      if (!isPending(`${self}.actionPoints`)) crawl.value[self].actionPoints = remote[self].actionPoints ?? 2
       if (!isPending(`${self}.selectedOpponentCard`))
         crawl.value[self].selectedOpponentCard = remote[self].selectedOpponentCard ?? null
     })
@@ -336,10 +335,10 @@ export const useCrawlManager = () => {
     const p = player.value
     const key = `${p}.actionPoints`
     const next = (crawl.value[p].actionPoints ?? 2) - 1
-    crawl.value[p].actionPoints = next
+    crawl.value[p].actionPoints = next < 0 ? 0 : next
     markPending(key)
     try {
-      await sendUpdate({ [key]: next })
+      await sendUpdate({ [key]: next < 0 ? 0 : next })
     } finally {
       unmarkPending(key)
     }
