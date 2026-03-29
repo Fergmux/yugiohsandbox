@@ -4,6 +4,7 @@ export interface Power {
   name: string
   description: string
   id: string
+  used?: boolean
 }
 
 /** Card on the opponent's board that this player is pointing at (shared via Firestore). */

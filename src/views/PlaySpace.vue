@@ -87,7 +87,7 @@ Playground
 - Rotate left/right?
 */
 
-const { newDuel, finishDuel, winDuel, crawl, setSelectedOpponentCard } = useCrawlManager()
+const { newDuel, finishDuel, winDuel, crawl, setSelectedOpponentCard, togglePowerUsed } = useCrawlManager()
 
 const { next, endCrawl } = usePageManager()
 
@@ -182,7 +182,6 @@ const joinUrl = computed(() => `${window.location.origin}/play/${gameCode.value}
 const viewDeck = ref(false)
 const viewShortcuts = ref(false)
 const powerDescription = ref<string | null>(null)
-const activatedPowerIds = ref<Set<string>>(new Set())
 
 interface EditBatch {
   edits: GameEdit[]
@@ -758,13 +757,9 @@ onUnmounted(() => {
           @mouseover="powerDescription = power.description"
           @mouseleave="powerDescription = null"
           :key="power.id"
-          class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+          class="cursor-default rounded-md border-1 border-gray-300 p-2"
+          :class="{ 'bg-yellow-600': power.used }"
         >
-          <!-- TODO: track opponent's activated powers
-          :class="{ 'bg-yellow-600': activatedPowerIds.has(power.id) }"
-          @click="
-            activatedPowerIds.has(power.id) ? activatedPowerIds.delete(power.id) : activatedPowerIds.add(power.id)
-          " -->
           {{ power.name }}
         </div>
       </div>
@@ -844,10 +839,8 @@ onUnmounted(() => {
             @mouseleave="powerDescription = null"
             :key="power.id"
             class="cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-            :class="{ 'bg-yellow-600': activatedPowerIds.has(power.id) }"
-            @click="
-              activatedPowerIds.has(power.id) ? activatedPowerIds.delete(power.id) : activatedPowerIds.add(power.id)
-            "
+            :class="{ 'bg-yellow-600': power.used }"
+            @click="togglePowerUsed(power.id)"
           >
             {{ power.name }}
           </div>

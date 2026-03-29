@@ -242,6 +242,22 @@ export const useCrawlManager = () => {
     }
   }
 
+  const togglePowerUsed = async (powerId: string) => {
+    if (!player.value) return
+    const key = `${player.value}.powers`
+    const currentPowers = crawl.value[player.value].powers
+    const idx = currentPowers.findIndex((power) => power.id === powerId)
+    if (idx === -1) return
+    const newPowers = currentPowers.map((power, i) => (i === idx ? { ...power, used: !power.used } : power))
+    crawl.value[player.value].powers = newPowers
+    markPending(key)
+    try {
+      await sendUpdate({ [key]: newPowers })
+    } finally {
+      unmarkPending(key)
+    }
+  }
+
   const addCardToDeck = async (id: number) => {
     if (!player.value) return
     const p = player.value
@@ -349,6 +365,7 @@ export const useCrawlManager = () => {
     winDuel,
     addPowerToUser,
     removePowerFromUser,
+    togglePowerUsed,
     addCardToDeck,
     removeCardFromDeck,
     getCrawls,
