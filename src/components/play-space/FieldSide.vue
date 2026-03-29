@@ -9,8 +9,8 @@ import CardSlot from '@/components/play-space/CardSlot.vue'
 import LifePoints from '@/components/play-space/LifePoints.vue'
 import { type DragData, type DropZone, useDragDrop } from '@/composables/useDragDrop'
 import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
-import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
 import type { CardSelection } from '@/types/crawl'
+import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
 import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
@@ -859,7 +859,7 @@ onBeforeUnmount(() => {
             ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 0)?.uid) ?? []),
           ]"
           :name="'Extra Monster Zone'"
-          @click="i ? (zoneIsFree(0) && handleFieldClick(0, 'zones')) : handleOpponentCardClick('zones', 0)"
+          @click="i ? zoneIsFree(0) && handleFieldClick(0, 'zones') : handleOpponentCardClick('zones', 0)"
           @click.right.prevent="
             (!extraZones[0]?.faceDown || zoneIsFree(0) || viewer) && inspectCard(extraZones[0], 'zones')
           "
@@ -906,7 +906,7 @@ onBeforeUnmount(() => {
             ...(getCards('attached').filter((c) => c?.attached === getCard('zones', 1)?.uid) ?? []),
           ]"
           :name="'Extra Monster Zone'"
-          @click="i ? (zoneIsFree(1) && handleFieldClick(1, 'zones')) : handleOpponentCardClick('zones', 1)"
+          @click="i ? zoneIsFree(1) && handleFieldClick(1, 'zones') : handleOpponentCardClick('zones', 1)"
           @click.right.prevent="
             (!extraZones[1]?.faceDown || zoneIsFree(1) || viewer) && inspectCard(extraZones[1], 'zones')
           "
@@ -944,7 +944,13 @@ onBeforeUnmount(() => {
           class="bg-gray-200"
           :cards="getCards('banished')"
           :name="'Banished Zone'"
-          @click.stop="i ? (selectedCard ? logMoveCard('banished') : selectCard('banished', 0)) : handleOpponentCardClick('banished', 0)"
+          @click.stop="
+            i
+              ? selectedCard
+                ? logMoveCard('banished')
+                : selectCard('banished', 0)
+              : handleOpponentCardClick('banished', 0)
+          "
           @click.right.prevent="inspectCards('banished')"
           :hint="getCards('banished').length"
           :actions="i && selectedCard ? ['face-down'] : []"
@@ -995,7 +1001,13 @@ onBeforeUnmount(() => {
         :name="'Graveyard'"
         :hint="getCards('graveyard').length"
         :selected-index="i && selectedCardLocation === 'graveyard' && selectedCardIndex"
-        @click.stop="i ? (selectedCard ? logMoveCard('graveyard') : selectCard('graveyard', 0)) : handleOpponentCardClick('graveyard', 0)"
+        @click.stop="
+          i
+            ? selectedCard
+              ? logMoveCard('graveyard')
+              : selectCard('graveyard', 0)
+            : handleOpponentCardClick('graveyard', 0)
+        "
         @click.right.prevent="inspectCards('graveyard')"
         :opponent-selected="isOpponentSelected('graveyard', 0) || isMyOpponentSelected('graveyard', 0)"
         :rotate
@@ -1064,35 +1076,46 @@ onBeforeUnmount(() => {
       data-drop-zone="hand"
       :class="{ 'rounded ring-2 ring-yellow-400 ring-inset': !!dragging && hoverZone?.location === 'hand' }"
       @click="i && logMoveCard('hand')"
-      class="mt-4 flex h-[min(20vw,20vh)] w-full justify-center"
+      class="mt-4 flex h-[min(10vw,10vh)] w-full justify-center"
     >
-      <div v-for="(card, index) in getCards('hand')" :key="`${card?.id}+${index}`" class="relative">
-        <img
-          v-if="card"
-          :class="{
-            'border-4 border-yellow-200': isSelected('hand', index),
-            'border-4 border-red-500': isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index),
-            'opacity-30': dragging?.card.uid === card?.uid,
-          }"
-          class="h-full max-h-80 max-w-full min-w-0 object-contain"
-          :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
-        />
-        <div
-          class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
-          @pointerdown="i && card && startCardDrag(card, 'hand', index, $event)"
-          @click.stop="
-            i ? (isShiftHeld ? shiftClickHandCard(index) : selectCard('hand', index)) : handleOpponentCardClick('hand', index)
-          "
-          @click.right.prevent="
-            i && isShiftHeld ? shiftRightClickHandCard(index) : (iv || card?.revealed) && inspectCard(card, 'hand')
-          "
-          @dragstart.prevent=""
-        >
-          <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
-            <icon-button title="Reveal" @click.stop="showToOpponent(index)">
-              {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
-            </icon-button>
-            <icon-button title="Give" @click.stop="giveToOpponent(index)"> volunteer_activism </icon-button>
+      <div
+        v-for="(card, index) in getCards('hand')"
+        :key="`${card?.id}+${index}`"
+        :style="{ transform: `rotate(${(index - (getCards('hand').length - 1) / 2) * 5}deg) translateY(${Math.abs(index - (getCards('hand').length - 1) / 2) * 10}px)` }"
+        class="z-[140] origin-bottom hover:z-[150]"
+      >
+        <div class="relative origin-bottom transition-transform duration-200 hover:z-50 hover:scale-[3]">
+          <img
+            v-if="card"
+            :class="{
+              'border-4 border-yellow-200': isSelected('hand', index),
+              'border-4 border-red-500': isOpponentSelected('hand', index) || isMyOpponentSelected('hand', index),
+              'opacity-30': dragging?.card.uid === card?.uid,
+            }"
+            class="h-full max-h-24 max-w-full min-w-0 object-contain"
+            :src="getS3ImageUrl(iv || card.revealed ? card.id : 0)"
+          />
+          <div
+            class="absolute top-0 left-0 h-full w-full opacity-0 hover:opacity-100"
+            @pointerdown="i && card && startCardDrag(card, 'hand', index, $event)"
+            @click.stop="
+              i
+                ? isShiftHeld
+                  ? shiftClickHandCard(index)
+                  : selectCard('hand', index)
+                : handleOpponentCardClick('hand', index)
+            "
+            @click.right.prevent="
+              i && isShiftHeld ? shiftRightClickHandCard(index) : (iv || card?.revealed) && inspectCard(card, 'hand')
+            "
+            @dragstart.prevent=""
+          >
+            <div v-if="i" class="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2">
+              <icon-button title="Reveal" @click.stop="showToOpponent(index)">
+                {{ getCard('hand', index)?.revealed ? 'visibility_off' : 'visibility' }}
+              </icon-button>
+              <icon-button title="Give" @click.stop="giveToOpponent(index)"> volunteer_activism </icon-button>
+            </div>
           </div>
         </div>
       </div>

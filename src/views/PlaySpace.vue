@@ -19,8 +19,8 @@ import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import { db } from '@/firebase/client'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
-import { extraDeckTypes, mainDeckTypes } from '@/types/filters'
 import type { CardSelection } from '@/types/crawl'
+import { extraDeckTypes, mainDeckTypes } from '@/types/filters'
 import type { BoardSide, GameEdit, GameState, YugiohCard } from '@/types/yugiohCard'
 import { applyEdits } from '@/utils/applyEdit'
 import { useClipboard } from '@vueuse/core'
@@ -292,14 +292,16 @@ registerShortcut('Enter', () => {
 
   // One step per hand card → graveyard
   for (const card of playerCards.hand.filter(Boolean)) {
-    steps.push([{
-      type: 'move_card',
-      player: playerKey.value,
-      cardUid: card.uid,
-      fromLocation: 'hand',
-      toLocation: 'graveyard',
-      cardData: { ...card, faceDown: false, defence: false, counters: 0, newAttack: null, newDefence: null },
-    }])
+    steps.push([
+      {
+        type: 'move_card',
+        player: playerKey.value,
+        cardUid: card.uid,
+        fromLocation: 'hand',
+        toLocation: 'graveyard',
+        cardData: { ...card, faceDown: false, defence: false, counters: 0, newAttack: null, newDefence: null },
+      },
+    ])
   }
 
   // Simulate deck/graveyard state after hand is cleared, then build draw steps
@@ -322,14 +324,16 @@ registerShortcut('Enter', () => {
       graveyard = []
     }
     const card = deck[0]
-    steps.push([{
-      type: 'move_card',
-      player: playerKey.value,
-      cardUid: card.uid,
-      fromLocation: 'deck',
-      toLocation: 'hand',
-      cardData: { ...card, faceDown: true },
-    }])
+    steps.push([
+      {
+        type: 'move_card',
+        player: playerKey.value,
+        cardUid: card.uid,
+        fromLocation: 'deck',
+        toLocation: 'hand',
+        cardData: { ...card, faceDown: true },
+      },
+    ])
     deck = deck.slice(1)
     drawn++
   }
@@ -786,7 +790,7 @@ onUnmounted(() => {
       <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">End phase</div>
     </div>
     <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
-    <div class="w-[70vh]" ref="gameSpaceRef">
+    <div class="w-[100vh]" ref="gameSpaceRef">
       <!-- OPPONENT -->
       <field-side
         ref="opponentFieldRef"
