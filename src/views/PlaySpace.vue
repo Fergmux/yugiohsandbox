@@ -10,6 +10,7 @@ import { useRoute } from 'vue-router'
 
 import InspectModal from '@/components/InspectModal.vue'
 import InviteFriendsModal from '@/components/InviteFriendsModal.vue'
+import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import CoinFlip from '@/components/play-space/CoinFlip.vue'
 import FieldSide from '@/components/play-space/FieldSide.vue'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
@@ -179,6 +180,7 @@ const deckId: Ref<string | undefined> = ref()
 let unsubscribe: () => void
 const joinUrl = computed(() => `${window.location.origin}/play/${gameCode.value}`)
 const viewDeck = ref(false)
+const viewShortcuts = ref(false)
 const powerDescription = ref<string | null>(null)
 const activatedPowerIds = ref<Set<string>>(new Set())
 
@@ -701,11 +703,18 @@ onUnmounted(() => {
       >
         I Lose
       </button>
+      <br />
       <button
         @click="viewDeck = !viewDeck"
         class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
       >
         View Deck
+      </button>
+      <button
+        @click="viewShortcuts = true"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+      >
+        View shortcuts
       </button>
     </template>
     <template v-else>
@@ -859,4 +868,5 @@ onUnmounted(() => {
     :game-code="String(gameCode)"
     @close="showInviteModal = false"
   />
+  <shortcuts-modal v-if="viewShortcuts" @close="viewShortcuts = false" />
 </template>

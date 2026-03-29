@@ -297,6 +297,32 @@ const shiftClickHandCard = (index: number) => {
   }
 }
 
+const shiftRightClickFieldCard = (index: number) => {
+  if (index === 0) return // exclude field spell zone
+  const card = getCard('field', index)
+  if (!card) return
+
+  if (spellTrapTypes.includes(card.type)) {
+    flipCard(card)
+  } else if (card.faceDown) {
+    flipCard(card)
+  } else {
+    const newDefence = !card.defence
+    sendEdit(
+      [
+        {
+          type: 'update_card',
+          player: props.player,
+          cardUid: card.uid,
+          location: 'field',
+          updates: { defence: newDefence },
+        },
+      ],
+      `changed ${cardName(card)} to ${newDefence ? 'defence' : 'attack'} mode`,
+    )
+  }
+}
+
 const handleFieldClick = (index: number, zone: 'zones' | 'field' = 'field') => {
   const card = getCard(zone, index)
   if (card) {
@@ -744,9 +770,14 @@ registerShortcut('d', () => {
   if (!i.value || selectedCard.value) return
   drawCard('deck')
 })
-registerShortcut('k', () => {
+registerShortcut('s', () => {
   if (!i.value || selectedCard.value) return
   handleDeckAction('search')
+})
+registerShortcut('G', () => {
+  if (!i.value || !selectedCard.value || selectedCardLocation.value !== 'hand') return
+  if (selectedCardIndex.value === undefined) return
+  giveToOpponent(selectedCardIndex.value)
 })
 
 // Drag and drop
@@ -971,7 +1002,7 @@ onBeforeUnmount(() => {
         :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
         :class="index === 0 ? 'bg-green-600' : 'bg-yellow-700'"
         @click.stop="i ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
-        @click.right.prevent="(!card?.faceDown || iv) && inspectCard(card, 'field')"
+        @click.right.prevent="i && isShiftHeld && index !== 0 ? shiftRightClickFieldCard(index) : (!card?.faceDown || iv) && inspectCard(card, 'field')"
         :selected="i && isSelected('field', index)"
         :selected-index="
           i &&
@@ -1034,7 +1065,7 @@ onBeforeUnmount(() => {
         :name="'Spell & Trap Card Zone'"
         class="bg-teal-600"
         @click.stop="i ? handleFieldClick(index) : handleOpponentCardClick('field', index)"
-        @click.right.prevent="(!card?.faceDown || iv) && inspectCard(card, 'field')"
+        @click.right.prevent="i && isShiftHeld ? shiftRightClickFieldCard(index) : (!card?.faceDown || iv) && inspectCard(card, 'field')"
         :selected="i && isSelected('field', index)"
         :selected-index="
           i &&
