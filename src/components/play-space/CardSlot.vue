@@ -181,6 +181,7 @@ const cardDef = computed({
             type="number"
             class="max-w-[min(3vh,3vw)] bg-black text-center"
             @click.stop
+            @pointerdown.stop
             @keyup.enter.stop="($event.target as HTMLInputElement).blur()"
             :class="
               topCard.newAttack && topCard.atk
@@ -199,6 +200,7 @@ const cardDef = computed({
             type="number"
             class="max-w-[min(3vh,3vw)] bg-black text-center"
             @click.stop
+            @pointerdown.stop
             @keyup.enter.stop="($event.target as HTMLInputElement).blur()"
             :class="
               topCard.newDefence && topCard.def
@@ -213,8 +215,10 @@ const cardDef = computed({
         </div>
       </div>
 
-      <div class="absolute top-0 z-[130] h-full w-full opacity-0 hover:opacity-100">
-        <div v-if="controls" class="absolute top-0 right-0 flex w-min gap-1">
+      <div
+        class="pointer-events-none absolute top-0 z-[130] h-full w-full opacity-0 hover:opacity-100"
+      >
+        <div v-if="controls" class="pointer-events-auto absolute top-0 right-0 flex w-min gap-1">
           <icon-button :scale="0.6" title="Remove counter" @click.stop="emit('increment', -1)"> remove </icon-button>
           <icon-button :scale="0.6" title="Add counter" @click.stop="emit('increment', 1)"> add </icon-button>
         </div>
@@ -226,7 +230,7 @@ const cardDef = computed({
         >
           {{ hint }}
         </p>
-        <div v-if="actions" class="absolute bottom-0 flex w-full justify-center gap-2">
+        <div v-if="actions" class="pointer-events-auto absolute bottom-0 flex w-full justify-center gap-2">
           <icon-button
             v-for="action in actions"
             :key="action"

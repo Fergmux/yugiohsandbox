@@ -1,11 +1,11 @@
 import type { Ref } from 'vue'
 import { ref } from 'vue'
 
-import { defineStore } from 'pinia'
 import { doc, onSnapshot } from 'firebase/firestore'
+import { defineStore } from 'pinia'
 
 import { db } from '@/firebase/client'
-import type { Friend, Invite, User } from '@/types/user'
+import type { Invite, User } from '@/types/user'
 import { useStorage } from '@vueuse/core'
 
 export const useUserStore = defineStore('user', () => {
@@ -129,5 +129,16 @@ export const useUserStore = defineStore('user', () => {
     if (response.status !== 200) throw new Error(result.message)
   }
 
-  return { user, loadingUser, addUser, getUser, loginExisting, updateUsername, sendInvite, acceptInvite, declineInvite, removeFriend }
+  return {
+    user,
+    loadingUser,
+    addUser,
+    getUser,
+    loginExisting,
+    updateUsername,
+    sendInvite,
+    acceptInvite,
+    declineInvite,
+    removeFriend,
+  }
 })

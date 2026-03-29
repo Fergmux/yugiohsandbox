@@ -154,7 +154,12 @@ const moveCard = (
   index?: number,
   options?: { faceDown?: boolean; defence?: boolean; attached?: string },
 ): GameEdit[] => {
-  emit('useActionPoint')
+  if (
+    selectedCardLocation.value === 'hand' &&
+    (destination === 'field' || destination === 'zones')
+  ) {
+    emit('useActionPoint')
+  }
   return _moveCard(destination, index, options)
 }
 
@@ -703,48 +708,42 @@ const attachedSelectedIndex = (parentUid?: string) =>
           @update="updateLifePoints($event, opponentPlayerKey)"
         />
 
-        <!-- Extra monster zones -->
+        <!-- Extra monster zone (left) / Tokens / Extra monster zone (right) -->
         <card-slot
-          v-for="zoneIndex in [0, 1]"
-          :key="`extra-zone-${zoneIndex}`"
-          :card="extraZones[zoneIndex]"
-          :cards="extraZoneCards(zoneIndex)"
+          :card="extraZones[0]"
+          :cards="extraZoneCards(0)"
           name="Extra Monster Zone"
           class="bg-blue-800"
-          :selected="isSelected('zones', zoneIndex)"
-          :selected-index="attachedSelectedIndex(extraZones[zoneIndex]?.uid)"
-          :actions="isInteractive && zoneIsFree(zoneIndex) ? getActions('zones', zoneIndex) : []"
+          :selected="isSelected('zones', 0)"
+          :selected-index="attachedSelectedIndex(extraZones[0]?.uid)"
+          :actions="isInteractive && zoneIsFree(0) ? getActions('zones', 0) : []"
           :hint="
-            (viewer || zoneIsFree(zoneIndex)) && extraZones[zoneIndex]?.faceDown
-              ? extraZones[zoneIndex]?.name
-              : undefined
+            (viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined
           "
-          :controls="!!getCard('zones', zoneIndex)"
-          :counters="extraZones[zoneIndex]?.counters"
-          :opponent-selected="isOpponentSelected('zones', zoneIndex) || isMyOpponentSelected('zones', zoneIndex)"
+          :controls="!!getCard('zones', 0)"
+          :counters="extraZones[0]?.counters"
+          :opponent-selected="isOpponentSelected('zones', 0) || isMyOpponentSelected('zones', 0)"
           :rotate
-          :drop-zone="isInteractive && zoneIsFree(zoneIndex) ? 'zones' : undefined"
-          :drop-index="isInteractive && zoneIsFree(zoneIndex) ? zoneIndex : undefined"
+          :drop-zone="isInteractive && zoneIsFree(0) ? 'zones' : undefined"
+          :drop-index="isInteractive && zoneIsFree(0) ? 0 : undefined"
           @click="
             isInteractive
-              ? zoneIsFree(zoneIndex) && handleFieldClick(zoneIndex, 'zones')
-              : handleOpponentCardClick('zones', zoneIndex)
+              ? zoneIsFree(0) && handleFieldClick(0, 'zones')
+              : handleOpponentCardClick('zones', 0)
           "
           @click.right.prevent="
-            (!extraZones[zoneIndex]?.faceDown || zoneIsFree(zoneIndex) || viewer) &&
-            inspectCard(extraZones[zoneIndex], 'zones')
+            (!extraZones[0]?.faceDown || zoneIsFree(0) || viewer) && inspectCard(extraZones[0], 'zones')
           "
-          @action="(evt) => isInteractive && handleAction(evt, 'zones', zoneIndex)"
-          @increment="(evt) => isInteractive && handleIncrement(evt, 'zones', zoneIndex)"
+          @action="(evt) => isInteractive && handleAction(evt, 'zones', 0)"
+          @increment="(evt) => isInteractive && handleIncrement(evt, 'zones', 0)"
           @update="debouncedUpdateCardStats"
           @pointerdown="
             isInteractive &&
-            getCard('zones', zoneIndex) &&
-            startCardDrag(getCard('zones', zoneIndex)!, 'zones', zoneIndex, $event)
+            getCard('zones', 0) &&
+            startCardDrag(getCard('zones', 0)!, 'zones', 0, $event)
           "
         />
 
-        <!-- Tokens -->
         <card-slot
           name="Tokens"
           :cards="getCards('tokens')"
@@ -754,6 +753,41 @@ const attachedSelectedIndex = (parentUid?: string) =>
           :drop-zone="isInteractive ? 'tokens' : undefined"
           @click.right.prevent="canView && inspectCards('tokens')"
           @click.stop="isInteractive && (selectedCard ? logMoveCard('tokens') : drawCard('tokens'))"
+        />
+
+        <card-slot
+          :card="extraZones[1]"
+          :cards="extraZoneCards(1)"
+          name="Extra Monster Zone"
+          class="bg-blue-800"
+          :selected="isSelected('zones', 1)"
+          :selected-index="attachedSelectedIndex(extraZones[1]?.uid)"
+          :actions="isInteractive && zoneIsFree(1) ? getActions('zones', 1) : []"
+          :hint="
+            (viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined
+          "
+          :controls="!!getCard('zones', 1)"
+          :counters="extraZones[1]?.counters"
+          :opponent-selected="isOpponentSelected('zones', 1) || isMyOpponentSelected('zones', 1)"
+          :rotate
+          :drop-zone="isInteractive && zoneIsFree(1) ? 'zones' : undefined"
+          :drop-index="isInteractive && zoneIsFree(1) ? 1 : undefined"
+          @click="
+            isInteractive
+              ? zoneIsFree(1) && handleFieldClick(1, 'zones')
+              : handleOpponentCardClick('zones', 1)
+          "
+          @click.right.prevent="
+            (!extraZones[1]?.faceDown || zoneIsFree(1) || viewer) && inspectCard(extraZones[1], 'zones')
+          "
+          @action="(evt) => isInteractive && handleAction(evt, 'zones', 1)"
+          @increment="(evt) => isInteractive && handleIncrement(evt, 'zones', 1)"
+          @update="debouncedUpdateCardStats"
+          @pointerdown="
+            isInteractive &&
+            getCard('zones', 1) &&
+            startCardDrag(getCard('zones', 1)!, 'zones', 1, $event)
+          "
         />
 
         <!-- Player life points -->
