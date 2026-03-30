@@ -13,9 +13,9 @@ const route = useRoute()
 const inputRef = ref<HTMLInputElement>()
 const userStore = useUserStore()
 
-const { crawl, gameCode, gameId, joinUrl, joinGame, createGame, leaveGame, copy, getCrawls, deleteCrawl, loadCrawl } =
+const { crawl, player, gameCode, gameId, joinUrl, joinGame, createGame, leaveGame, copy, getCrawls, deleteCrawl, loadCrawl } =
   useCrawlManager()
-const { next, currentPageIndex } = usePageManager()
+const { currentPageIndex, moveBothToPage } = usePageManager()
 
 const pastCrawls = ref<(Crawl & { id: string })[]>([])
 const showInviteModal = ref(false)
@@ -28,6 +28,10 @@ function formatDate(iso: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
+}
+
+const startGame = async () => {
+  await moveBothToPage(1)
 }
 
 const tryJoinGame = async () => {
@@ -123,6 +127,13 @@ onMounted(async () => {
       </ul>
     </div>
 
+    <div v-else-if="gameId && !player" class="m-auto w-fit text-center">
+      <p class="text-lg font-semibold text-gray-400">Spectating</p>
+      <p class="text-lg">
+        Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
+      </p>
+      <p class="mt-2 text-gray-400">Waiting for players to start...</p>
+    </div>
     <div v-else-if="gameId" class="m-auto w-fit text-center">
       <p class="text-lg">
         Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
@@ -147,7 +158,7 @@ onMounted(async () => {
       <button
         v-if="crawl?.player2.id && crawl?.player1.id"
         class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
-        @click="next"
+        @click="startGame"
       >
         Start Game!
       </button>

@@ -89,8 +89,7 @@ Playground
 
 const {
   newDuel,
-  finishDuel,
-  winDuel,
+  winOpponentDuel,
   crawl,
   setSelectedOpponentCard,
   togglePowerUsed,
@@ -98,7 +97,7 @@ const {
   decrementActionPoint,
 } = useCrawlManager()
 
-const { next, endCrawl } = usePageManager()
+const { endCrawl, moveBothToPage } = usePageManager()
 
 const props = defineProps<{
   crawlPlayer?: 'player1' | 'player2' | null
@@ -171,7 +170,12 @@ onMounted(async () => {
     await joinGame()
   }
   if (props.crawlPlayer) {
-    if (!crawl.value.duelId) {
+    if (crawl.value.duelId) {
+      // Duel already exists — join it
+      await joinGame(crawl.value.duelId)
+      await setDeck(crawl.value[props.crawlPlayer].deck)
+    } else if (props.crawlPlayer === 'player1') {
+      // Only player1 creates the duel to avoid race conditions
       await createGame()
       if (gameId.value) {
         await newDuel(gameId.value)
@@ -180,9 +184,32 @@ onMounted(async () => {
       }
       await setDeck(crawl.value[props.crawlPlayer].deck)
     } else {
-      await joinGame(crawl.value.duelId)
-      await setDeck(crawl.value[props.crawlPlayer].deck)
+      // Player2 waits for player1 to create the duel
+      watch(
+        () => crawl.value.duelId,
+        async (newDuelId) => {
+          if (newDuelId && !gameId.value) {
+            await joinGame(newDuelId)
+            setDeck(crawl.value[props.crawlPlayer!].deck)
+          }
+        },
+        { immediate: true },
+      )
     }
+  } else if (props.crawlPlayer === null) {
+    // Crawl spectator: watch for duel changes and auto-join
+    watch(
+      () => crawl.value.duelId,
+      async (newDuelId) => {
+        if (newDuelId) {
+          if (gameId.value) leaveGame()
+          await joinGame(newDuelId)
+        } else if (gameId.value) {
+          leaveGame()
+        }
+      },
+      { immediate: true },
+    )
   }
 })
 
@@ -194,6 +221,7 @@ const joinUrl = computed(() => `${window.location.origin}/play/${gameCode.value}
 const viewDeck = ref(false)
 const viewShortcuts = ref(false)
 const powerDescription = ref<string | null>(null)
+const waitingForOpponent = ref(false)
 
 interface EditBatch {
   edits: GameEdit[]
@@ -248,23 +276,18 @@ const leaveGame = () => {
   unsubscribe()
 }
 
-const iWin = async () => {
-  await winDuel()
+const iWin = () => {
   leaveGame()
-  if (crawl.value[playerKey.value].wins >= 5) {
-    endCrawl()
-  } else {
-    next()
-  }
+  waitingForOpponent.value = true
 }
 
-const iLose = () => {
+const iLose = async () => {
+  const newWins = await winOpponentDuel()
   leaveGame()
-  finishDuel()
-  if (crawl.value[opponentKey.value].wins >= 5) {
-    endCrawl()
+  if (newWins && newWins >= 5) {
+    await endCrawl()
   } else {
-    next()
+    await moveBothToPage(3)
   }
 }
 
@@ -366,7 +389,7 @@ registerShortcut('Enter', () => {
 
 // Handle spacebar press to increment turn
 const handleKeyUp = (event: KeyboardEvent) => {
-  if (event.code === 'Space' && gameId.value) {
+  if (event.code === 'Space' && gameId.value && !isSpectator.value) {
     event.preventDefault()
     const newTurn = (turn.value + 1) % 12
     setTurn(newTurn)
@@ -517,7 +540,7 @@ const joinGame = async (id?: string) => {
       deckId.value = gameData.decks.player1 ?? undefined
     } else if (gameData.players.player2?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player2 ?? undefined
-    } else if (!gameData.players.player2) {
+    } else if (!gameData.players.player2 && props.crawlPlayer !== null) {
       await fetch('/.netlify/functions/update-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -562,11 +585,24 @@ const player = computed(() => {
   }
   return null
 })
+const isSpectator = computed(() => player.value === null)
 const playerKey: ComputedRef<'player1' | 'player2'> = computed(
   () => props.crawlPlayer ?? (player.value === 'player2' ? 'player2' : 'player1'),
 )
 const opponentKey: ComputedRef<'player1' | 'player2'> = computed(() => {
   return playerKey.value === 'player1' ? 'player2' : 'player1'
+})
+const playerDisplayName = computed(() => {
+  if (!isSpectator.value) return 'Your'
+  const name =
+    crawl.value?.[playerKey.value]?.name ?? gameState.value.players[playerKey.value]?.username
+  return name ? `${name}'s` : 'Player 1\'s'
+})
+const opponentDisplayName = computed(() => {
+  if (!isSpectator.value) return "Opponent's"
+  const name =
+    crawl.value?.[opponentKey.value]?.name ?? gameState.value.players[opponentKey.value]?.username
+  return name ? `${name}'s` : 'Player 2\'s'
 })
 const { celebrate } = useConfetti()
 watch(
@@ -682,8 +718,16 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+  <!-- WAITING FOR OPPONENT (after clicking I Win) -->
+  <div v-if="waitingForOpponent" class="m-auto flex w-max flex-col items-center">
+    <p class="text-lg text-gray-400">Waiting for opponent to confirm result...</p>
+  </div>
+  <!-- SPECTATOR WAITING (crawl spectator between duels) -->
+  <div v-else-if="!gameId && props.crawlPlayer === null" class="m-auto flex w-max flex-col items-center">
+    <p class="text-lg text-gray-400">Spectating — waiting for next duel to start...</p>
+  </div>
   <!-- JOIN/CREATE GAME -->
-  <div v-if="!gameId" class="m-auto flex w-max flex-col items-center">
+  <div v-else-if="!gameId" class="m-auto flex w-max flex-col items-center">
     <div>
       <input
         v-model="gameCode"
@@ -705,7 +749,7 @@ onUnmounted(() => {
   <div v-else class="m-auto w-fit text-center">
     <template v-if="props.crawlPlayer">
       <p class="text-lg">
-        Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
+        Room code: <span class="text-lg font-bold">{{ crawl.code }}</span>
       </p>
       <p class="text-lg">
         Round: <span class="text-lg font-bold">{{ crawl.round }}</span>
@@ -738,6 +782,29 @@ onUnmounted(() => {
         View shortcuts
       </button>
     </template>
+    <template v-else-if="props.crawlPlayer === null">
+      <p class="text-lg font-semibold text-gray-400">Spectating</p>
+      <p class="text-lg">
+        Room code: <span class="text-lg font-bold">{{ crawl.code }}</span>
+      </p>
+      <p class="text-lg">
+        Round: <span class="text-lg font-bold">{{ crawl.round }}</span>
+      </p>
+      <p class="text-lg">Score</p>
+      <p class="text-lg">
+        {{ crawl.player1.name ?? 'Player 1' }}: <span class="font-bold">{{ crawl.player1.wins ?? 0 }}</span> -
+        {{ crawl.player2.name ?? 'Player 2' }}: <span class="font-bold">{{ crawl.player2.wins ?? 0 }}</span>
+      </p>
+    </template>
+    <template v-else-if="isSpectator">
+      <p class="text-lg font-semibold text-gray-400">Spectating</p>
+      <p class="text-lg">
+        Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
+      </p>
+      <button @click="leaveGame" class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
+        Leave Game
+      </button>
+    </template>
     <template v-else>
       <p class="text-lg">
         Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
@@ -760,10 +827,10 @@ onUnmounted(() => {
     </template>
 
     <br />
-    <coin-flip ref="coinRef" class="mx-auto mt-2" @flip="flipCoin" />
+    <coin-flip v-if="!isSpectator" ref="coinRef" class="mx-auto mt-2" @flip="flipCoin" />
     <template v-if="props.crawlPlayer && crawl[opponentKey].powers.length">
       <p class="mx-auto my-4 max-w-full text-center break-words">
-        {{ powerDescription ? powerDescription : "Opponent's powers" }}
+        {{ powerDescription ? powerDescription : `${opponentDisplayName} powers` }}
       </p>
       <div class="mx-auto mt-4 flex w-max gap-4">
         <div
@@ -782,7 +849,7 @@ onUnmounted(() => {
 
   <!-- PICK DECK -->
   <div
-    v-if="gameId && !gameState.decks[playerKey]"
+    v-if="gameId && !isSpectator && !gameState.decks[playerKey]"
     class="m-4 mx-auto mt-8 flex w-max min-w-80 flex-col items-start rounded-md border-1 border-gray-300 p-4 active:bg-gray-600"
   >
     <h3 class="mx-auto text-2xl">Pick your deck</h3>
@@ -805,17 +872,50 @@ onUnmounted(() => {
   <!-- WHOLE PLAYSPACE -->
   <div v-if="gameId && (deckId || player === null)" class="mt-40 mb-80 flex h-screen items-center justify-center gap-2">
     <div class="flex flex-col items-end gap-2 text-[min(1vh,1vw)] font-bold text-white">
-      <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn < 6 }" @click="setTurn(0)">
-        {{ playerKey === 'player2' ? 'Your turn' : "Opponent's turn" }}
+      <p
+        :class="[{ 'bg-yellow-500': turn < 6 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(0)"
+      >
+        {{ playerKey === 'player2' ? `${playerDisplayName} turn` : `${opponentDisplayName} turn` }}
       </p>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 0 }" @click="setTurn(0)">Draw phase</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 1 }" @click="setTurn(1)">Standby phase</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 2 }" @click="setTurn(2)">Main phase 1</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 3 }" @click="setTurn(3)">Battle phase</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 4 }" @click="setTurn(4)">Main phase 2</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 5 }" @click="setTurn(5)">End phase</div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 0 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(0)"
+      >
+        Draw phase
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 1 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(1)"
+      >
+        Standby phase
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 2 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(2)"
+      >
+        Main phase 1
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 3 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(3)"
+      >
+        Battle phase
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 4 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(4)"
+      >
+        Main phase 2
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 5 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(5)"
+      >
+        End phase
+      </div>
       <div class="mt-8 max-w-40 text-center text-lg font-semibold text-gray-300">
-        <p>Opponent's action points</p>
+        <p>{{ opponentDisplayName }} action points</p>
         <p class="font-bold text-yellow-500">{{ `${opponentActionPoints}/2` }}</p>
       </div>
     </div>
@@ -827,8 +927,9 @@ onUnmounted(() => {
         v-if="gameId"
         :game-state="gameState"
         :player="playerKey === 'player2' ? 'player1' : 'player2'"
-        :viewer="player === null"
-        :crawl="props.crawlPlayer !== null"
+        :viewer="isSpectator"
+        :crawl="props.crawlPlayer !== undefined"
+        :rotate="true"
         :my-selected-opponent-card="mySelectedOpponentCard"
         @edit="handleEdit"
         @select-opponent-card="handleOpponentCardSelect"
@@ -840,9 +941,9 @@ onUnmounted(() => {
         v-if="gameId"
         :game-state="gameState"
         :player="playerKey"
-        :interactive="player !== null"
-        :viewer="player === null"
-        :crawl="props.crawlPlayer !== null"
+        :interactive="!isSpectator"
+        :viewer="isSpectator"
+        :crawl="props.crawlPlayer !== undefined"
         :opponent-selected-card="opponentSelectedMyCard"
         @edit="handleEdit"
         @card-selected="clearOpponentSelection"
@@ -865,22 +966,55 @@ onUnmounted(() => {
           </div>
         </div>
         <p class="mx-auto mt-4 mb-4 max-w-full text-center break-words">
-          {{ powerDescription ? powerDescription : 'Your powers' }}
+          {{ powerDescription ? powerDescription : `${playerDisplayName} powers` }}
         </p>
       </template>
     </div>
     <div class="flex flex-col gap-2 text-[min(1vh,1vw)] font-bold text-white">
-      <p class="cursor-pointer" :class="{ 'bg-yellow-500': turn >= 6 }" @click="setTurn(6)">
-        {{ playerKey === 'player2' ? "Opponent's turn" : 'Your turn' }}
+      <p
+        :class="[{ 'bg-yellow-500': turn >= 6 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(6)"
+      >
+        {{ playerKey === 'player2' ? `${opponentDisplayName} turn` : `${playerDisplayName} turn` }}
       </p>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 6 }" @click="setTurn(6)">Draw phase</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 7 }" @click="setTurn(7)">Standby phase</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 8 }" @click="setTurn(8)">Main phase 1</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 9 }" @click="setTurn(9)">Battle phase</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 10 }" @click="setTurn(10)">Main phase 2</div>
-      <div class="cursor-pointer" :class="{ 'bg-yellow-500': turn === 11 }" @click="setTurn(11)">End phase</div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 6 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(6)"
+      >
+        Draw phase
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 7 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(7)"
+      >
+        Standby phase
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 8 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(8)"
+      >
+        Main phase 1
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 9 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(9)"
+      >
+        Battle phase
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 10 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(10)"
+      >
+        Main phase 2
+      </div>
+      <div
+        :class="[{ 'bg-yellow-500': turn === 11 }, isSpectator ? '' : 'cursor-pointer']"
+        @click="!isSpectator && setTurn(11)"
+      >
+        End phase
+      </div>
       <div class="mt-8 max-w-40 text-center text-lg font-semibold text-gray-300">
-        <p>Your action points</p>
+        <p>{{ playerDisplayName }} action points</p>
         <p class="font-bold text-yellow-500">{{ `${actionPoints}/2` }}</p>
       </div>
     </div>

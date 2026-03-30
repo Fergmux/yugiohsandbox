@@ -15,7 +15,7 @@ import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
 const { next } = usePageManager()
-const { powers, deck, removeCardFromDeck, addPowerToUser, removePowerFromUser, addCardToDeck } = useCrawlManager()
+const { player, powers, deck, removeCardFromDeck, addPowerToUser, removePowerFromUser, addCardToDeck } = useCrawlManager()
 const deckStore = useDeckStore()
 const { allCards } = storeToRefs(deckStore)
 const { getAllCards } = deckStore
@@ -106,7 +106,10 @@ const closeInspect = () => {
 </script>
 
 <template>
-  <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
+  <div v-if="!player" class="mt-20 text-center">
+    <p class="text-xl text-gray-400">Players are selecting their rewards...</p>
+  </div>
+  <div v-else class="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
     <div class="text-center">
       <h1 class="text-2xl font-bold">Rewards</h1>
       <p class="mt-2 text-sm text-gray-500">Choose your rewards</p>

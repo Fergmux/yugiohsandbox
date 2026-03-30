@@ -30,9 +30,11 @@ const selectedCard = ref<YugiohCard | null>(null)
 const selectedDeckId = ref<string | undefined>(undefined)
 
 onMounted(async () => {
-  await getAdminDecks()
-  await getDecks()
-  await getAllCards()
+  if (player.value) {
+    await getAdminDecks()
+    await getDecks()
+    await getAllCards()
+  }
 })
 
 const selectedDeck = computed(() => starterDecks.value.find((deck) => deck.id === selectedDeckId.value))
@@ -53,7 +55,10 @@ const confirm = async () => {
 </script>
 
 <template>
-  <div>
+  <div v-if="!player" class="mt-20 text-center">
+    <p class="text-xl text-gray-400">Players are selecting their decks...</p>
+  </div>
+  <div v-else>
     <div class="mx-auto flex w-max flex-wrap gap-2">
       <div
         v-for="deck in starterDecks"

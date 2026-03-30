@@ -26,6 +26,7 @@ const props = defineProps<{
   gameState: GameState
   player: Player
   interactive?: boolean
+  rotate?: boolean
   viewer?: boolean
   crawl?: boolean
   opponentSelectedCard?: CardSelection
@@ -44,7 +45,7 @@ const emit = defineEmits<{
 const isInteractive = computed(() => props.interactive || undefined)
 const canView = computed(() => isInteractive.value || props.viewer || undefined)
 const isCrawl = computed(() => !!props.crawl)
-const rotate = computed(() => !isInteractive.value)
+const rotate = computed(() => props.rotate)
 
 const gameState = computed(() => props.gameState)
 const playerKey = computed(() => props.player)
@@ -224,6 +225,7 @@ const drawFromInspected = (destination: keyof BoardSide, index: number, faceDown
 }
 
 const revealCard = () => {
+  if (props.viewer) return
   sendEdit([], `revealed a card in ${zoneName(inspectedCardsLocation.value)}`)
 }
 

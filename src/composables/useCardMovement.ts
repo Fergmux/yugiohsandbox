@@ -121,9 +121,10 @@ export function useCardMovement({
     const card = getCard(selectedCardLocation.value, selectedCardIndex.value)
     if (!card) return []
 
-    // Token movement restrictions
+    // Movement restrictions
     if (destination === 'tokens' && card.type !== 'Token') return []
     if (card.type === 'Token' && !['tokens', 'field', 'hand'].includes(destination)) return []
+    if (selectedCardLocation.value === 'hand' && destination === 'hand') return []
 
     const edits: GameEdit[] = []
     const fromLocation = selectedCardLocation.value as keyof BoardSide

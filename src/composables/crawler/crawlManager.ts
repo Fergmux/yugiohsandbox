@@ -126,14 +126,23 @@ export const useCrawlManager = () => {
     const gameData = await response.json()
     gameId.value = gameData.id
     subscribe()
-    await sendUpdate({
-      player2: {
-        id: userStore.user?.id ?? null,
-        name: userStore.user?.username ?? null,
-        deck: [],
-        powers: [],
-      },
-    })
+
+    const userId = userStore.user?.id
+    const isPlayer1 = gameData.player1?.id === userId
+    const isPlayer2 = gameData.player2?.id === userId
+    const player2Empty = !gameData.player2?.id
+
+    // Only assign as player2 if not already a player and the slot is open
+    if (!isPlayer1 && !isPlayer2 && player2Empty) {
+      await sendUpdate({
+        player2: {
+          id: userStore.user?.id ?? null,
+          name: userStore.user?.username ?? null,
+          deck: [],
+          powers: [],
+        },
+      })
+    }
   }
 
   const subscribe = () => {
@@ -213,6 +222,26 @@ export const useCrawlManager = () => {
       unmarkPending(winsKey)
       unmarkPending('duelId')
     }
+  }
+
+  const winOpponentDuel = async () => {
+    if (!player.value) return
+    const opp = player.value === 'player1' ? 'player2' : 'player1'
+    const newWins = (crawl.value[opp].wins ?? 0) + 1
+    crawl.value.duelId = null
+    markPending('duelId')
+    try {
+      await sendUpdate({ [`${opp}.wins`]: newWins, duelId: null })
+    } finally {
+      unmarkPending('duelId')
+    }
+    return newWins
+  }
+
+  const setBothPages = async (page: number) => {
+    crawl.value.player1.page = page
+    crawl.value.player2.page = page
+    await sendUpdate({ 'player1.page': page, 'player2.page': page })
   }
 
   const addPowerToUser = async (power: Power) => {
@@ -393,6 +422,8 @@ export const useCrawlManager = () => {
     newDuel,
     finishDuel,
     winDuel,
+    winOpponentDuel,
+    setBothPages,
     addPowerToUser,
     removePowerFromUser,
     togglePowerUsed,
