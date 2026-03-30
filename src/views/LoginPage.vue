@@ -114,6 +114,16 @@ const onClaimAccount = async () => {
   }
 }
 
+const onClaimWithGoogle = async () => {
+  errorMessage.value = ''
+  try {
+    await userStore.claimAccountWithGoogle(username.value)
+    await navigateAfterAuth()
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err)
+  }
+}
+
 const onGoogleSignIn = async () => {
   errorMessage.value = ''
   try {
@@ -271,7 +281,7 @@ const switchMode = (newMode: Mode) => {
         <h2 class="text-xl font-semibold">Claim Account</h2>
 
         <template v-if="claimStep === 'username'">
-          <p class="text-center text-sm text-gray-400">Enter your existing username to link it with a new email and password.</p>
+          <p class="text-center text-sm text-gray-400">Enter your existing username to link it with a new account.</p>
           <input
             ref="inputRef"
             type="text"
@@ -292,8 +302,19 @@ const switchMode = (newMode: Mode) => {
         <template v-else>
           <p class="text-center text-sm text-green-400">
             Account found for <strong>{{ username }}</strong
-            >. Set your email and password below.
+            >. Choose how to claim your account.
           </p>
+          <button
+            @click="onClaimWithGoogle"
+            class="w-2/3 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+          >
+            Claim with Google
+          </button>
+          <div class="w-full flex items-center gap-3">
+            <div class="h-px flex-1 bg-gray-300" />
+            <span class="text-sm text-gray-400">or</span>
+            <div class="h-px flex-1 bg-gray-300" />
+          </div>
           <input
             type="email"
             v-model="email"
@@ -318,7 +339,7 @@ const switchMode = (newMode: Mode) => {
             @click="onClaimAccount"
             class="w-2/3 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600 disabled:cursor-not-allowed disabled:bg-transparent disabled:opacity-50"
           >
-            Claim Account
+            Claim with Email
           </button>
         </template>
 

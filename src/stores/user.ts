@@ -73,14 +73,34 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const claimAccount = async (username: string, email: string, password: string) => {
-    // First verify the username exists and is unclaimed (unauthenticated check)
-    const checkResponse = await fetch(`/.netlify/functions/get-user/${username}`)
-    const checkData = await checkResponse.json()
-    if (checkResponse.status !== 200) throw new Error(checkData.message)
-    if (checkData.firebaseUid) throw new Error('This account has already been claimed')
-
     // Create Firebase Auth account
     await createUserWithEmailAndPassword(auth, email, password)
+
+    try {
+      // Link to existing Firestore doc
+      const response = await authFetch('/.netlify/functions/claim-account', {
+        method: 'POST',
+        body: JSON.stringify({ username, email }),
+      })
+      const userData: User | { message: string } = await response.json()
+      if (response.status !== 200) throw new Error((userData as { message: string }).message)
+      user.value = userData as User
+      subscribe(user.value.id)
+    } catch (err) {
+      // If claim fails, clean up the Firebase Auth account
+      if (auth.currentUser) await auth.currentUser.delete()
+      throw err
+    }
+
+    // Clean up old localStorage username
+    localStorage.removeItem('username')
+  }
+
+  const claimAccountWithGoogle = async (username: string) => {
+    // Sign in with Google
+    const provider = new GoogleAuthProvider()
+    await signInWithPopup(auth, provider)
+    const email = auth.currentUser?.email || ''
 
     try {
       // Link to existing Firestore doc
@@ -242,6 +262,7 @@ export const useUserStore = defineStore('user', () => {
     needsUsername,
     logout,
     claimAccount,
+    claimAccountWithGoogle,
     initAuth,
     checkUsername,
     updateUsername,
