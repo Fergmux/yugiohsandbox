@@ -89,15 +89,23 @@ Playground
 
 const {
   newDuel,
+  winDuel,
   winOpponentDuel,
   crawl,
   setSelectedOpponentCard,
   togglePowerUsed,
   setActionPoints,
   decrementActionPoint,
+  leaveGame: leaveCrawl,
 } = useCrawlManager()
+const modifiers = computed(() => ({
+  drawCount: crawl.value.modifiers?.drawCount ?? 4,
+  rewards: crawl.value.modifiers?.rewards ?? 3,
+  actionPoints: crawl.value.modifiers?.actionPoints ?? 2,
+  totalDuels: crawl.value.modifiers?.totalDuels ?? 11,
+}))
 
-const { endCrawl, moveBothToPage } = usePageManager()
+const { endCrawl, moveBothToPage, reset: resetPage } = usePageManager()
 
 const props = defineProps<{
   crawlPlayer?: 'player1' | 'player2' | null
@@ -157,8 +165,8 @@ const userStore = useUserStore()
 const route = useRoute()
 
 const inputRef = ref<HTMLInputElement>()
-const actionPoints = computed(() => crawl.value[playerKey.value].actionPoints ?? 2)
-const opponentActionPoints = computed(() => crawl.value[opponentKey.value].actionPoints ?? 2)
+const actionPoints = computed(() => crawl.value[playerKey.value].actionPoints ?? modifiers.value.actionPoints)
+const opponentActionPoints = computed(() => crawl.value[opponentKey.value].actionPoints ?? modifiers.value.actionPoints)
 
 // Fetch all Yu-Gi-Oh! cards and decks on component mount
 onMounted(async () => {
@@ -202,10 +210,10 @@ onMounted(async () => {
       () => crawl.value.duelId,
       async (newDuelId) => {
         if (newDuelId) {
-          if (gameId.value) leaveGame()
+          if (gameId.value) leaveDuel()
           await joinGame(newDuelId)
         } else if (gameId.value) {
-          leaveGame()
+          leaveDuel()
         }
       },
       { immediate: true },
@@ -221,7 +229,6 @@ const joinUrl = computed(() => `${window.location.origin}/play/${gameCode.value}
 const viewDeck = ref(false)
 const viewShortcuts = ref(false)
 const powerDescription = ref<string | null>(null)
-const waitingForOpponent = ref(false)
 
 interface EditBatch {
   edits: GameEdit[]
@@ -265,7 +272,7 @@ const createGame = async () => {
   subscribe()
 }
 
-const leaveGame = () => {
+const leaveDuel = () => {
   gameId.value = undefined
   gameCode.value = undefined
   deckId.value = undefined
@@ -276,15 +283,31 @@ const leaveGame = () => {
   unsubscribe()
 }
 
-const iWin = () => {
-  leaveGame()
-  waitingForOpponent.value = true
+const leaveGame = () => {
+  leaveDuel()
+  leaveCrawl()
+  resetPage()
+}
+
+const winOrLoseClicked = ref(false)
+const iWin = async () => {
+  if (winOrLoseClicked.value) return
+  winOrLoseClicked.value = true
+  const newWins = await winDuel()
+  leaveDuel()
+  if (newWins && newWins >= modifiers.value.totalDuels / 2) {
+    await endCrawl()
+  } else {
+    await moveBothToPage(3)
+  }
 }
 
 const iLose = async () => {
+  if (winOrLoseClicked.value) return
+  winOrLoseClicked.value = true
   const newWins = await winOpponentDuel()
-  leaveGame()
-  if (newWins && newWins >= 5) {
+  leaveDuel()
+  if (newWins && newWins >= modifiers.value.totalDuels / 2) {
     await endCrawl()
   } else {
     await moveBothToPage(3)
@@ -331,7 +354,7 @@ const { registerShortcut } = useFieldShortcuts()
 registerShortcut('Enter', () => {
   if (!gameId.value || !props.crawlPlayer) return
 
-  void setActionPoints(2)
+  void setActionPoints(modifiers.value.actionPoints)
 
   const playerCards = gameState.value.cards[playerKey.value]
   const steps: GameEdit[][] = []
@@ -358,7 +381,7 @@ registerShortcut('Enter', () => {
   let deck = [...playerCards.deck]
   let drawn = 0
 
-  while (drawn < 4) {
+  while (drawn < modifiers.value.drawCount) {
     if (deck.length === 0) {
       if (!graveyard.length) break
       const shuffled = [...graveyard].sort(() => Math.random() - 0.5).map((c) => ({ ...c, faceDown: true }))
@@ -594,15 +617,13 @@ const opponentKey: ComputedRef<'player1' | 'player2'> = computed(() => {
 })
 const playerDisplayName = computed(() => {
   if (!isSpectator.value) return 'Your'
-  const name =
-    crawl.value?.[playerKey.value]?.name ?? gameState.value.players[playerKey.value]?.username
-  return name ? `${name}'s` : 'Player 1\'s'
+  const name = crawl.value?.[playerKey.value]?.name ?? gameState.value.players[playerKey.value]?.username
+  return name ? `${name}'s` : "Player 1's"
 })
 const opponentDisplayName = computed(() => {
   if (!isSpectator.value) return "Opponent's"
-  const name =
-    crawl.value?.[opponentKey.value]?.name ?? gameState.value.players[opponentKey.value]?.username
-  return name ? `${name}'s` : 'Player 2\'s'
+  const name = crawl.value?.[opponentKey.value]?.name ?? gameState.value.players[opponentKey.value]?.username
+  return name ? `${name}'s` : "Player 2's"
 })
 const { celebrate } = useConfetti()
 watch(
@@ -718,12 +739,8 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-  <!-- WAITING FOR OPPONENT (after clicking I Win) -->
-  <div v-if="waitingForOpponent" class="m-auto flex w-max flex-col items-center">
-    <p class="text-lg text-gray-400">Waiting for opponent to confirm result...</p>
-  </div>
   <!-- SPECTATOR WAITING (crawl spectator between duels) -->
-  <div v-else-if="!gameId && props.crawlPlayer === null" class="m-auto flex w-max flex-col items-center">
+  <div v-if="!gameId && props.crawlPlayer === null" class="m-auto flex w-max flex-col items-center">
     <p class="text-lg text-gray-400">Spectating — waiting for next duel to start...</p>
   </div>
   <!-- JOIN/CREATE GAME -->
@@ -759,12 +776,19 @@ onUnmounted(() => {
         You: <span class="font-bold">{{ crawl[playerKey].wins ?? 0 }}</span> - {{ crawl[opponentKey].name }}:
         <span class="font-bold">{{ crawl[opponentKey].wins ?? 0 }}</span>
       </p>
-      <button @click="iWin" class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
+      <button
+        v-if="gameState.lifePoints[opponentKey] <= 0"
+        :disabled="winOrLoseClicked"
+        @click="iWin"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
+      >
         I Win
       </button>
       <button
+        v-if="gameState.lifePoints[playerKey] <= 0"
+        :disabled="winOrLoseClicked"
         @click="iLose"
-        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
+        class="mt-4 ml-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600 disabled:cursor-default disabled:opacity-50 disabled:active:bg-transparent"
       >
         I Lose
       </button>
@@ -916,7 +940,7 @@ onUnmounted(() => {
       </div>
       <div class="mt-8 max-w-40 text-center text-lg font-semibold text-gray-300">
         <p>{{ opponentDisplayName }} action points</p>
-        <p class="font-bold text-yellow-500">{{ `${opponentActionPoints}/2` }}</p>
+        <p class="font-bold text-yellow-500">{{ `${opponentActionPoints}/${modifiers.actionPoints}` }}</p>
       </div>
     </div>
     <!-- <div class="my-8 max-h-[min(90vw,90vh)] max-w-[min(90vw,90vh)] min-w-4xl basis-[100vw]"> -->
@@ -1015,7 +1039,7 @@ onUnmounted(() => {
       </div>
       <div class="mt-8 max-w-40 text-center text-lg font-semibold text-gray-300">
         <p>{{ playerDisplayName }} action points</p>
-        <p class="font-bold text-yellow-500">{{ `${actionPoints}/2` }}</p>
+        <p class="font-bold text-yellow-500">{{ `${actionPoints}/${modifiers.actionPoints}` }}</p>
       </div>
     </div>
 

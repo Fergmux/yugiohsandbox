@@ -14,6 +14,7 @@ export const usePageManager = createSharedComposable(() => {
 
   const isWaiting = computed(() => {
     if (!player.value) return false
+    if (currentPageIndex.value === 0) return false
     return crawl.value[player.value].page !== currentPageIndex.value
   })
 
@@ -64,6 +65,11 @@ export const usePageManager = createSharedComposable(() => {
     await moveBothToPage(4)
   }
 
+  const reset = () => {
+    currentPageIndex.value = 0
+    lockedPage.value = null
+  }
+
   return {
     pages,
     currentPage,
@@ -72,5 +78,6 @@ export const usePageManager = createSharedComposable(() => {
     next,
     moveBothToPage,
     endCrawl,
+    reset,
   }
 })

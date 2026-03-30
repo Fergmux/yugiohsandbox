@@ -64,6 +64,7 @@ const confirm = async () => {
         v-for="deck in starterDecks"
         :key="deck.id"
         class="cursor-pointer rounded-md border-1 border-gray-200 p-2"
+        :class="{ 'bg-neutral-400 font-semibold text-neutral-900': selectedDeckId === deck.id }"
         @click="selectedDeckId = deck.id"
       >
         <h3>{{ deck.name }}</h3>

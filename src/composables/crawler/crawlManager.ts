@@ -12,6 +12,12 @@ const defaultCrawl: Crawl = {
   round: 0,
   duelId: null,
   created: null,
+  modifiers: {
+    drawCount: 4,
+    rewards: 3,
+    actionPoints: 2,
+    totalDuels: 11,
+  },
   player1: {
     id: null,
     name: null,
@@ -124,7 +130,9 @@ export const useCrawlManager = () => {
     const response = await fetch(`/.netlify/functions/get-crawl-by-code/${code}`)
     if (!response.ok) throw new Error('Game not found')
     const gameData = await response.json()
-    gameId.value = gameData.id
+    const { id, ...crawlData } = gameData
+    gameId.value = id
+    crawl.value = crawlData
     subscribe()
 
     const userId = userStore.user?.id
@@ -140,6 +148,9 @@ export const useCrawlManager = () => {
           name: userStore.user?.username ?? null,
           deck: [],
           powers: [],
+          page: 0,
+          wins: 0,
+          actionPoints: crawl.value.modifiers?.actionPoints ?? 2,
         },
       })
     }
@@ -163,6 +174,7 @@ export const useCrawlManager = () => {
       if (!isPending('duelId')) crawl.value.duelId = remote.duelId
       if (!isPending('round')) crawl.value.round = remote.round
       if (!isPending('code')) crawl.value.code = remote.code
+      if (!isPending('modifiers')) crawl.value.modifiers = remote.modifiers
 
       if (!isPending(`${self}.deck`)) crawl.value[self].deck = [...remote[self].deck]
       if (!isPending(`${self}.powers`)) crawl.value[self].powers = [...remote[self].powers]
@@ -222,6 +234,7 @@ export const useCrawlManager = () => {
       unmarkPending(winsKey)
       unmarkPending('duelId')
     }
+    return newWins
   }
 
   const winOpponentDuel = async () => {
@@ -242,6 +255,22 @@ export const useCrawlManager = () => {
     crawl.value.player1.page = page
     crawl.value.player2.page = page
     await sendUpdate({ 'player1.page': page, 'player2.page': page })
+  }
+
+  const setBothActionPoints = async (value: number) => {
+    crawl.value.player1.actionPoints = value
+    crawl.value.player2.actionPoints = value
+    await sendUpdate({ 'player1.actionPoints': value, 'player2.actionPoints': value })
+  }
+
+  const updateModifiers = async (modifiers: Crawl['modifiers']) => {
+    crawl.value.modifiers = modifiers
+    markPending('modifiers')
+    try {
+      await sendUpdate({ modifiers })
+    } finally {
+      unmarkPending('modifiers')
+    }
   }
 
   const addPowerToUser = async (power: Power) => {
@@ -424,6 +453,8 @@ export const useCrawlManager = () => {
     winDuel,
     winOpponentDuel,
     setBothPages,
+    setBothActionPoints,
+    updateModifiers,
     addPowerToUser,
     removePowerFromUser,
     togglePowerUsed,

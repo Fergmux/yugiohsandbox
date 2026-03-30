@@ -13,14 +13,39 @@ const route = useRoute()
 const inputRef = ref<HTMLInputElement>()
 const userStore = useUserStore()
 
-const { crawl, player, gameCode, gameId, joinUrl, joinGame, createGame, leaveGame, copy, getCrawls, deleteCrawl, loadCrawl } =
-  useCrawlManager()
+const {
+  crawl,
+  player,
+  gameCode,
+  gameId,
+  joinUrl,
+  joinGame,
+  createGame,
+  leaveGame,
+  copy,
+  getCrawls,
+  deleteCrawl,
+  loadCrawl,
+  updateModifiers,
+  setBothActionPoints,
+} = useCrawlManager()
 const { currentPageIndex, moveBothToPage } = usePageManager()
 
 const pastCrawls = ref<(Crawl & { id: string })[]>([])
 const showInviteModal = ref(false)
 const localGameCode = ref<number | null>(null)
 const joinError = ref('')
+
+const localModifiers = ref({
+  drawCount: crawl.value?.modifiers?.drawCount ?? 4,
+  rewards: crawl.value?.modifiers?.rewards ?? 3,
+  actionPoints: crawl.value?.modifiers?.actionPoints ?? 2,
+  totalDuels: crawl.value?.modifiers?.totalDuels ?? 11,
+})
+
+const saveModifiers = () => {
+  updateModifiers({ ...localModifiers.value })
+}
 
 function formatDate(iso: string | null) {
   if (!iso) return '—'
@@ -30,7 +55,22 @@ function formatDate(iso: string | null) {
   })
 }
 
+const WIN_NAME_GREEN = 'text-green-400'
+const WIN_NAME_RED = 'text-red-400'
+const NAME_GRAY = 'text-gray-300'
+
+function pastCrawlPlayerNameClasses(crwl: Crawl & { id: string }) {
+  const isWinning = (playerKey: 'player1' | 'player2') => crwl[playerKey].wins > (crwl.modifiers?.totalDuels ?? 0) / 2
+
+  return {
+    player1: isWinning('player1') ? WIN_NAME_GREEN : isWinning('player2') ? WIN_NAME_RED : NAME_GRAY,
+    player2: isWinning('player2') ? WIN_NAME_GREEN : isWinning('player1') ? WIN_NAME_RED : NAME_GRAY,
+  }
+}
+
 const startGame = async () => {
+  await updateModifiers({ ...localModifiers.value })
+  await setBothActionPoints(localModifiers.value.actionPoints)
   await moveBothToPage(1)
 }
 
@@ -52,7 +92,7 @@ async function handleDeleteCrawl(id: string) {
 async function resumeCrawl(c: Crawl & { id: string }) {
   // Resolve player/page from the raw data before touching reactive state
   const myPlayer = c.player1.id === userStore.user?.id ? 'player1' : 'player2'
-  const myPage = c[myPlayer]?.page ?? 1
+  const myPage = c[myPlayer]?.page ?? 0
   loadCrawl(c)
   // Wait for the DOM update caused by gameId changing before triggering navigation,
   // otherwise the currentPage watcher fires (pre-flush) while NewGame.vue still has
@@ -113,8 +153,12 @@ onMounted(async () => {
           class="flex items-center justify-between rounded-md border border-gray-300 p-4 text-sm"
         >
           <div class="flex flex-1 cursor-pointer items-center gap-6 hover:opacity-70" @click="resumeCrawl(crwl)">
-            <span class="font-medium">{{ crwl.player1.name ?? '—' }} vs {{ crwl.player2.name ?? '—' }}</span>
-            <span class="text-gray-500">Round {{ crwl.round }}</span>
+            <span class="font-medium">
+              <span :class="pastCrawlPlayerNameClasses(crwl).player1">{{ crwl.player1.name ?? '—' }}</span>
+              vs
+              <span :class="pastCrawlPlayerNameClasses(crwl).player2">{{ crwl.player2.name ?? '—' }}</span>
+            </span>
+            <span class="text-gray-500">Round {{ crwl.round }}/{{ crwl.modifiers?.totalDuels }}</span>
             <span class="text-gray-400">{{ formatDate(crwl.created) }}</span>
           </div>
           <button
@@ -138,6 +182,57 @@ onMounted(async () => {
       <p class="text-lg">
         Room code: <span class="text-lg font-bold">{{ gameCode }}</span>
       </p>
+
+      <div class="mx-auto mt-6 w-full max-w-xs text-left">
+        <h3 class="mb-2 text-center text-sm font-semibold tracking-wide text-gray-500 uppercase">Modifiers</h3>
+        <div class="flex flex-col gap-2">
+          <label class="flex items-center justify-between text-sm">
+            <span>Draw Count</span>
+            <input
+              v-if="player === 'player1'"
+              v-model.number="localModifiers.drawCount"
+              type="number"
+              class="w-20 rounded-md border border-gray-300 p-1 text-center"
+              @change="saveModifiers"
+            />
+            <span v-else class="font-medium">{{ crawl?.modifiers?.drawCount }}</span>
+          </label>
+          <label class="flex items-center justify-between text-sm">
+            <span>Rewards</span>
+            <input
+              v-if="player === 'player1'"
+              v-model.number="localModifiers.rewards"
+              type="number"
+              class="w-20 rounded-md border border-gray-300 p-1 text-center"
+              @change="saveModifiers"
+            />
+            <span v-else class="font-medium">{{ crawl?.modifiers?.rewards }}</span>
+          </label>
+          <label class="flex items-center justify-between text-sm">
+            <span>Action Points</span>
+            <input
+              v-if="player === 'player1'"
+              v-model.number="localModifiers.actionPoints"
+              type="number"
+              class="w-20 rounded-md border border-gray-300 p-1 text-center"
+              @change="saveModifiers"
+            />
+            <span v-else class="font-medium">{{ crawl?.modifiers?.actionPoints }}</span>
+          </label>
+          <label class="flex items-center justify-between text-sm">
+            <span>Total Duels</span>
+            <input
+              v-if="player === 'player1'"
+              v-model.number="localModifiers.totalDuels"
+              type="number"
+              class="w-20 rounded-md border border-gray-300 p-1 text-center"
+              @change="saveModifiers"
+            />
+            <span v-else class="font-medium">{{ crawl?.modifiers?.totalDuels }}</span>
+          </label>
+        </div>
+      </div>
+
       <button @click="leaveGame" class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600">
         Leave Game
       </button>
@@ -156,12 +251,13 @@ onMounted(async () => {
 
       <br />
       <button
-        v-if="crawl?.player2.id && crawl?.player1.id"
+        v-if="player === 'player1' && crawl?.player2.id && crawl?.player1.id"
         class="mt-4 cursor-pointer rounded-md border-1 border-gray-300 p-2 active:bg-gray-600"
         @click="startGame"
       >
         Start Game!
       </button>
+      <p v-if="player === 'player2'" class="mt-4 text-gray-400">Waiting on other player...</p>
     </div>
     <invite-friends-modal
       v-if="showInviteModal && gameCode"

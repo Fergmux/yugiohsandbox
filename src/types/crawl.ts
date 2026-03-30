@@ -18,6 +18,12 @@ export interface Crawl {
   round: number
   duelId: string | null
   created: string | null
+  modifiers: {
+    drawCount: number
+    rewards: number
+    actionPoints: number
+    totalDuels: number
+  }
   player1: {
     id: string | null
     name: string | null

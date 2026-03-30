@@ -487,6 +487,15 @@ const handleDeckAction = (action: string) => {
   }
 }
 
+const handleDeckRightClick = () => {
+  if (props.viewer) {
+    revealDeck.value = true
+    inspectCards('deck')
+  } else {
+    inspectCards('deck')
+  }
+}
+
 const handleBanishedAction = (action: string) => {
   if (action === 'face-down' && selectedCard.value) {
     const logText = `banished ${cardName(selectedCard.value)} face down`
@@ -774,6 +783,7 @@ const attachedSelectedIndex = (parentUid?: string) =>
         <life-points
           ref="playerLpRef"
           :life-points="gameState.lifePoints[props.player]"
+          :interactive="isInteractive"
           reverse
           @update="updateLifePoints($event, props.player)"
         />
@@ -910,7 +920,7 @@ const attachedSelectedIndex = (parentUid?: string) =>
         :rotate
         :drop-zone="isInteractive ? 'deck' : undefined"
         @click.stop="isInteractive && drawCard('deck')"
-        @click.right.prevent="canView && inspectCards('deck')"
+        @click.right.prevent="canView && handleDeckRightClick()"
         @action="(evt) => isInteractive && handleDeckAction(evt)"
       />
     </div>

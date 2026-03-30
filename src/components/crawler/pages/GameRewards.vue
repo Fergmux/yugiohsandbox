@@ -15,7 +15,7 @@ import type { YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
 const { next } = usePageManager()
-const { player, powers, deck, removeCardFromDeck, addPowerToUser, removePowerFromUser, addCardToDeck } = useCrawlManager()
+const { player, powers, deck, crawl, removeCardFromDeck, addPowerToUser, removePowerFromUser, addCardToDeck } = useCrawlManager()
 const deckStore = useDeckStore()
 const { allCards } = storeToRefs(deckStore)
 const { getAllCards } = deckStore
@@ -31,7 +31,7 @@ const selectedCard = ref<YugiohCard | null>(null)
 const selectedReward = ref<string | null>(null)
 const selectedRewardDeck = ref<Deck | null>(null)
 const viewDeck = ref(false)
-const rewardPoints = ref(3)
+const rewardPoints = ref(crawl.value.modifiers?.rewards ?? 3)
 
 onMounted(async () => {
   await getPowers()
