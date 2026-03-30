@@ -11,7 +11,6 @@ const cardSelectedShortcuts = [
   { key: 'B', description: 'Send to banished zone' },
   { key: 'F', description: 'Place on field zone' },
   { key: 'P', description: 'Pass card to opponent' },
-  { key: 'Shift + Click', description: 'Send field card to graveyard' },
 ]
 
 const noCardSelectedShortcuts = [

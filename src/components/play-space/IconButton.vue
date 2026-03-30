@@ -21,7 +21,7 @@ withDefaults(
       <slot></slot>
     </span>
     <span
-      class="pointer-events-none absolute bottom-full left-1/2 z-[99999] mb-1 -translate-x-1/2 rounded bg-gray-900 px-1.5 py-0.5 text-[min(1vh,1vw)] whitespace-nowrap text-white opacity-0 transition-opacity delay-500 group-hover:opacity-100"
+      class="pointer-events-none absolute bottom-full left-1/2 z-[99999] mb-1 -translate-x-1/2 rounded bg-gray-900 px-1.5 py-0.5 text-[min(1vh,1vw)] whitespace-nowrap text-white opacity-0 transition-opacity delay-700 group-hover:opacity-100"
     >
       {{ title }}
     </span>

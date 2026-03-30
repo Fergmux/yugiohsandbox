@@ -8,6 +8,7 @@ defineExpose({ focus: () => inputRef.value?.focus() })
 const props = defineProps<{
   lifePoints: number
   reverse?: boolean
+  interactive?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -74,7 +75,8 @@ watch(
     >
     <div class="flex items-center">
       <button
-        class="h-[min(2vh,2vw)] w-[min(2vh,2vw)] cursor-pointer rounded-full border-1 border-gray-300 bg-red-600 text-center leading-1 text-black active:bg-red-300"
+        :disabled="!interactive"
+        class="h-[min(2vh,2vw)] w-[min(2vh,2vw)] cursor-pointer rounded-full border-1 border-gray-300 bg-red-600 text-center leading-1 text-black active:bg-red-300 disabled:cursor-default disabled:active:bg-red-600"
         @click="changeLifePoints(-1)"
       >
         -
@@ -85,10 +87,12 @@ watch(
         type="number"
         step="50"
         v-model="lifePointsInput"
+        :disabled="!interactive"
         @keyup.enter.stop="enterHandler($event.shiftKey)"
       />
       <button
-        class="h-[min(2vh,2vw)] w-[min(2vh,2vw)] cursor-pointer rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300"
+        :disabled="!interactive"
+        class="h-[min(2vh,2vw)] w-[min(2vh,2vw)] cursor-pointer rounded-full border-1 border-gray-300 bg-green-500 leading-1 text-black active:bg-green-300 disabled:cursor-default disabled:active:bg-green-500"
         @click="changeLifePoints(1)"
       >
         +

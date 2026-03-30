@@ -129,11 +129,12 @@ const cardDef = computed({
 
 <template>
   <div
-    class="relative aspect-square overflow-hidden border-1 border-gray-400 p-px"
+    class="group/slot relative aspect-square border-1 border-gray-400 p-px"
     :class="{ 'ring-2 ring-yellow-400 ring-inset': isDropHighlighted }"
     :data-drop-zone="dropZone"
     :data-drop-index="dropIndex"
   >
+    <div class="absolute inset-0 overflow-hidden">
     <div
       class="pointer-events-none absolute inset-0 z-0 bg-contain bg-center bg-no-repeat opacity-60 grayscale"
       :style="{ backgroundImage: `url('${getS3ImageUrl(0)}')` }"
@@ -215,31 +216,33 @@ const cardDef = computed({
         </div>
       </div>
 
-      <div
-        class="pointer-events-none absolute top-0 z-[130] h-full w-full opacity-0 hover:opacity-100"
-      >
-        <div v-if="controls" class="pointer-events-auto absolute top-0 right-0 flex w-min gap-1">
-          <icon-button :scale="0.6" title="Remove counter" @click.stop="emit('increment', -1)"> remove </icon-button>
-          <icon-button :scale="0.6" title="Add counter" @click.stop="emit('increment', 1)"> add </icon-button>
-        </div>
+    </div>
+    </div>
 
-        <p
-          v-if="hint"
-          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-200"
-          :class="{ 'rotate-180': rotate }"
+    <div
+      class="pointer-events-none absolute top-0 z-[130] h-full w-full opacity-0 group-hover/slot:opacity-100"
+    >
+      <div v-if="controls" class="pointer-events-auto absolute top-0 right-0 flex w-min gap-1">
+        <icon-button :scale="0.6" title="Remove counter" @click.stop="emit('increment', -1)"> remove </icon-button>
+        <icon-button :scale="0.6" title="Add counter" @click.stop="emit('increment', 1)"> add </icon-button>
+      </div>
+
+      <p
+        v-if="hint"
+        class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-200"
+        :class="{ 'rotate-180': rotate }"
+      >
+        {{ hint }}
+      </p>
+      <div v-if="actions" class="pointer-events-auto absolute bottom-0 flex w-full justify-center gap-2">
+        <icon-button
+          v-for="action in actions"
+          :key="action"
+          @click.stop="emit('action', action)"
+          :title="actionTitleMap[action]"
         >
-          {{ hint }}
-        </p>
-        <div v-if="actions" class="pointer-events-auto absolute bottom-0 flex w-full justify-center gap-2">
-          <icon-button
-            v-for="action in actions"
-            :key="action"
-            @click.stop="emit('action', action)"
-            :title="actionTitleMap[action]"
-          >
-            {{ actionIconMap[action] }}
-          </icon-button>
-        </div>
+          {{ actionIconMap[action] }}
+        </icon-button>
       </div>
     </div>
   </div>

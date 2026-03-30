@@ -154,10 +154,7 @@ const moveCard = (
   index?: number,
   options?: { faceDown?: boolean; defence?: boolean; attached?: string },
 ): GameEdit[] => {
-  if (
-    selectedCardLocation.value === 'hand' &&
-    (destination === 'field' || destination === 'zones')
-  ) {
+  if (selectedCardLocation.value === 'hand' && (destination === 'field' || destination === 'zones')) {
     emit('useActionPoint')
   }
   return _moveCard(destination, index, options)
@@ -515,8 +512,8 @@ const showToOpponent = (index: number) => {
   )
 }
 
-const giveToOpponent = (index: number) => {
-  const card = getCard('hand', index)
+const giveToOpponent = (location: CardLocation, index: number) => {
+  const card = getCard(location, index)
   if (!card) return
   sendEdit(
     [
@@ -525,7 +522,7 @@ const giveToOpponent = (index: number) => {
         fromPlayer: props.player,
         toPlayer: opponentPlayerKey.value,
         cardUid: card.uid,
-        fromLocation: 'hand',
+        fromLocation: location,
         toLocation: 'hand',
         cardData: { ...card, faceDown: false },
       },
@@ -573,10 +570,10 @@ registerShortcut('s', () => {
   if (!isInteractive.value || selectedCard.value) return
   handleDeckAction('search')
 })
-registerShortcut('G', () => {
-  if (!isInteractive.value || !selectedCard.value || selectedCardLocation.value !== 'hand') return
-  if (selectedCardIndex.value === undefined) return
-  giveToOpponent(selectedCardIndex.value)
+registerShortcut('p', () => {
+  if (!isInteractive.value || !selectedCard.value) return
+  if (selectedCardLocation.value === undefined || selectedCardIndex.value === undefined) return
+  giveToOpponent(selectedCardLocation.value, selectedCardIndex.value)
 })
 
 // Escape to deselect
@@ -705,6 +702,7 @@ const attachedSelectedIndex = (parentUid?: string) =>
         <life-points
           ref="opponentLpRef"
           :life-points="gameState.lifePoints[opponentPlayerKey]"
+          :interactive="isInteractive"
           @update="updateLifePoints($event, opponentPlayerKey)"
         />
 
@@ -717,31 +715,21 @@ const attachedSelectedIndex = (parentUid?: string) =>
           :selected="isSelected('zones', 0)"
           :selected-index="attachedSelectedIndex(extraZones[0]?.uid)"
           :actions="isInteractive && zoneIsFree(0) ? getActions('zones', 0) : []"
-          :hint="
-            (viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined
-          "
+          :hint="(viewer || zoneIsFree(0)) && extraZones[0]?.faceDown ? extraZones[0]?.name : undefined"
           :controls="!!getCard('zones', 0)"
           :counters="extraZones[0]?.counters"
           :opponent-selected="isOpponentSelected('zones', 0) || isMyOpponentSelected('zones', 0)"
           :rotate
           :drop-zone="isInteractive && zoneIsFree(0) ? 'zones' : undefined"
           :drop-index="isInteractive && zoneIsFree(0) ? 0 : undefined"
-          @click="
-            isInteractive
-              ? zoneIsFree(0) && handleFieldClick(0, 'zones')
-              : handleOpponentCardClick('zones', 0)
-          "
+          @click="isInteractive ? zoneIsFree(0) && handleFieldClick(0, 'zones') : handleOpponentCardClick('zones', 0)"
           @click.right.prevent="
             (!extraZones[0]?.faceDown || zoneIsFree(0) || viewer) && inspectCard(extraZones[0], 'zones')
           "
           @action="(evt) => isInteractive && handleAction(evt, 'zones', 0)"
           @increment="(evt) => isInteractive && handleIncrement(evt, 'zones', 0)"
           @update="debouncedUpdateCardStats"
-          @pointerdown="
-            isInteractive &&
-            getCard('zones', 0) &&
-            startCardDrag(getCard('zones', 0)!, 'zones', 0, $event)
-          "
+          @pointerdown="isInteractive && getCard('zones', 0) && startCardDrag(getCard('zones', 0)!, 'zones', 0, $event)"
         />
 
         <card-slot
@@ -763,31 +751,21 @@ const attachedSelectedIndex = (parentUid?: string) =>
           :selected="isSelected('zones', 1)"
           :selected-index="attachedSelectedIndex(extraZones[1]?.uid)"
           :actions="isInteractive && zoneIsFree(1) ? getActions('zones', 1) : []"
-          :hint="
-            (viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined
-          "
+          :hint="(viewer || zoneIsFree(1)) && extraZones[1]?.faceDown ? extraZones[1]?.name : undefined"
           :controls="!!getCard('zones', 1)"
           :counters="extraZones[1]?.counters"
           :opponent-selected="isOpponentSelected('zones', 1) || isMyOpponentSelected('zones', 1)"
           :rotate
           :drop-zone="isInteractive && zoneIsFree(1) ? 'zones' : undefined"
           :drop-index="isInteractive && zoneIsFree(1) ? 1 : undefined"
-          @click="
-            isInteractive
-              ? zoneIsFree(1) && handleFieldClick(1, 'zones')
-              : handleOpponentCardClick('zones', 1)
-          "
+          @click="isInteractive ? zoneIsFree(1) && handleFieldClick(1, 'zones') : handleOpponentCardClick('zones', 1)"
           @click.right.prevent="
             (!extraZones[1]?.faceDown || zoneIsFree(1) || viewer) && inspectCard(extraZones[1], 'zones')
           "
           @action="(evt) => isInteractive && handleAction(evt, 'zones', 1)"
           @increment="(evt) => isInteractive && handleIncrement(evt, 'zones', 1)"
           @update="debouncedUpdateCardStats"
-          @pointerdown="
-            isInteractive &&
-            getCard('zones', 1) &&
-            startCardDrag(getCard('zones', 1)!, 'zones', 1, $event)
-          "
+          @pointerdown="isInteractive && getCard('zones', 1) && startCardDrag(getCard('zones', 1)!, 'zones', 1, $event)"
         />
 
         <!-- Player life points -->
@@ -818,6 +796,11 @@ const attachedSelectedIndex = (parentUid?: string) =>
           "
           @click.right.prevent="inspectCards('banished')"
           @action="(evt) => isInteractive && handleBanishedAction(evt)"
+          @pointerdown="
+            isInteractive &&
+            getCards('banished').length &&
+            startCardDrag(getCards('banished')[0]!, 'banished', 0, $event)
+          "
         />
       </template>
 
@@ -953,7 +936,7 @@ const attachedSelectedIndex = (parentUid?: string) =>
         @shift-click="shiftClickHandCard(index)"
         @shift-right-click="shiftRightClickHandCard(index)"
         @reveal="showToOpponent(index)"
-        @give="giveToOpponent(index)"
+        @give="giveToOpponent('hand', index)"
         @start-drag="(evt) => card && startCardDrag(card, 'hand', index, evt)"
       />
     </div>
