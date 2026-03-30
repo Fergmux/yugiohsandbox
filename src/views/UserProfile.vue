@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 
+import { auth } from '@/firebase/client'
 import { authFetch } from '@/lib/authFetch'
 import { useUserStore } from '@/stores/user'
 import type { Friend, Invite } from '@/types/user'
@@ -129,6 +131,70 @@ const hideSuggestions = () => {
   setTimeout(() => {
     showSuggestions.value = false
   }, 150)
+}
+
+const hasPasswordProvider = computed(() =>
+  auth.currentUser?.providerData.some((p) => p.providerId === 'password'),
+)
+
+const changingPassword = ref(false)
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordError = ref('')
+const passwordSuccess = ref(false)
+const savingPassword = ref(false)
+
+const startChangePassword = () => {
+  currentPassword.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  passwordError.value = ''
+  passwordSuccess.value = false
+  changingPassword.value = true
+}
+
+const cancelChangePassword = () => {
+  changingPassword.value = false
+  passwordError.value = ''
+  passwordSuccess.value = false
+}
+
+const savePassword = async () => {
+  passwordError.value = ''
+  passwordSuccess.value = false
+
+  if (newPassword.value.length < 6) {
+    passwordError.value = 'New password must be at least 6 characters'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = 'Passwords do not match'
+    return
+  }
+
+  const firebaseUser = auth.currentUser
+  if (!firebaseUser || !firebaseUser.email) return
+
+  savingPassword.value = true
+  try {
+    const credential = EmailAuthProvider.credential(firebaseUser.email, currentPassword.value)
+    await reauthenticateWithCredential(firebaseUser, credential)
+    await updatePassword(firebaseUser, newPassword.value)
+    passwordSuccess.value = true
+    changingPassword.value = false
+  } catch (err: any) {
+    const code = err?.code
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      passwordError.value = 'Current password is incorrect'
+    } else if (code === 'auth/too-many-requests') {
+      passwordError.value = 'Too many attempts. Please try again later'
+    } else {
+      passwordError.value = 'Failed to change password'
+    }
+  } finally {
+    savingPassword.value = false
+  }
 }
 
 const onLogout = async () => {
@@ -269,6 +335,50 @@ const onLogout = async () => {
           </button>
         </div>
         <p v-if="friendError" class="mt-2 text-red-400">{{ friendError }}</p>
+      </div>
+
+      <div v-if="hasPasswordProvider">
+        <h2 class="mb-4 text-xl font-semibold">Password</h2>
+        <div v-if="!changingPassword">
+          <button class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1" @click="startChangePassword">
+            Change Password
+          </button>
+          <p v-if="passwordSuccess" class="mt-2 text-green-400">Password changed successfully</p>
+        </div>
+        <div v-else class="flex flex-col gap-3">
+          <input
+            v-model="currentPassword"
+            type="password"
+            placeholder="Current password"
+            class="w-full rounded-md border-1 border-gray-300 p-2"
+          />
+          <input
+            v-model="newPassword"
+            type="password"
+            placeholder="New password"
+            class="w-full rounded-md border-1 border-gray-300 p-2"
+          />
+          <input
+            v-model="confirmPassword"
+            type="password"
+            placeholder="Confirm new password"
+            class="w-full rounded-md border-1 border-gray-300 p-2"
+            @keyup.enter="savePassword"
+          />
+          <p v-if="passwordError" class="text-red-400">{{ passwordError }}</p>
+          <div class="flex gap-2">
+            <button
+              :disabled="savingPassword || !currentPassword || !newPassword || !confirmPassword"
+              class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="savePassword"
+            >
+              Save
+            </button>
+            <button class="cursor-pointer rounded-md border-1 border-gray-300 px-3 py-1" @click="cancelChangePassword">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="border-t border-gray-300 pt-6">
