@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getCurrentUser } from 'vuefire'
 
 import { useUserStore } from '@/stores/user'
 import LoginPage from '@/views/LoginPage.vue'
@@ -81,11 +82,19 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
-  if (!userStore.user) {
-    await userStore.loginExisting()
+
+  // Wait for Firebase Auth to resolve persisted session
+  const firebaseUser = await getCurrentUser()
+
+  // If Firebase user exists but store isn't loaded, initialize
+  if (firebaseUser && !userStore.user) {
+    await userStore.initAuth()
   }
+
   if (!userStore.user && to.name !== 'login') {
     next({ name: 'login', params: to.name === 'play' ? { gameCode: to.params.gameCode } : {} })
+  } else if (userStore.user && to.name === 'login') {
+    next({ name: 'deck' })
   } else {
     next()
   }

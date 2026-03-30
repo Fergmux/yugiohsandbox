@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 
+import { authFetch } from '@/lib/authFetch'
 import { useUserStore } from '@/stores/user'
 import type { Friend, Invite } from '@/types/user'
 
@@ -61,7 +62,7 @@ watch(friendUsername, (val) => {
     return
   }
   searchDebounce = setTimeout(async () => {
-    const response = await fetch(`/.netlify/functions/search-users?term=${encodeURIComponent(val.trim())}`)
+    const response = await authFetch(`/.netlify/functions/search-users?term=${encodeURIComponent(val.trim())}`)
     if (response.ok) {
       const results: Friend[] = await response.json()
       const currentFriendIds = new Set(user.value?.friends?.map((f) => f.id) ?? [])
@@ -128,6 +129,11 @@ const hideSuggestions = () => {
   setTimeout(() => {
     showSuggestions.value = false
   }, 150)
+}
+
+const onLogout = async () => {
+  await userStore.logout()
+  router.push('/')
 }
 </script>
 
@@ -263,6 +269,15 @@ const hideSuggestions = () => {
           </button>
         </div>
         <p v-if="friendError" class="mt-2 text-red-400">{{ friendError }}</p>
+      </div>
+
+      <div class="border-t border-gray-300 pt-6">
+        <button
+          class="cursor-pointer rounded-md border-1 border-red-400 px-4 py-2 text-red-400 active:bg-red-400/20"
+          @click="onLogout"
+        >
+          Logout
+        </button>
       </div>
     </div>
   </main>

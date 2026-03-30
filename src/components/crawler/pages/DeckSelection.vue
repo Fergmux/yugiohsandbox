@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import InspectModal from '@/components/InspectModal.vue'
+import { authFetch } from '@/lib/authFetch'
 import { useCrawlManager } from '@/composables/crawler/crawlManager'
 import { usePageManager } from '@/composables/crawler/pageManager'
 import { useCrawlStore } from '@/stores/crawl'
@@ -41,7 +42,7 @@ const selectedDeck = computed(() => starterDecks.value.find((deck) => deck.id ==
 
 const confirm = async () => {
   if (selectedDeckId.value && player.value) {
-    await fetch('/.netlify/functions/update-crawl', {
+    await authFetch('/.netlify/functions/update-crawl', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

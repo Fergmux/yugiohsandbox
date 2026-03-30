@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 
 import { defineStore } from 'pinia'
 
+import { authFetch } from '@/lib/authFetch'
 import type { Power } from '@/types/crawl'
 import type { Deck } from '@/types/deck'
 
@@ -15,13 +16,13 @@ export const useCrawlStore = defineStore('crawl', () => {
   const starterDecks = computed(() => adminDecks.value.filter((deck) => deck.type === 'starter'))
 
   const getPowers = async () => {
-    const response = await fetch(`/.netlify/functions/get-powers`)
+    const response = await authFetch(`/.netlify/functions/get-powers`)
     const data = await response.json()
     powerRewards.value = data
   }
 
   const getAdminDecks = async () => {
-    const response = await fetch(`/.netlify/functions/get-decks/${ADMIN_ID}`)
+    const response = await authFetch(`/.netlify/functions/get-decks/${ADMIN_ID}`)
     const data = await response.json()
     adminDecks.value = data
   }

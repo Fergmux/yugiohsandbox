@@ -2,6 +2,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 
 import { db } from '../lib/firebase.js'
 
+// No auth required — used by the claim flow before the user has a Firebase account
 const handler = async (event: { path: string }) => {
   try {
     let name
@@ -23,7 +24,9 @@ const handler = async (event: { path: string }) => {
       if (querySnapshot.empty) throw new Error('User not found')
 
       const userDoc = querySnapshot.docs[0]
-      const userData = { id: userDoc.id, ...userDoc.data() }
+      const data = userDoc.data()
+      // Return whether the account is claimed, but don't expose the actual UID
+      const userData = { id: userDoc.id, ...data, firebaseUid: data.firebaseUid ? true : undefined }
 
       return {
         statusCode: 200,

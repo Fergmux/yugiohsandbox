@@ -1,9 +1,12 @@
 import { collection, endAt, getDocs, limit, orderBy, query, startAt } from 'firebase/firestore'
 
 import { db } from '../lib/firebase.js'
+import { verifyAuth } from '../lib/auth.js'
 
-const handler = async (event: { queryStringParameters?: Record<string, string> }) => {
+const handler = async (event: { queryStringParameters?: Record<string, string>; headers: Record<string, string> }) => {
   try {
+    const authResult = await verifyAuth(event)
+    if (authResult.error) return authResult.error
     const term = event.queryStringParameters?.term?.toLowerCase()?.trim()
 
     if (!term) {

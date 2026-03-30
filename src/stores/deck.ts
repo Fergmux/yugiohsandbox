@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 
 import type { Deck } from '@/types/deck'
 import type { BanlistFormat, YugiohCard } from '@/types/yugiohCard'
+import { authFetch } from '@/lib/authFetch'
 
 import { useUserStore } from './user'
 
@@ -31,7 +32,7 @@ export const useDeckStore = defineStore('deck', () => {
 
   const addDeck = async (deckName: string): Promise<string> => {
     addingDeck.value = true
-    const response = await fetch(`/.netlify/functions/add-deck`, {
+    const response = await authFetch(`/.netlify/functions/add-deck`, {
       method: 'POST',
       body: JSON.stringify({ userId: userStore.user?.id, deckName: deckName, locked: false }),
     })
@@ -48,7 +49,7 @@ export const useDeckStore = defineStore('deck', () => {
 
   const getDecks = async () => {
     decksLoading.value = true
-    const response = await fetch(`/.netlify/functions/get-decks/${userStore.user?.id}`)
+    const response = await authFetch(`/.netlify/functions/get-decks/${userStore.user?.id}`)
     const deckData: Deck[] = await response.json()
     decks.value = deckData
     decksLoading.value = false
@@ -57,7 +58,7 @@ export const useDeckStore = defineStore('deck', () => {
   const removeDeck = async () => {
     if (!selectedDeckId.value) return
     deletingDeck.value = true
-    await fetch(`/.netlify/functions/remove-deck`, {
+    await authFetch(`/.netlify/functions/remove-deck`, {
       method: 'POST',
       body: JSON.stringify({ deckId: selectedDeckId.value }),
     })
@@ -68,7 +69,7 @@ export const useDeckStore = defineStore('deck', () => {
   const addCardToDeck = async (cardId: number) => {
     if (selectedDeck.value) {
       selectedDeck.value.cards.push(cardId)
-      fetch(`/.netlify/functions/add-card-to-deck`, {
+      authFetch(`/.netlify/functions/add-card-to-deck`, {
         method: 'POST',
         body: JSON.stringify({ deckId: selectedDeckId.value, cards: selectedDeck.value.cards }),
       })
@@ -78,7 +79,7 @@ export const useDeckStore = defineStore('deck', () => {
   const removeCardFromDeck = async (cardId: number) => {
     if (selectedDeck.value) {
       selectedDeck.value.cards.splice(selectedDeck.value.cards.indexOf(cardId), 1)
-      fetch(`/.netlify/functions/remove-card-from-deck`, {
+      authFetch(`/.netlify/functions/remove-card-from-deck`, {
         method: 'POST',
         body: JSON.stringify({ deckId: selectedDeckId.value, cards: selectedDeck.value.cards }),
       })
@@ -88,7 +89,7 @@ export const useDeckStore = defineStore('deck', () => {
   const changeDeckName = async (name: string) => {
     if (selectedDeck.value) {
       selectedDeck.value.name = name
-      fetch(`/.netlify/functions/edit-deck-name`, {
+      authFetch(`/.netlify/functions/edit-deck-name`, {
         method: 'POST',
         body: JSON.stringify({ deckId: selectedDeckId.value, name }),
       })
@@ -97,7 +98,7 @@ export const useDeckStore = defineStore('deck', () => {
 
   const shareDeck = async (username: string) => {
     if (selectedDeck.value) {
-      fetch(`/.netlify/functions/share-deck`, {
+      authFetch(`/.netlify/functions/share-deck`, {
         method: 'POST',
         body: JSON.stringify({
           deckId: selectedDeckId.value,
@@ -116,7 +117,7 @@ export const useDeckStore = defineStore('deck', () => {
 
     // Copy all cards from the selected deck to the new deck
     if (selectedDeck.value.cards.length > 0) {
-      await fetch(`/.netlify/functions/add-card-to-deck`, {
+      await authFetch(`/.netlify/functions/add-card-to-deck`, {
         method: 'POST',
         body: JSON.stringify({ deckId: newDeckId, cards: [...selectedDeck.value.cards] }),
       })
@@ -129,7 +130,7 @@ export const useDeckStore = defineStore('deck', () => {
   const lockDeck = async () => {
     if (selectedDeck.value) {
       selectedDeck.value.locked = true
-      fetch(`/.netlify/functions/lock-deck`, {
+      authFetch(`/.netlify/functions/lock-deck`, {
         method: 'POST',
         body: JSON.stringify({ deckId: selectedDeckId.value }),
       })
@@ -139,7 +140,7 @@ export const useDeckStore = defineStore('deck', () => {
   const unlockDeck = async () => {
     if (selectedDeck.value) {
       selectedDeck.value.locked = false
-      fetch(`/.netlify/functions/unlock-deck`, {
+      authFetch(`/.netlify/functions/unlock-deck`, {
         method: 'POST',
         body: JSON.stringify({ deckId: selectedDeckId.value }),
       })
@@ -149,7 +150,7 @@ export const useDeckStore = defineStore('deck', () => {
   const setDeckFormat = async (format: BanlistFormat) => {
     if (selectedDeck.value) {
       selectedDeck.value.format = format
-      fetch(`/.netlify/functions/set-deck-format`, {
+      authFetch(`/.netlify/functions/set-deck-format`, {
         method: 'POST',
         body: JSON.stringify({ deckId: selectedDeckId.value, format }),
       })

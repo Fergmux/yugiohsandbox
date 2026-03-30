@@ -22,13 +22,7 @@ const hasReceivedInvite = computed(() => {
   <div>
     <!-- Autocomplete Search Box -->
     <div class="mx-auto my-14 flex w-fit justify-between gap-4 rounded-md border-1 border-gray-300 p-4 text-2xl">
-      <button
-        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'login' && userStore.user }"
-        class="cursor-pointer p-1"
-        @click="router.push('/')"
-      >
-        Login
-      </button>
+      <button v-if="!userStore.user" class="cursor-pointer p-1" @click="router.push('/')">Login</button>
       <button
         :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'deck' }"
         class="cursor-pointer p-1"

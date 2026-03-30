@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import { authFetch } from '@/lib/authFetch'
 import type { Power } from '@/types/crawl'
 import type { Deck } from '@/types/deck'
 
@@ -24,7 +25,7 @@ const editDescription = ref('')
 const fetchPowers = async () => {
   loading.value = true
   try {
-    const response = await fetch('/.netlify/functions/get-powers')
+    const response = await authFetch('/.netlify/functions/get-powers')
     powers.value = await response.json()
   } finally {
     loading.value = false
@@ -34,7 +35,7 @@ const fetchPowers = async () => {
 const fetchDecks = async () => {
   loadingDecks.value = true
   try {
-    const response = await fetch(`/.netlify/functions/get-decks/${ADMIN_ID}`)
+    const response = await authFetch(`/.netlify/functions/get-decks/${ADMIN_ID}`)
     decks.value = await response.json()
   } finally {
     loadingDecks.value = false
@@ -49,7 +50,7 @@ const toggleDeckType = async (deck: Deck, type: 'starter' | 'reward') => {
   const newType = deck.type === type ? null : type
 
   deck.type = newType
-  await fetch('/.netlify/functions/set-deck-type', {
+  await authFetch('/.netlify/functions/set-deck-type', {
     method: 'POST',
     body: JSON.stringify({ deckId: deck.id, type: newType }),
   })
@@ -83,7 +84,7 @@ const saveEdit = async () => {
   if (!editingPower.value || !editName.value.trim() || !editDescription.value.trim()) return
   saving.value = true
   try {
-    const response = await fetch('/.netlify/functions/update-power', {
+    const response = await authFetch('/.netlify/functions/update-power', {
       method: 'POST',
       body: JSON.stringify({
         id: editingPower.value.id,
@@ -104,7 +105,7 @@ const addPower = async () => {
   if (!formName.value.trim() || !formDescription.value.trim()) return
   saving.value = true
   try {
-    const response = await fetch('/.netlify/functions/add-power', {
+    const response = await authFetch('/.netlify/functions/add-power', {
       method: 'POST',
       body: JSON.stringify({
         name: formName.value.trim(),
@@ -122,7 +123,7 @@ const addPower = async () => {
 const deletePower = async (power: Power) => {
   if (!confirm(`Delete "${power.name}"?`)) return
   try {
-    await fetch('/.netlify/functions/delete-power', {
+    await authFetch('/.netlify/functions/delete-power', {
       method: 'POST',
       body: JSON.stringify({ id: power.id }),
     })

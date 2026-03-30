@@ -1,9 +1,13 @@
 import { addDoc, collection } from 'firebase/firestore'
 
 import { db } from '../lib/firebase.js'
+import { verifyAuth } from '../lib/auth.js'
 
-const handler = async (event: { body: string }) => {
+const handler = async (event: { body: string; headers: Record<string, string> }) => {
   try {
+    const authResult = await verifyAuth(event)
+    if (authResult.error) return authResult.error
+
     const body = JSON.parse(event.body)
 
     const docRef = await addDoc(collection(db, 'crawls'), body.crawl)

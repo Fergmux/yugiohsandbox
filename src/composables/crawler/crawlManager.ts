@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { doc, onSnapshot } from 'firebase/firestore'
 
 import { db } from '@/firebase/client'
+import { authFetch } from '@/lib/authFetch'
 import { useUserStore } from '@/stores/user'
 import type { CardSelection, Crawl, Power } from '@/types/crawl'
 import { useClipboard } from '@vueuse/core'
@@ -100,7 +101,7 @@ export const useCrawlManager = () => {
   const { copy } = useClipboard({ source: joinUrl.value })
 
   const sendUpdate = async (fields: Record<string, unknown>) => {
-    await fetch('/.netlify/functions/update-crawl', {
+    await authFetch('/.netlify/functions/update-crawl', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: gameId.value, ...fields }),
@@ -113,7 +114,7 @@ export const useCrawlManager = () => {
     crawl.value.player1.id = userStore.user?.id ?? null
     crawl.value.player1.name = userStore.user?.username ?? null
     try {
-      const response = await fetch('/.netlify/functions/create-crawl', {
+      const response = await authFetch('/.netlify/functions/create-crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ crawl: crawl.value }),
@@ -127,7 +128,7 @@ export const useCrawlManager = () => {
   }
 
   const joinGame = async (code: number) => {
-    const response = await fetch(`/.netlify/functions/get-crawl-by-code/${code}`)
+    const response = await authFetch(`/.netlify/functions/get-crawl-by-code/${code}`)
     if (!response.ok) throw new Error('Game not found')
     const gameData = await response.json()
     const { id, ...crawlData } = gameData
@@ -410,7 +411,7 @@ export const useCrawlManager = () => {
   }
 
   const deleteCrawl = async (id: string): Promise<void> => {
-    await fetch('/.netlify/functions/delete-crawl', {
+    await authFetch('/.netlify/functions/delete-crawl', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
@@ -421,7 +422,7 @@ export const useCrawlManager = () => {
     const userId = userStore.user?.id
     if (!userId) return []
     try {
-      const response = await fetch(`/.netlify/functions/get-crawls/${userId}`)
+      const response = await authFetch(`/.netlify/functions/get-crawls/${userId}`)
       if (!response.ok) return []
       const data: (Crawl & { id: string })[] = await response.json()
       return data.sort((a, b) => {

@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 import DeckSelect from '@/components/deckbuilder/DeckSelect.vue'
 import InspectModal from '@/components/InspectModal.vue'
+import { authFetch } from '@/lib/authFetch'
 import { useDeckStore } from '@/stores/deck'
 import { extraDeckTypes, otherDeckTypes } from '@/types/filters'
 import type { YugiohCard } from '@/types/yugiohCard'
@@ -172,7 +173,7 @@ watch(
 
 const getPlaygroundState = async () => {
   try {
-    const response = await fetch(`/.netlify/functions/get-playground/${selectedDeckId.value}`)
+    const response = await authFetch(`/.netlify/functions/get-playground/${selectedDeckId.value}`)
     const data = await response.json()
 
     if (data.exists) {
@@ -210,7 +211,7 @@ const getPlaygroundState = async () => {
 
       // Create a new document in the playgrounds collection
       try {
-        await fetch('/.netlify/functions/save-playground', {
+        await authFetch('/.netlify/functions/save-playground', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deckId: selectedDeckId.value, state: playgroundState.value }),
@@ -231,7 +232,7 @@ const updateState = _debounce(async () => {
   // Ensure textElements.value is an array before storing
   playgroundState.value.textElements = Array.isArray(textElements.value) ? textElements.value : []
 
-  await fetch('/.netlify/functions/update-playground', {
+  await authFetch('/.netlify/functions/update-playground', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deckId: selectedDeckId.value, state: playgroundState.value }),

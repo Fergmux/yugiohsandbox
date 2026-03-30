@@ -2,6 +2,7 @@ import { doc, runTransaction, updateDoc } from 'firebase/firestore'
 
 import type { BoardSide, GameEdit, GameState, YugiohCard } from '../../src/types/yugiohCard.js'
 import { db } from '../lib/firebase.js'
+import { verifyAuth } from '../lib/auth.js'
 
 function findCardIndex(cards: (YugiohCard | null)[], cardUid: string): number {
   return cards.findIndex((c) => c?.uid === cardUid)
@@ -130,8 +131,11 @@ function applyEdit(state: GameState, edit: GameEdit) {
   }
 }
 
-const handler = async (event: { body: string }) => {
+const handler = async (event: { body: string; headers: Record<string, string> }) => {
   try {
+    const authResult = await verifyAuth(event)
+    if (authResult.error) return authResult.error
+
     const body = JSON.parse(event.body)
 
     if (!body.gameId) {

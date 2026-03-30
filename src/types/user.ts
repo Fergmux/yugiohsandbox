@@ -15,6 +15,8 @@ export type Friend = {
 export interface User {
   id: string
   username: string
+  firebaseUid?: string
+  email?: string
   friends: Friend[]
   invites: Invite[]
 }

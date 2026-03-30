@@ -18,6 +18,7 @@ import { usePageManager } from '@/composables/crawler/pageManager'
 import { useConfetti } from '@/composables/crawler/useConfetti'
 import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import { db } from '@/firebase/client'
+import { authFetch } from '@/lib/authFetch'
 import { useDeckStore } from '@/stores/deck'
 import { useUserStore } from '@/stores/user'
 import type { CardSelection } from '@/types/crawl'
@@ -259,7 +260,7 @@ const createGame = async () => {
   pendingEdits.value = []
   inflightBatches.value = []
   try {
-    const response = await fetch('/.netlify/functions/create-game', {
+    const response = await authFetch('/.netlify/functions/create-game', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameState: initial }),
@@ -510,7 +511,7 @@ const doFlush = async () => {
   const batch: EditBatch = { edits, serverVersion: null }
   inflightBatches.value = [...inflightBatches.value, batch]
   try {
-    const response = await fetch('/.netlify/functions/update-game', {
+    const response = await authFetch('/.netlify/functions/update-game', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId: gameId.value, edits }),
@@ -541,13 +542,13 @@ const joinGame = async (id?: string) => {
   try {
     let response
     if (id) {
-      response = await fetch(`/.netlify/functions/get-game/${id}`)
+      response = await authFetch(`/.netlify/functions/get-game/${id}`)
       if (!response.ok) {
         console.error('Game not found')
         return
       }
     } else {
-      response = await fetch(`/.netlify/functions/get-game-by-code/${gameCode.value}`)
+      response = await authFetch(`/.netlify/functions/get-game-by-code/${gameCode.value}`)
       if (!response.ok) {
         console.error('Game not found')
         return
@@ -564,7 +565,7 @@ const joinGame = async (id?: string) => {
     } else if (gameData.players.player2?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player2 ?? undefined
     } else if (!gameData.players.player2 && props.crawlPlayer !== null) {
-      await fetch('/.netlify/functions/update-game', {
+      await authFetch('/.netlify/functions/update-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

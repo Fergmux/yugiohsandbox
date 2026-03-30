@@ -1,9 +1,13 @@
 import { doc, getDoc } from 'firebase/firestore'
 
 import { db } from '../lib/firebase.js'
+import { verifyAuth } from '../lib/auth.js'
 
-const handler = async (event: { path: string }) => {
+const handler = async (event: { path: string; headers: Record<string, string> }) => {
   try {
+    const authResult = await verifyAuth(event)
+    if (authResult.error) return authResult.error
+
     let deckId
     if (!deckId && event.path) {
       const pathParts = event.path.split('/')
