@@ -3,220 +3,280 @@ export interface Card {
     image: string
 }
 
-export type Location = 'graveyard1' | 'deck1' | 'monster11' | 'monster12' | 'monster13' | 'power11' | 'power12' | 'banished1' | 'extra1' | 'monster14' | 'monster15' | 'monster16' | 'power13' | 'power14' | 'power21' | 'power22' | 'monster21' | 'monster22' | 'monster23' | 'extra2' | 'banished2' | 'power23' | 'power24' | 'monster24' | 'monster25' | 'monster26' | 'deck2' | 'graveyard2' | 'hand11' | 'hand12' | 'hand13' | 'hand14' | 'hand15' | 'hand16' | 'hand17' | 'hand21' | 'hand22' | 'hand23' | 'hand24' | 'hand25' | 'hand26' | 'hand27'
+export type ZoneType = 'hand' | 'power' | 'unit' | 'leader' | 'trap' | 'empty' | 'deck' | 'spent' | 'dead'
 
-export const fieldLayout: Location[] = [
-    'hand11',
-    'hand12',
-    'hand13',
-    'hand14',
-    'hand15',
-    'hand16',
-    'hand17',
-    'graveyard1',
-    'deck1',
-    'monster11',
-    'monster12',
-    'monster13',
-    'power11',
-    'power12',
-    'banished1',
-    'extra1',
-    'monster14',
-    'monster15',
-    'monster16',
-    'power13',
-    'power14',
-    'power21',
-    'power22',
-    'monster21',
-    'monster22',
-    'monster23',
-    'extra2',
-    'banished2',
-    'power23',
-    'power24',
-    'monster24',
-    'monster25',
-    'monster26',
-    'deck2',
-    'graveyard2',
-    'hand21',
-    'hand22',
-    'hand23',
-    'hand24',
-    'hand25',
-    'hand26',
-    'hand27',
-]
-
-export const locations: Record<Location, { name: string, colour: string }> = {
+export const locations: Record<string, { type: ZoneType, name: string | null}> = {
+    // Row 1
     hand11: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand12: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand13: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand14: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand15: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand16: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand17: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
+    },
+
+    // Row 2
+    empty11: {
+        type: 'empty',
+        name: null,
+    },
+    empty12: {
+        type: 'empty',
+        name: null,
+    },
+    trap11: {
+        type: 'trap',
+        name: 'Trap',
+    },
+    trap12: {
+        type: 'trap',
+        name: 'Trap',
+    },
+    trap13: {
+        type: 'trap',
+        name: 'Trap',
+    },
+    empty13: {
+        type: 'empty',
+        name: null,
+    },
+    empty14: {
+        type: 'empty',
+        name: null,
+    },
+
+    // Row 3
+    banished1: {
+        type: 'dead',
+        name: 'Dead',
     },
     graveyard1: {
-        name: 'Graveyard',
-        colour: 'bg-gray-500',
+        type: 'spent',
+        name: 'Spent',
+    },
+    unit11: {
+        type: 'unit',
+        name: 'Unit',
+    },
+    unit12: {
+        type: 'unit',
+        name: 'Unit',
+    },
+    unit13: {
+        type: 'unit',
+        name: 'Unit',
     },
     deck1: {
+        type: 'deck',
         name: 'Deck',
-        colour: 'bg-amber-900',
     },
-    monster11: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
+    leader1: {
+        type: 'leader',
+        name: 'Leader',
     },
-    monster12: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
-    },
-    monster13: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
-    },
-    power11:   {
+
+    // Row 4
+    power11: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
     },
     power12: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
     },
-    banished1: {
-        name: 'Banished',
-        colour: 'bg-purple-700',
+    unit14: {
+        type: 'unit',
+        name: 'Unit',
     },
-    extra1: {
-        name: 'Extra',
-        colour: 'bg-green-700',
+    unit15: {
+        type: 'unit',
+        name: 'Unit',
     },
-    monster14: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
-    },
-    monster15: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
-    },
-    monster16:          {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
+    unit16: {
+        type: 'unit',
+        name: 'Unit',
     },
     power13: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
     },
     power14: {
-        name: 'Power',  
-        colour: 'bg-blue-600',
-    },
-    extra2: {
-        name: 'Extra',
-        colour: 'bg-green-700',
-    },
-    banished2: {
-        name: 'Banished',
-        colour: 'bg-purple-700',
-    },
-    power21: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
+    },
+
+    // Row 2
+    empty1: {
+        type: 'empty',
+        name: null,
+    },
+    empty2: {
+        type: 'empty',
+        name: null,
+    },
+    empty3: {
+        type: 'empty',
+        name: null,
+    },
+    empty4: {
+        type: 'empty',
+        name: null,
+    },
+    empty5: {
+        type: 'empty',
+        name: null,
+    },
+    empty6: {
+        type: 'empty',
+        name: null,
+    },
+    empty7: {
+        type: 'empty',
+        name: null,
+    },
+
+    // Row 5
+    power21: {
+        type: 'power',
+        name: 'Power',
     },
     power22: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
     },
-    monster21: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
+    unit21: {
+        type: 'unit',
+        name: 'Unit',
     },
-    monster22: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
+    unit22: {
+        type: 'unit',
+        name: 'Unit',
     },
-    monster23: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
+    unit23: {
+        type: 'unit',
+        name: 'Unit',
     },
     power23: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
     },
     power24: {
+        type: 'power',
         name: 'Power',
-        colour: 'bg-blue-600',
     },
-    monster24: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
-    },
-    monster25: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
-    },
-    monster26: {
-        name: 'Monster',
-        colour: 'bg-yellow-800',
+
+    // Row 6
+    leader2: {
+        type: 'leader',
+        name: 'Leader',
     },
     deck2: {
+        type: 'deck',
         name: 'Deck',
-        colour: 'bg-amber-900',
+    },
+    unit24: {
+        type: 'unit',
+        name: 'Unit',
+    },
+    unit25: {
+        type: 'unit',
+        name: 'Unit',
+    },
+    unit26: {
+        type: 'unit',
+        name: 'Unit',
     },
     graveyard2: {
-        name: 'Graveyard',
-        colour: 'bg-gray-500',
+        type: 'spent',
+        name: 'Spent',
     },
+    banished2: {
+        type: 'dead',
+        name: 'Dead',
+    },
+
+    //Row7
+    empty21: {
+        type: 'empty',
+        name: null,
+    },
+    empty22: {
+        type: 'empty',
+        name: null,
+    },
+    trap21: {
+        type: 'trap',
+        name: 'Trap',
+    },
+    trap22: {
+        type: 'trap',
+        name: 'Trap',
+    },
+    trap23: {
+        type: 'trap',
+        name: 'Trap',
+    },
+    empty23: {
+        type: 'empty',
+        name: null,
+    },
+    empty24: {
+        type: 'empty',
+        name: null,
+    },
+
+    // Row 8
     hand21: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand22: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand23: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand24: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand25: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand26: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
     hand27: {
+        type: 'hand',
         name: 'Hand',
-        colour: 'bg-transparent',
     },
 }
+
+export type Location = keyof typeof locations
+
+export const fieldLayout: Location[] = Object.keys(locations) as Location[]

@@ -1,5 +1,5 @@
 <template>
-    <div class="w-full aspect-square border-2 border-gray-300 rounded-md flex justify-center items-center">
+    <div class="flex justify-center items-center border-2 border-gray-400 rounded-md bg-opacity-50">
         <CardBase v-if="card" :card="card" />
         <div v-else class="text-center">
             <p class="text-sm font-bold my-auto">{{ name }}</p>
@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import CardBase from './CardBase.vue'
+import CardBase from '@/components/crawlv2/CardBase.vue'
 import type { Card } from '@/types/crawlv2'
 
 const props = defineProps<{

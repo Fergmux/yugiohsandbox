@@ -1,5 +1,5 @@
 <template>
-    <div class="grid grid-cols-7 gap-4 max-w-7xl mx-auto select-none">
+    <div class="grid grid-cols-[2fr_2fr_3fr_3fr_3fr_2fr_2fr] grid-rows-[3fr_2fr_3fr_3fr_1fr_3fr_3fr_2fr_3fr] gap-x-[5vw] gap-y-2 w-full h-full max-h-screen max-w-[100vh] mx-auto select-none bg-cover bg-center px-40 py-20" :style="{ backgroundImage: `url(${playspaceImg})` }">
         <FieldZone
             v-for="(id, index) in fieldLayout"
             class="col-span-1"
@@ -8,8 +8,9 @@
                 [locations[id].colour]: true
             }"
             :key="`${id}-${index}`"
-            :name="locations[id].name"
+            :name="locations[id].name" 
             :card="getCard(id)"
+            :type="locations[id].type"
             :id="id"
             @mousedown="selectCard(id)"
             @mouseup="moveCard(id)"
@@ -18,10 +19,10 @@
 </template>
 
 <script setup lang="ts">
-import FieldZone from '@/components/crawlv2/FieldZone.vue'
-import HandCard from '@/components/crawlv2/HandCard.vue'
+import FieldZone from '@/components/crawlv2/zones/FieldZone.vue'
 import { fieldLayout, locations, type Location } from '@/types/crawlv2'
 import cardImg from '@/assets/images/card.png'
+import playspaceImg from '@/assets/images/playspace.png'
 import type { Card } from '@/types/crawlv2'
 import { ref, type Ref } from 'vue'
 
@@ -55,25 +56,25 @@ const moveCard = (id: Location) => {
 
 const gameState: Ref<{ locations: Partial<Record<Location, { card: Card }>> }> = ref({
     locations: {
-        'monster11': {
+        'unit11': {
             card: {
                 name: 'Card 1',
                 image: cardImg,
             },
         },
-        'monster12': {
+        'unit12': {
             card: {
                 name: 'Card 2',
                 image: cardImg,
             },
         },
-        'monster23': {
+        'unit23': {
             card: {
                 name: 'Card 3',
                 image: cardImg,
             },
         },
-        'monster24': {
+        'unit24': {
             card: {
                 name: 'Card 4',
                 image: cardImg,
@@ -81,13 +82,13 @@ const gameState: Ref<{ locations: Partial<Record<Location, { card: Card }>> }> =
         },
         'hand11': {
             card: {
-                name: 'Card 1',
+                name: 'Card 5',
                 image: cardImg,
             },
         },
         'hand12': {
             card: {
-                name: 'Card 2',
+                name: 'Card 6',
                 image: cardImg,
             },
         },
