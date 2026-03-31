@@ -1,5 +1,5 @@
 <template>
-    <ZoneBase :name="name" :card="card" :id="id" class="bg-red-700/75" />
+    <ZoneBase :name="name" :card="card" :id="id" rotate class="bg-red-700/75" />
 </template>
 
 <script setup lang="ts">
