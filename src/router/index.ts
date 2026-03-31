@@ -69,6 +69,11 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/crawlv2',
+      name: 'crawlv2',
+      component: () => import('@/views/CrawlV2.vue'),
+    },
     // {
     //   path: '/about',
     //   name: 'about',
