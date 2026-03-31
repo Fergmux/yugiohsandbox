@@ -1,6 +1,6 @@
 <template>
   <div
-    class="mx-auto grid h-full max-h-screen w-full max-w-[120vh] grid-cols-[2fr_2fr_3fr_3fr_3fr_2fr_2fr] grid-rows-[3fr_2fr_3fr_3fr_1fr_3fr_3fr_2fr_3fr] gap-x-[min(5vw,80px)] gap-y-2 bg-cover bg-center px-40 py-20 select-none"
+    class="mx-auto grid h-full max-h-screen w-full max-w-[110vh] grid-cols-[2fr_2fr_3fr_3fr_3fr_2fr_2fr] grid-rows-[3fr_2fr_3fr_3fr_1fr_3fr_3fr_2fr_3fr] gap-x-[min(5vw,80px)] gap-y-2 bg-cover bg-center px-40 py-20 select-none"
     :style="{ backgroundImage: `url(${playspaceImg})` }"
   >
     <FieldZone
