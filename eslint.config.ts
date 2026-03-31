@@ -1,11 +1,8 @@
 import oxlint from 'eslint-plugin-oxlint'
 import pluginVue from 'eslint-plugin-vue'
+import prettierConfig from '@vue/eslint-config-prettier'
 
-import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
-import {
-  defineConfigWithVueTs,
-  vueTsConfigs,
-} from '@vue/eslint-config-typescript'
+import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
 
 // To allow more languages other than `ts` in `.vue` files, uncomment the following lines:
 // import { configureVueProject } from '@vue/eslint-config-typescript'
@@ -26,5 +23,5 @@ export default defineConfigWithVueTs(
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
   oxlint.configs['flat/recommended'],
-  skipFormatting,
+  prettierConfig,
 )

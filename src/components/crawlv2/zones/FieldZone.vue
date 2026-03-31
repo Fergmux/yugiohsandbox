@@ -1,5 +1,5 @@
 <template>
-    <component :is="component" :name="name" :card="card" :id="id" />
+  <component :is="component" :name="name" :card="card" :id="id" />
 </template>
 
 <script setup lang="ts">
@@ -16,24 +16,34 @@ import SpentZone from './SpentZone.vue'
 import { computed } from 'vue'
 
 const props = defineProps<{
-    name: string
-    card: Card
-    id: string
-    type: ZoneType
+  name: string | null
+  card?: Card | null
+  id: string
+  type: ZoneType
 }>()
 
 const component = computed(() => {
-    switch (props.type) {
-        case 'hand': return HandZone
-        case 'power': return PowerZone
-        case 'unit': return UnitZone
-        case 'leader': return LeaderZone
-        case 'trap': return TrapZone
-        case 'empty': return EmptyZone
-        case 'deck': return DeckZone
-        case 'spent': return SpentZone
-        case 'dead': return DeadZone
-        default: return EmptyZone
-    }
+  switch (props.type) {
+    case 'hand':
+      return HandZone
+    case 'power':
+      return PowerZone
+    case 'unit':
+      return UnitZone
+    case 'leader':
+      return LeaderZone
+    case 'trap':
+      return TrapZone
+    case 'empty':
+      return EmptyZone
+    case 'deck':
+      return DeckZone
+    case 'spent':
+      return SpentZone
+    case 'dead':
+      return DeadZone
+    default:
+      return EmptyZone
+  }
 })
 </script>
