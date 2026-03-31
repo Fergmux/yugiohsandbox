@@ -1,22 +1,24 @@
 <template>
-  <div
-    class="mx-auto grid h-full max-h-screen w-full max-w-[110vh] grid-cols-[2fr_2fr_3fr_3fr_3fr_2fr_2fr] grid-rows-[3fr_2fr_3fr_3fr_1fr_3fr_3fr_2fr_3fr] gap-x-[min(5vw,80px)] gap-y-2 bg-cover bg-center px-40 py-20 select-none"
-    :style="{ backgroundImage: `url(${playspaceImg})` }"
-  >
-    <FieldZone
-      v-for="(id, index) in fieldLayout"
-      class="col-span-1"
-      :class="{
-        'ring-2 ring-yellow-400': id === selectedCardLocation,
-      }"
-      :key="`${id}-${index}`"
-      :name="locations[id].name"
-      :card="getCard(id)"
-      :type="locations[id].type"
-      :id="id"
-      @mousedown="selectCard(id)"
-      @mouseup="moveCard(id)"
-    />
+  <div class="flex h-screen w-screen items-center justify-center">
+    <div
+      class="mx-auto grid w-[130vh] grid-cols-[2fr_2fr_3fr_3fr_3fr_2fr_2fr] grid-rows-[3fr_2fr_3fr_3fr_0.5fr_3fr_3fr_2fr_3fr] gap-x-[min(80px,3vh)] gap-y-2 bg-cover bg-center bg-no-repeat px-[min(15vw,30vh)] py-[5vh] select-none"
+      :style="{ backgroundImage: `url(${playspaceImg})` }"
+    >
+      <FieldZone
+        v-for="(id, index) in fieldLayout"
+        class="col-span-1"
+        :class="{
+          'ring-2 ring-yellow-400': id === selectedCardLocation,
+        }"
+        :key="`${id}-${index}`"
+        :name="locations[id].name"
+        :card="getCard(id)"
+        :type="locations[id].type"
+        :id="id"
+        @mousedown="selectCard(id)"
+        @mouseup="moveCard(id)"
+      />
+    </div>
   </div>
 </template>
 
