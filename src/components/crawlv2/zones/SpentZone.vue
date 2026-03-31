@@ -1,5 +1,5 @@
 <template>
-  <ZoneBase :name="name" :card="card" :id="id" class="aspect-2/3 bg-green-700" />
+  <ZoneBase :name="name" :card="card" :id="id" class="aspect-2/3 bg-green-700/75" />
 </template>
 
 <script setup lang="ts">
