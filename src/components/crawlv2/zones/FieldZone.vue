@@ -1,9 +1,10 @@
 <template>
-  <component :is="component" :name="name" :card="card" :id="id" />
+  <component :is="component" :name="name" :card="card" :location="location" />
 </template>
 
 <script setup lang="ts">
-import type { Card, ZoneType } from '@/types/crawlv2'
+import type { Location, ZoneType } from '@/types/crawlv2'
+import { type GameCard } from '@/types/cards'
 import HandZone from './HandZone.vue'
 import PowerZone from './PowerZone.vue'
 import UnitZone from './UnitZone.vue'
@@ -17,8 +18,8 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   name: string | null
-  card?: Card | null
-  id: string
+  card?: GameCard | null
+  location: Location
   type: ZoneType
 }>()
 

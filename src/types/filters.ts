@@ -59,7 +59,7 @@ export const mainDeckTypes = [
   'Pendulum Tuner Effect Monster',
   'Ritual Effect Monster',
   'Ritual Monster',
-  'Spell Card',
+  'Effect Card',
   'Spirit Monster',
   'Toon Monster',
   'Trap Card',
@@ -68,8 +68,8 @@ export const mainDeckTypes = [
 ]
 export const otherDeckTypes = ['Skill Card', 'Token']
 
-export const spellTrapTypes = ['Spell Card', 'Trap Card']
-export const mainDeckMonsterTypes = mainDeckTypes.filter((type) => !spellTrapTypes.includes(type))
+export const effectTrapTypes = ['Effect Card', 'Trap Card']
+export const mainDeckMonsterTypes = mainDeckTypes.filter((type) => !effectTrapTypes.includes(type))
 
 export const fusionTypes = ['Fusion Monster', 'Pendulum Effect Fusion Monster']
 export const linkTypes = ['Link Monster']
@@ -107,7 +107,7 @@ export const frameTypeOptions = [
   'XYZ',
   'Link',
   'Pendulum',
-  'Spell',
+  'Effect',
   'Trap',
   'Token',
   'Skill',
@@ -134,7 +134,7 @@ export const cardTypeSections: FilterOption[] = [
       { title: 'Effect Monsters', options: effectTypes },
       { title: 'Ritual Monsters', options: ritualTypes },
       { title: 'Tuner Monsters', options: tunerTypes },
-      'Spell Card',
+      'Effect Card',
       'Trap Card',
     ],
   },
@@ -176,7 +176,7 @@ const monsterRaces = [
   'Reptile',
   'Rock',
   'Sea Serpent',
-  'Spellcaster',
+  'Effectcaster',
   'Thunder',
   'Warrior',
   'Winged Beast',
@@ -184,12 +184,12 @@ const monsterRaces = [
   'Zombie',
   'Other',
 ]
-const spellRaces = ['Normal', 'Field', 'Equip', 'Quick-Play', 'Ritual', 'Continuous']
+const effectRaces = ['Normal', 'Field', 'Equip', 'Quick-Play', 'Ritual', 'Continuous']
 const trapRaces = ['Normal', 'Counter', 'Continuous']
 
 export const raceSections: FilterOption[] = [
   { title: 'Monster Cards', options: monsterRaces },
-  { title: 'Spell Cards', options: spellRaces },
+  { title: 'Effect Cards', options: effectRaces },
   { title: 'Trap Cards', options: trapRaces },
 ]
 

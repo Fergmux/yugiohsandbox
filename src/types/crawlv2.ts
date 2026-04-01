@@ -1,282 +1,105 @@
 export interface Card {
-    name: string
-    image: string
+  name: string
+  image: string
 }
 
 export type ZoneType = 'hand' | 'power' | 'unit' | 'leader' | 'trap' | 'empty' | 'deck' | 'spent' | 'dead'
 
-export const locations: Record<string, { type: ZoneType, name: string | null}> = {
-    // Row 1
-    hand11: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand12: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand13: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand14: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand15: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand16: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand17: {
-        type: 'hand',
-        name: 'Hand',
-    },
-
-    // Row 2
-    empty11: {
-        type: 'empty',
-        name: null,
-    },
-    empty12: {
-        type: 'empty',
-        name: null,
-    },
-    trap11: {
-        type: 'trap',
-        name: 'Trap',
-    },
-    trap12: {
-        type: 'trap',
-        name: 'Trap',
-    },
-    trap13: {
-        type: 'trap',
-        name: 'Trap',
-    },
-    empty13: {
-        type: 'empty',
-        name: null,
-    },
-    empty14: {
-        type: 'empty',
-        name: null,
-    },
-
-    // Row 3
-    banished1: {
-        type: 'dead',
-        name: 'Dead',
-    },
-    graveyard1: {
-        type: 'spent',
-        name: 'Spent',
-    },
-    unit11: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit12: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit13: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    deck1: {
-        type: 'deck',
-        name: 'Deck',
-    },
-    leader1: {
-        type: 'leader',
-        name: 'Leader',
-    },
-
-    // Row 4
-    power11: {
-        type: 'power',
-        name: 'Power',
-    },
-    power12: {
-        type: 'power',
-        name: 'Power',
-    },
-    unit14: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit15: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit16: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    power13: {
-        type: 'power',
-        name: 'Power',
-    },
-    power14: {
-        type: 'power',
-        name: 'Power',
-    },
-
-    // Row 2
-    empty1: {
-        type: 'empty',
-        name: null,
-    },
-    empty2: {
-        type: 'empty',
-        name: null,
-    },
-    empty3: {
-        type: 'empty',
-        name: null,
-    },
-    empty4: {
-        type: 'empty',
-        name: null,
-    },
-    empty5: {
-        type: 'empty',
-        name: null,
-    },
-    empty6: {
-        type: 'empty',
-        name: null,
-    },
-    empty7: {
-        type: 'empty',
-        name: null,
-    },
-
-    // Row 5
-    power21: {
-        type: 'power',
-        name: 'Power',
-    },
-    power22: {
-        type: 'power',
-        name: 'Power',
-    },
-    unit21: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit22: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit23: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    power23: {
-        type: 'power',
-        name: 'Power',
-    },
-    power24: {
-        type: 'power',
-        name: 'Power',
-    },
-
-    // Row 6
-    leader2: {
-        type: 'leader',
-        name: 'Leader',
-    },
-    deck2: {
-        type: 'deck',
-        name: 'Deck',
-    },
-    unit24: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit25: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    unit26: {
-        type: 'unit',
-        name: 'Unit',
-    },
-    graveyard2: {
-        type: 'spent',
-        name: 'Spent',
-    },
-    banished2: {
-        type: 'dead',
-        name: 'Dead',
-    },
-
-    //Row7
-    empty21: {
-        type: 'empty',
-        name: null,
-    },
-    empty22: {
-        type: 'empty',
-        name: null,
-    },
-    trap21: {
-        type: 'trap',
-        name: 'Trap',
-    },
-    trap22: {
-        type: 'trap',
-        name: 'Trap',
-    },
-    trap23: {
-        type: 'trap',
-        name: 'Trap',
-    },
-    empty23: {
-        type: 'empty',
-        name: null,
-    },
-    empty24: {
-        type: 'empty',
-        name: null,
-    },
-
-    // Row 8
-    hand21: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand22: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand23: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand24: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand25: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand26: {
-        type: 'hand',
-        name: 'Hand',
-    },
-    hand27: {
-        type: 'hand',
-        name: 'Hand',
-    },
+export type Location = {
+  id: string
+  type: ZoneType
+  index: number
+  player: 'player1' | 'player2' | null
+  name: string | null
 }
 
-export type Location = keyof typeof locations
+const indexTypes = ['hand', 'power', 'unit', 'trap']
 
-export const fieldLayout: Location[] = Object.keys(locations) as Location[]
+export const getLocationId = (type: ZoneType, index: number, player: 'player1' | 'player2' | null) => {
+  return `${type}${player === 'player1' ? '1' : '2'}${indexTypes.includes(type) ? index : ''}`
+}
+
+export const locations: Location[] = [
+  // Row 1
+
+  { id: 'hand11', type: 'hand', index: 1, player: 'player1', name: 'Hand' },
+  { id: 'hand12', type: 'hand', index: 2, player: 'player1', name: 'Hand' },
+  { id: 'hand13', type: 'hand', index: 3, player: 'player1', name: 'Hand' },
+  { id: 'hand14', type: 'hand', index: 4, player: 'player1', name: 'Hand' },
+  { id: 'hand15', type: 'hand', index: 5, player: 'player1', name: 'Hand' },
+  { id: 'hand16', type: 'hand', index: 6, player: 'player1', name: 'Hand' },
+  { id: 'hand17', type: 'hand', index: 7, player: 'player1', name: 'Hand' },
+
+  // Row 2
+  { id: 'empty11', type: 'empty', index: 1, player: null, name: null },
+  { id: 'empty12', type: 'empty', index: 2, player: null, name: null },
+  { id: 'trap11', type: 'trap', index: 1, player: 'player1', name: 'Trap' },
+  { id: 'trap12', type: 'trap', index: 2, player: 'player1', name: 'Trap' },
+  { id: 'trap13', type: 'trap', index: 3, player: 'player1', name: 'Trap' },
+  { id: 'empty13', type: 'empty', index: 3, player: null, name: null },
+  { id: 'empty14', type: 'empty', index: 4, player: null, name: null },
+
+  // Row 3
+  { id: 'leader1', type: 'leader', index: 1, player: 'player1', name: 'Leader' },
+  { id: 'deck1', type: 'deck', index: 1, player: 'player1', name: 'Deck' },
+  { id: 'unit11', type: 'unit', index: 1, player: 'player1', name: 'Unit' },
+  { id: 'unit12', type: 'unit', index: 2, player: 'player1', name: 'Unit' },
+  { id: 'unit13', type: 'unit', index: 3, player: 'player1', name: 'Unit' },
+  { id: 'power11', type: 'power', index: 1, player: 'player1', name: 'Power' },
+  { id: 'power12', type: 'power', index: 2, player: 'player1', name: 'Power' },
+
+  // Row 4
+
+  { id: 'dead1', type: 'dead', index: 1, player: 'player1', name: 'Dead' },
+  { id: 'spent1', type: 'spent', index: 1, player: 'player1', name: 'Spent' },
+  { id: 'unit14', type: 'unit', index: 4, player: 'player1', name: 'Unit' },
+  { id: 'unit15', type: 'unit', index: 5, player: 'player1', name: 'Unit' },
+  { id: 'unit16', type: 'unit', index: 6, player: 'player1', name: 'Unit' },
+  { id: 'power13', type: 'power', index: 3, player: 'player1', name: 'Power' },
+  { id: 'power14', type: 'power', index: 4, player: 'player1', name: 'Power' },
+
+  // Row 5
+  { id: 'empty1', type: 'empty', index: 1, player: null, name: null },
+  { id: 'empty2', type: 'empty', index: 2, player: null, name: null },
+  { id: 'empty3', type: 'empty', index: 3, player: null, name: null },
+  { id: 'empty4', type: 'empty', index: 4, player: null, name: null },
+  { id: 'empty5', type: 'empty', index: 5, player: null, name: null },
+  { id: 'empty6', type: 'empty', index: 6, player: null, name: null },
+  { id: 'empty7', type: 'empty', index: 7, player: null, name: null },
+
+  // Row 6
+  { id: 'power21', type: 'power', index: 1, player: 'player2', name: 'Power' },
+  { id: 'power22', type: 'power', index: 2, player: 'player2', name: 'Power' },
+  { id: 'unit21', type: 'unit', index: 1, player: 'player2', name: 'Unit' },
+  { id: 'unit22', type: 'unit', index: 2, player: 'player2', name: 'Unit' },
+  { id: 'unit23', type: 'unit', index: 3, player: 'player2', name: 'Unit' },
+  { id: 'spent2', type: 'spent', index: 1, player: 'player2', name: 'Spent' },
+  { id: 'dead2', type: 'dead', index: 1, player: 'player2', name: 'Dead' },
+
+  // Row 7
+  { id: 'power23', type: 'power', index: 3, player: 'player2', name: 'Power' },
+  { id: 'power24', type: 'power', index: 4, player: 'player2', name: 'Power' },
+  { id: 'unit24', type: 'unit', index: 4, player: 'player2', name: 'Unit' },
+  { id: 'unit25', type: 'unit', index: 5, player: 'player2', name: 'Unit' },
+  { id: 'unit26', type: 'unit', index: 6, player: 'player2', name: 'Unit' },
+  { id: 'deck2', type: 'deck', index: 1, player: 'player2', name: 'Deck' },
+  { id: 'leader2', type: 'leader', index: 1, player: 'player2', name: 'Leader' },
+
+  // Row 8
+  { id: 'empty21', type: 'empty', index: 1, player: null, name: null },
+  { id: 'empty22', type: 'empty', index: 2, player: null, name: null },
+  { id: 'trap21', type: 'trap', index: 1, player: 'player2', name: 'Trap' },
+  { id: 'trap22', type: 'trap', index: 2, player: 'player2', name: 'Trap' },
+  { id: 'trap23', type: 'trap', index: 3, player: 'player2', name: 'Trap' },
+  { id: 'empty23', type: 'empty', index: 3, player: null, name: null },
+  { id: 'empty24', type: 'empty', index: 4, player: null, name: null },
+
+  // Row 9
+  { id: 'hand21', type: 'hand', index: 1, player: 'player2', name: 'Hand' },
+  { id: 'hand22', type: 'hand', index: 2, player: 'player2', name: 'Hand' },
+  { id: 'hand23', type: 'hand', index: 3, player: 'player2', name: 'Hand' },
+  { id: 'hand24', type: 'hand', index: 4, player: 'player2', name: 'Hand' },
+  { id: 'hand25', type: 'hand', index: 5, player: 'player2', name: 'Hand' },
+  { id: 'hand26', type: 'hand', index: 6, player: 'player2', name: 'Hand' },
+  { id: 'hand27', type: 'hand', index: 7, player: 'player2', name: 'Hand' },
+]

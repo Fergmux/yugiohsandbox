@@ -12,7 +12,7 @@ import { useCardMovement } from '@/composables/useCardMovement'
 import { type DragData, type DropZone, useDragDrop } from '@/composables/useDragDrop'
 import { useFieldShortcuts } from '@/composables/useFieldShortcuts'
 import type { CardSelection } from '@/types/crawl'
-import { mainDeckMonsterTypes, spellTrapTypes } from '@/types/filters'
+import { mainDeckMonsterTypes, effectTrapTypes } from '@/types/filters'
 import type { BoardSide, GameEdit, GameState, Player, YugiohCard } from '@/types/yugiohCard'
 import { getS3ImageUrl } from '@/utils'
 
@@ -312,7 +312,7 @@ const shiftRightClickFieldCard = (index: number) => {
   const card = getCard('field', index)
   if (!card) return
 
-  if (spellTrapTypes.includes(card.type) || card.faceDown) {
+  if (effectTrapTypes.includes(card.type) || card.faceDown) {
     flipCard(card)
   } else {
     const newDefence = !card.defence
@@ -342,7 +342,7 @@ const shiftClickHandCard = (index: number) => {
     selectCard('hand', index)
     const edits = moveCard('field', 0, { faceDown: false })
     if (edits.length) sendEdit(edits, `played ${card.name}`)
-  } else if (spellTrapTypes.includes(card.type)) {
+  } else if (effectTrapTypes.includes(card.type)) {
     const freeIndex = findMiddleFreeSlot([6, 7, 8, 9, 10])
     if (freeIndex === -1) return
     selectCard('hand', index)
@@ -367,7 +367,7 @@ const shiftRightClickHandCard = (index: number) => {
     selectCard('hand', index)
     const edits = moveCard('field', freeIndex, { faceDown: true, defence: true })
     if (edits.length) sendEdit(edits, `set ${card.name} face down`)
-  } else if (spellTrapTypes.includes(card.type)) {
+  } else if (effectTrapTypes.includes(card.type)) {
     const freeIndex = findMiddleFreeSlot([6, 7, 8, 9, 10])
     if (freeIndex === -1) return
     selectCard('hand', index)
@@ -381,7 +381,7 @@ const shiftRightClickHandCard = (index: number) => {
 const handleAction = (action: string, destination: keyof BoardSide, index: number) => {
   switch (action) {
     case 'set': {
-      const defence = selectedCard.value?.type !== 'Trap Card' && selectedCard.value?.type !== 'Spell Card'
+      const defence = selectedCard.value?.type !== 'Trap Card' && selectedCard.value?.type !== 'Effect Card'
       const logText = `set ${cardName(selectedCard.value)} face down`
       const edits = moveCard(destination, index, { faceDown: true, defence })
       if (edits.length) sendEdit(edits, logText)
@@ -816,7 +816,7 @@ const attachedSelectedIndex = (parentUid?: string) =>
         />
       </template>
 
-      <!-- ── Top row: field spell + 5 monster zones ────────────────────── -->
+      <!-- ── Top row: field effect + 5 monster zones ────────────────────── -->
       <card-slot
         v-for="(card, index) in topRow"
         :key="index"
@@ -879,13 +879,13 @@ const attachedSelectedIndex = (parentUid?: string) =>
         @click.stop="isInteractive && (selectedCard ? logMoveCard('extra') : inspectCards('extra'))"
       />
 
-      <!-- ── Bottom row: 5 spell/trap zones ────────────────────────────── -->
+      <!-- ── Bottom row: 5 effect/trap zones ────────────────────────────── -->
       <card-slot
         v-for="[card, index] in bottomRow"
         :key="index"
         :card="card"
         :cards="[card, ...(getCards('attached').filter((c) => c?.attached === card?.uid) ?? [])]"
-        name="Spell & Trap Card Zone"
+        name="Effect & Trap Card Zone"
         class="bg-teal-600"
         :selected="isInteractive && isSelected('field', index)"
         :selected-index="attachedSelectedIndex(card?.uid)"

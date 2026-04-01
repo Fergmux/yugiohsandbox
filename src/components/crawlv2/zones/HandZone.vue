@@ -1,14 +1,15 @@
 <template>
-  <ZoneBase :name="name" :card="card" :id="id" class="bg-gray-300/25" />
+  <ZoneBase :name="name" :card="card" :location="location" class="bg-gray-300/25" />
 </template>
 
 <script setup lang="ts">
 import ZoneBase from './ZoneBase.vue'
-import type { Card } from '@/types/crawlv2'
+import { type GameCard } from '@/types/cards'
+import type { Location } from '@/types/crawlv2'
 
-const props = defineProps<{
+defineProps<{
   name: string
-  card: Card
-  id: string
+  card?: GameCard | null
+  location: Location
 }>()
 </script>

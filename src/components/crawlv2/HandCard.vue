@@ -1,12 +1,12 @@
 <template>
-  <CardBase :card="card" />
+  <CardBase v-if="card" :card="card" />
 </template>
 
 <script setup lang="ts">
 import CardBase from './CardBase.vue'
-import type { Card } from '@/types/crawlv2'
+import { type GameCard } from '@/types/cards'
 
 defineProps<{
-  card: Card
+  card?: GameCard | null
 }>()
 </script>
