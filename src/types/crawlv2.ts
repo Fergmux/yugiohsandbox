@@ -14,10 +14,11 @@ export type Location = {
   adjacent?: string[]
 }
 
-export const fieldZones = ['hand', 'power', 'unit', 'trap']
+export const indexableZones = ['hand', 'power', 'unit', 'trap']
+export const fieldZones = ['power', 'unit', 'trap']
 
 export const getLocationId = (type: ZoneType, index: number, player: 'player1' | 'player2' | null) => {
-  return `${type}${player === 'player1' ? '1' : '2'}${fieldZones.includes(type) ? index : ''}`
+  return `${type}${player === 'player1' ? '1' : '2'}${indexableZones.includes(type) ? index : ''}`
 }
 
 export const locations: Location[] = [

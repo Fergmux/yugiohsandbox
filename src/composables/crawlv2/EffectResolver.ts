@@ -1,6 +1,6 @@
 import type { GameCard, EffectDef } from '@/types/cards'
 import { Event, EventBus } from './EventBus'
-import { getLocationId, type Location } from '@/types/crawlv2'
+import { fieldZones, getLocationId, type Location } from '@/types/crawlv2'
 import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
 import { effectHandlers, cleanupEffects } from './EffectHandlers'
 import { evaluateCondition } from './CheckSystem'
@@ -270,7 +270,7 @@ export class EffectResolver {
   async moveCard(selectedCard: GameCard, location: Location, cards: GameCard[]) {
     const cardAtLocation = this.config.getCard(location)
 
-    if (['unit', 'power', 'trap'].includes(location.type) && !cardAtLocation) {
+    if (fieldZones.includes(location.type) && !cardAtLocation) {
       await this.playCard(selectedCard, location, cards)
       return
     }
@@ -279,11 +279,13 @@ export class EffectResolver {
       cardAtLocation &&
       cardAtLocation.location.type === 'unit' &&
       selectedCard.location.type === 'unit' &&
-      cardAtLocation.gameId !== selectedCard.gameId
+      cardAtLocation.gameId !== selectedCard.gameId &&
+      cardAtLocation.owner !== selectedCard.owner
     ) {
       await this.damage({ target: cardAtLocation, source: selectedCard })
       this.config.selectCard(null)
-    } else if (!cardAtLocation) {
+    } else if (!cardAtLocation && location.player === selectedCard.owner) {
+      // Prevent moving cards to locations with a different owner
       await relocateCard(selectedCard, location)
     }
   }

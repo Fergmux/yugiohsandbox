@@ -133,9 +133,6 @@ const moveCard = (location: Location) => {
   // Prevent moving cards whose owner does not match the current player
   if (selectedCard.value.owner !== gameState.value.currentPlayer) return
 
-  // Prevent moving cards to locations with a different owner
-  if (location.player && location.player !== selectedCard.value.owner) return
-
   effectResolver.moveCard(selectedCard.value, location, gameState.value.cards)
 }
 
@@ -189,11 +186,11 @@ const gameState: Ref<GameState> = ref({
       description: 'A strong guy',
       effect: 'He kills people',
       rarity: 'common',
-      location: { id: 'hand11', type: 'hand', index: 1, player: 'player1', name: 'Hand' } as Location,
+      location: { id: 'deck1', type: 'deck', index: 1, player: 'player1', name: 'Deck' } as Location,
       owner: 'player1',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
     },
     {
@@ -210,11 +207,11 @@ const gameState: Ref<GameState> = ref({
       description: 'A strong guy',
       effect: 'He kills people',
       rarity: 'common',
-      location: { id: 'hand12', type: 'hand', index: 2, player: 'player1', name: 'Hand' } as Location,
+      location: { id: 'deck1', type: 'deck', index: 2, player: 'player1', name: 'Deck' } as Location,
       owner: 'player1',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
     },
     {
@@ -231,11 +228,11 @@ const gameState: Ref<GameState> = ref({
       description: 'A fire breathing dragon',
       effect: 'He kills people',
       rarity: 'rare',
-      location: { id: 'hand23', type: 'hand', index: 3, player: 'player2', name: 'Hand' } as Location,
+      location: { id: 'deck2', type: 'deck', index: 3, player: 'player2', name: 'Deck' } as Location,
       owner: 'player2',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
     },
     {
@@ -252,11 +249,11 @@ const gameState: Ref<GameState> = ref({
       description: 'A fire breathing dragon',
       effect: "Adjacent dragon's attacks are treated as fire damage",
       rarity: 'rare',
-      location: { id: 'hand24', type: 'hand', index: 4, player: 'player2', name: 'Hand' } as Location,
+      location: { id: 'deck2', type: 'deck', index: 4, player: 'player2', name: 'Deck' } as Location,
       owner: 'player2',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
       effects: [
         {
@@ -290,11 +287,11 @@ const gameState: Ref<GameState> = ref({
       description: 'A fire breathing dragon',
       effect: "Once per turn you can apply 2x burn to an opponent's unit",
       rarity: 'rare',
-      location: { id: 'hand25', type: 'hand', index: 5, player: 'player2', name: 'Hand' } as Location,
+      location: { id: 'deck2', type: 'deck', index: 5, player: 'player2', name: 'Deck' } as Location,
       owner: 'player2',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
       effects: [
         {
@@ -332,11 +329,11 @@ const gameState: Ref<GameState> = ref({
       description: '',
       effect: 'Once per turn, you can apply 1x Cleanse to this card',
       rarity: 'rare',
-      location: { id: 'hand15', type: 'hand', index: 5, player: 'player1', name: 'Hand' } as Location,
+      location: { id: 'deck1', type: 'deck', index: 5, player: 'player1', name: 'Deck' } as Location,
       owner: 'player1',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
       effects: [
         {
@@ -364,11 +361,11 @@ const gameState: Ref<GameState> = ref({
       cost: 0,
       type: 'effect',
       description: 'If you control a Warrior unit, you can add one spent unit to your hand.',
-      location: { id: 'hand13', type: 'hand', index: 3, player: 'player1', name: 'Hand' } as Location,
+      location: { id: 'deck1', type: 'deck', index: 3, player: 'player1', name: 'Deck' } as Location,
       owner: 'player1',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
     },
     {
@@ -379,11 +376,11 @@ const gameState: Ref<GameState> = ref({
       cost: 0,
       type: 'effect',
       description: 'If you control a Dragon unit, you can add one spent unit to your hand.',
-      location: { id: 'hand22', type: 'hand', index: 2, player: 'player2', name: 'Hand' } as Location,
+      location: { id: 'deck2', type: 'deck', index: 2, player: 'player2', name: 'Deck' } as Location,
       owner: 'player2',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
       effects: [
         {
@@ -414,11 +411,11 @@ const gameState: Ref<GameState> = ref({
       cost: 0,
       type: 'trap',
       description: 'Negate an attack',
-      location: { id: 'hand14', type: 'hand', index: 4, player: 'player1', name: 'Trap' } as Location,
+      location: { id: 'deck1', type: 'deck', index: 4, player: 'player1', name: 'Deck' } as Location,
       owner: 'player1',
       buffs: {},
       debuffs: {},
-      faceUp: true,
+      faceUp: false,
       defensePosition: false,
       effects: [
         { trigger: Event.TARGETED_ATTACK, effect: 'negate_attack', optional: true, eventName: Event.TRAP_ACTIVATED },

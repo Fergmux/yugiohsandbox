@@ -1,6 +1,6 @@
 <template>
   <div
-    :style="{ backgroundImage: `url(${card.image})` }"
+    :style="{ backgroundImage: `url(${cardImg})` }"
     class="group relative flex aspect-2/3 h-full items-center justify-center rounded-md border-2 border-gray-300 bg-contain bg-center bg-no-repeat text-xl font-bold text-black"
     :class="{ 'rotate-90': card.defensePosition }"
   >
@@ -79,6 +79,7 @@ import { type GameCard } from '@/types/cards'
 import { getEffective } from '@/composables/crawlv2/BuffSystem'
 import { propOf } from '@/composables/crawlv2/CheckSystem'
 import { computed } from 'vue'
+import CardBack from '@/assets/images/cards/cardback.png'
 
 const props = defineProps<{
   card: GameCard
@@ -89,6 +90,7 @@ const emit = defineEmits<{
   (e: 'activate-effect', card: GameCard): void
 }>()
 
+const cardImg = computed(() => (props.card.faceUp ? props.card.image : CardBack))
 const effective = computed(() => getEffective(props.card))
 const canSwapStance = computed(
   () => props.card.type === 'unit' && props.card.location.type === 'unit' && props.card.owner === props.currentPlayer,

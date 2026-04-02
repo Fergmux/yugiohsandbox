@@ -27,6 +27,7 @@ export enum Event {
   ACTIVATE_EFFECT = 'activate_effect',
   CLEANSE_APPLIED = 'cleanse_applied',
   BURN_APPLIED = 'burn_applied',
+  CARD_DRAWN = 'card_drawn',
 }
 
 export const EventBus = {

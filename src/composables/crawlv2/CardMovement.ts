@@ -12,6 +12,13 @@ export async function relocateCard(card: GameCard, newLocation: Location): Promi
   const oldLocation = card.location
   card.location = newLocation
 
+  if (oldLocation.type === 'deck' && newLocation.type === 'hand') {
+    card.faceUp = true
+    await EventBus.emit(Event.CARD_DRAWN, card.gameId, { card })
+  } else if (newLocation.type === 'deck') {
+    card.faceUp = false
+  }
+
   await EventBus.emit(Event.CARD_MOVED, card.gameId, { card })
 
   if (fieldZones.includes(oldLocation.type) && !fieldZones.includes(newLocation.type)) {
