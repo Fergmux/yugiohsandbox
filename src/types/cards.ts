@@ -2,6 +2,7 @@ import cardImg from '@/assets/images/cards/card.png'
 import effectImg from '@/assets/images/cards/effect.png'
 import { type Location } from './crawlv2'
 import type { Comparitors } from '@/composables/crawlv2/EffectResolver'
+import type { Event } from '@/composables/crawlv2/EventBus'
 
 type NestedKeyOf<T, Prefix extends string = ''> = {
   [K in keyof T & string]: T[K] extends Record<string, number>
@@ -12,10 +13,14 @@ type NestedKeyOf<T, Prefix extends string = ''> = {
 }[keyof T & string]
 
 export type Condition = {
+  test?: 'has_card'
+  checks?: Check[]
+}
+export type Check = {
   combinator?: 'and' | 'or'
   comparitor: Comparitors
-  key: NestedKeyOf<GameCard>
-  value: string
+  key?: NestedKeyOf<GameCard>
+  value?: string
 }
 
 export type Card = {
@@ -33,21 +38,30 @@ export type Card = {
   rarity?: string
 }
 
+export type EffectDef = {
+  trigger?: Event
+  effect: string
+  ongoing?: boolean
+  /** Stays registered after firing — re-fires on subsequent triggers */
+  persistent?: boolean
+  /** Only fires when it is the owning card's player's turn */
+  activateOnOwnerTurn?: boolean
+  options?: Record<string, string | number>
+  conditions?: Condition[]
+  target?: Check[]
+  optional?: boolean
+  eventName?: Event
+}
+
 export type GameCard = Card & {
   gameId: string
   location: Location
   owner?: 'player1' | 'player2'
-  buffs: { [key: string]: number }
-  debuffs: { [key: string]: number }
+  buffs: Record<string, string | number>
+  debuffs: Record<string, string | number>
   faceUp?: boolean
   defensePosition?: boolean
-  effects?: {
-    trigger: string
-    effect: string
-    conditions?: Condition[]
-    targetType?: string
-    options?: Record<string, unknown>
-  }[]
+  effects?: EffectDef[]
 }
 
 export const cards = [

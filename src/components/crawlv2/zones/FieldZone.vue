@@ -1,5 +1,11 @@
 <template>
-  <component :is="component" :name="name" :card="card" :location="location" />
+  <component
+    :is="component"
+    :name="name"
+    :card="card"
+    :location="location"
+    @swap-stance="emit('swap-stance', $event)"
+  />
 </template>
 
 <script setup lang="ts">
@@ -21,6 +27,9 @@ const props = defineProps<{
   card?: GameCard | null
   location: Location
   type: ZoneType
+}>()
+const emit = defineEmits<{
+  (e: 'swap-stance', card: GameCard): void
 }>()
 
 const component = computed(() => {

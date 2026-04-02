@@ -6,9 +6,10 @@
           :card="card"
           class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90"
           style="height: 150%; width: full"
+          @swap-stance="emit('swap-stance', $event)"
         />
       </div>
-      <CardBase v-else :card="card" />
+      <CardBase v-else :card="card" @swap-stance="emit('swap-stance', $event)" />
 
       <div
         v-if="pending?.card.gameId === card.gameId"
@@ -47,6 +48,9 @@ defineProps<{
   card?: GameCard | null
   location: Location
   rotate?: boolean
+}>()
+const emit = defineEmits<{
+  (e: 'swap-stance', card: GameCard): void
 }>()
 
 const { pending, respond } = useActivationPrompt()

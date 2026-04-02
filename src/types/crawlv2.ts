@@ -11,6 +11,7 @@ export type Location = {
   index: number
   player: 'player1' | 'player2' | null
   name: string | null
+  adjacent?: string[]
 }
 
 const indexTypes = ['hand', 'power', 'unit', 'trap']
@@ -42,9 +43,16 @@ export const locations: Location[] = [
   // Row 3
   { id: 'leader1', type: 'leader', index: 1, player: 'player1', name: 'Leader' },
   { id: 'deck1', type: 'deck', index: 1, player: 'player1', name: 'Deck' },
-  { id: 'unit11', type: 'unit', index: 1, player: 'player1', name: 'Unit' },
-  { id: 'unit12', type: 'unit', index: 2, player: 'player1', name: 'Unit' },
-  { id: 'unit13', type: 'unit', index: 3, player: 'player1', name: 'Unit' },
+  { id: 'unit11', type: 'unit', index: 1, player: 'player1', name: 'Unit', adjacent: ['unit12', 'unit15', 'unit16'] },
+  {
+    id: 'unit12',
+    type: 'unit',
+    index: 2,
+    player: 'player1',
+    name: 'Unit',
+    adjacent: ['unit11', 'unit13', 'unit14', 'unit15', 'unit16'],
+  },
+  { id: 'unit13', type: 'unit', index: 3, player: 'player1', name: 'Unit', adjacent: ['unit12', 'unit15', 'unit16'] },
   { id: 'power11', type: 'power', index: 1, player: 'player1', name: 'Power' },
   { id: 'power12', type: 'power', index: 2, player: 'player1', name: 'Power' },
 
@@ -52,9 +60,16 @@ export const locations: Location[] = [
 
   { id: 'dead1', type: 'dead', index: 1, player: 'player1', name: 'Dead' },
   { id: 'spent1', type: 'spent', index: 1, player: 'player1', name: 'Spent' },
-  { id: 'unit14', type: 'unit', index: 4, player: 'player1', name: 'Unit' },
-  { id: 'unit15', type: 'unit', index: 5, player: 'player1', name: 'Unit' },
-  { id: 'unit16', type: 'unit', index: 6, player: 'player1', name: 'Unit' },
+  { id: 'unit14', type: 'unit', index: 4, player: 'player1', name: 'Unit', adjacent: ['unit11', 'unit12', 'unit15'] },
+  {
+    id: 'unit15',
+    type: 'unit',
+    index: 5,
+    player: 'player1',
+    name: 'Unit',
+    adjacent: ['unit11', 'unit12', 'unit13', 'unit14', 'unit16'],
+  },
+  { id: 'unit16', type: 'unit', index: 6, player: 'player1', name: 'Unit', adjacent: ['unit12', 'unit13', 'unit15'] },
   { id: 'power13', type: 'power', index: 3, player: 'player1', name: 'Power' },
   { id: 'power14', type: 'power', index: 4, player: 'player1', name: 'Power' },
 
@@ -70,18 +85,32 @@ export const locations: Location[] = [
   // Row 6
   { id: 'power21', type: 'power', index: 1, player: 'player2', name: 'Power' },
   { id: 'power22', type: 'power', index: 2, player: 'player2', name: 'Power' },
-  { id: 'unit21', type: 'unit', index: 1, player: 'player2', name: 'Unit' },
-  { id: 'unit22', type: 'unit', index: 2, player: 'player2', name: 'Unit' },
-  { id: 'unit23', type: 'unit', index: 3, player: 'player2', name: 'Unit' },
+  { id: 'unit21', type: 'unit', index: 1, player: 'player2', name: 'Unit', adjacent: ['unit22', 'unit25', 'unit26'] },
+  {
+    id: 'unit22',
+    type: 'unit',
+    index: 2,
+    player: 'player2',
+    name: 'Unit',
+    adjacent: ['unit21', 'unit23', 'unit24', 'unit25', 'unit26'],
+  },
+  { id: 'unit23', type: 'unit', index: 3, player: 'player2', name: 'Unit', adjacent: ['unit22', 'unit25', 'unit26'] },
   { id: 'spent2', type: 'spent', index: 1, player: 'player2', name: 'Spent' },
   { id: 'dead2', type: 'dead', index: 1, player: 'player2', name: 'Dead' },
 
   // Row 7
   { id: 'power23', type: 'power', index: 3, player: 'player2', name: 'Power' },
   { id: 'power24', type: 'power', index: 4, player: 'player2', name: 'Power' },
-  { id: 'unit24', type: 'unit', index: 4, player: 'player2', name: 'Unit' },
-  { id: 'unit25', type: 'unit', index: 5, player: 'player2', name: 'Unit' },
-  { id: 'unit26', type: 'unit', index: 6, player: 'player2', name: 'Unit' },
+  { id: 'unit24', type: 'unit', index: 4, player: 'player2', name: 'Unit', adjacent: ['unit21', 'unit22', 'unit25'] },
+  {
+    id: 'unit25',
+    type: 'unit',
+    index: 5,
+    player: 'player2',
+    name: 'Unit',
+    adjacent: ['unit21', 'unit22', 'unit23', 'unit24', 'unit26'],
+  },
+  { id: 'unit26', type: 'unit', index: 6, player: 'player2', name: 'Unit', adjacent: ['unit22', 'unit23', 'unit25'] },
   { id: 'deck2', type: 'deck', index: 1, player: 'player2', name: 'Deck' },
   { id: 'leader2', type: 'leader', index: 1, player: 'player2', name: 'Leader' },
 
