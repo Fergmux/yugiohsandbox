@@ -20,13 +20,7 @@ const { selectTargets } = useTargetSelector()
 export const effectHandlers: Record<string, TriggerHandler> = {
   negate_attack: async (_data, ctx, card) => {
     ctx.cancel()
-    await relocateCard(card, {
-      id: getLocationId('spent', 1, card.owner ?? null),
-      type: 'spent',
-      index: 1,
-      player: card.owner ?? null,
-      name: 'Spent',
-    })
+    EventBus.emit(Event.ATTACK_NEGATED, card.gameId, { card })
   },
 
   debuff: async (_data, _ctx, card, effect, cards) => {

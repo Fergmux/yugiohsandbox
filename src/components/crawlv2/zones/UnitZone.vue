@@ -4,6 +4,7 @@
     :card="card"
     :location="location"
     :current-player="currentPlayer"
+    :all-cards="allCards"
     class="aspect-square bg-amber-500/75"
     @activate-effect="emit('activate-effect', $event)"
   />
@@ -19,6 +20,7 @@ defineProps<{
   card?: GameCard | null
   location: Location
   currentPlayer?: 'player1' | 'player2'
+  allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
   (e: 'activate-effect', card: GameCard): void

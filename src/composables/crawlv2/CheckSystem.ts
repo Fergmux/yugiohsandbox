@@ -1,6 +1,6 @@
 import type { GameCard, Check, Condition } from '@/types/cards'
 
-export type Comparator = 'equals' | 'not_equals' | 'less_than' | 'adjacent' | 'itself'
+export type Comparator = 'equals' | 'not_equals' | 'less_than' | 'adjacent' | 'itself' | 'owner'
 
 function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   if (!key) return undefined
@@ -23,6 +23,8 @@ function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boo
       return source.location.adjacent?.includes(candidate.location.id) ?? false
     case 'itself':
       return candidate.gameId === source.gameId
+    case 'owner':
+      return check.value === 'player' ? candidate.owner === source.owner : candidate.owner !== source.owner
     default:
       return false
   }
@@ -55,14 +57,58 @@ export function filterByChecks(checks: Check[], source: GameCard, cards: GameCar
 /**
  * Evaluates a condition against the game state.
  * 'has_card': returns true if at least one card matches all checks.
+ * 'event_target': returns true if the event's target card matches all checks.
  */
-export function evaluateCondition(condition: Condition, source: GameCard, cards: GameCard[]): boolean {
+export function evaluateCondition(
+  condition: Condition,
+  source: GameCard,
+  cards: GameCard[],
+  eventTarget?: GameCard,
+): boolean {
   switch (condition.test) {
+    case 'event_target':
+      if (!eventTarget) return false
+      return evaluateChecks(condition.checks ?? [], source, eventTarget)
     case 'has_card':
     default:
       return cards.some((c) => evaluateChecks(condition.checks ?? [], source, c))
   }
 }
 
+export function evaluateConditions(
+  conditions: Condition[] | undefined,
+  source: GameCard,
+  cards: GameCard[],
+  eventTarget?: GameCard,
+): boolean {
+  if (!conditions) return true
+  return conditions.every((c) => evaluateCondition(c, source, cards, eventTarget))
+}
+
 /** Strip source-card prefix from buff/debuff keys (e.g. "4:damage" -> "damage") */
 export const propOf = (key: string) => key.split(':').slice(1).join(':') || key
+
+/**
+ * Checks if a card has any available targets for its manual effects.
+ * Returns true if the card has no target requirements (self-targeting or no target),
+ * or if there are valid targets in the game state.
+ */
+export function hasAvailableTargets(card: GameCard, cards: GameCard[]): boolean {
+  const manualEffects = card.effects?.filter(
+    (e) => e.trigger === 'manual' && (e.uses === undefined || (e.activations ?? 0) < e.uses),
+  )
+
+  if (!manualEffects?.length) return false
+
+  // Check each manual effect for available targets
+  for (const effect of manualEffects) {
+    // If effect has no target definition, it doesn't need targets
+    if (!effect.target) return true
+
+    // Filter cards by the effect's target checks
+    const validTargets = filterByChecks(effect.target, card, cards)
+    if (validTargets.length > 0) return true
+  }
+
+  return false
+}

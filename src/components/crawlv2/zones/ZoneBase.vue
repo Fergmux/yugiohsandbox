@@ -5,6 +5,7 @@
         <CardBase
           :card="card"
           :current-player="currentPlayer"
+          :all-cards="allCards"
           class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90"
           style="height: 150%; width: full"
           @swap-stance="emit('swap-stance', $event)"
@@ -15,6 +16,7 @@
         v-else
         :card="card"
         :current-player="currentPlayer"
+        :all-cards="allCards"
         @swap-stance="emit('swap-stance', $event)"
         @activate-effect="emit('activate-effect', $event)"
       />
@@ -57,6 +59,7 @@ defineProps<{
   location: Location
   rotate?: boolean
   currentPlayer?: 'player1' | 'player2'
+  allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
   (e: 'swap-stance', card: GameCard): void

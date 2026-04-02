@@ -5,6 +5,7 @@
     :card="card"
     :location="location"
     :current-player="currentPlayer"
+    :all-cards="allCards"
     @swap-stance="emit('swap-stance', $event)"
     @activate-effect="emit('activate-effect', $event)"
   />
@@ -30,6 +31,7 @@ const props = defineProps<{
   location: Location
   type: ZoneType
   currentPlayer?: 'player1' | 'player2'
+  allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
   (e: 'swap-stance', card: GameCard): void

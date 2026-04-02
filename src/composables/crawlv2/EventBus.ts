@@ -1,8 +1,14 @@
 export type EventContext = { cancelled: boolean; cancel(): void }
 type EventListener = (event: Event, targetId: string, data: unknown, ctx: EventContext) => void | Promise<void>
-const listeners: Record<string, Record<string, EventListener[]>> = {}
+const listeners: Record<string, Map<string, EventListener[]>> = {}
+
+function getMap(event: string): Map<string, EventListener[]> {
+  if (!listeners[event]) listeners[event] = new Map()
+  return listeners[event]
+}
 
 export enum Event {
+  UPDATED = 'updated',
   TARGETED_ATTACK = 'targeted_attack',
   ATTACK_RESOLVED = 'attack_resolved',
   TARGETED_EFFECT = 'targeted_effect',
@@ -28,17 +34,24 @@ export enum Event {
   CLEANSE_APPLIED = 'cleanse_applied',
   BURN_APPLIED = 'burn_applied',
   CARD_DRAWN = 'card_drawn',
+  ATTACK_NEGATED = 'attack_negated',
 }
 
 export const EventBus = {
-  on(event: Event, key: string, fn: EventListener) {
-    if (!listeners[event]) listeners[event] = {}
-    if (!listeners[event][key]) listeners[event][key] = []
-    listeners[event][key].push(fn)
+  on(event: Event | Event[], key: string, fn: EventListener) {
+    if (Array.isArray(event)) {
+      for (const e of event) {
+        this.on(e, key, fn)
+      }
+    } else {
+      const map = getMap(event)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(fn)
+    }
   },
 
   off(event: Event, key: string) {
-    delete listeners[event]?.[key]
+    listeners[event]?.delete(key)
   },
 
   async emit(event: Event, triggerCardId: string, data: unknown): Promise<{ cancelled: boolean }> {
@@ -48,10 +61,14 @@ export const EventBus = {
         this.cancelled = true
       },
     }
-    const handlers = listeners[event] ?? {}
-    console.log(event, 'emitted', triggerCardId, data)
-    for (const fns of Object.values(handlers)) {
-      for (const fn of fns) await fn(event, triggerCardId, data, ctx)
+    const map = listeners[event]
+    if (map) {
+      for (const fns of map.values()) {
+        for (const fn of fns) await fn(event, triggerCardId, data, ctx)
+      }
+    }
+    if (event !== Event.UPDATED) {
+      await EventBus.emit(Event.UPDATED, triggerCardId, { card: data })
     }
     return ctx
   },

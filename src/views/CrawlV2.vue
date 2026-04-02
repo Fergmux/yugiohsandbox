@@ -53,6 +53,7 @@
         :type="location.type"
         :location="location"
         :current-player="gameState.currentPlayer"
+        :all-cards="gameState.cards"
         @mousedown="selectCard(location)"
         @mouseup="moveCard(location)"
         @swap-stance="swapStance"
@@ -64,11 +65,8 @@
 
 <script setup lang="ts">
 import FieldZone from '@/components/crawlv2/zones/FieldZone.vue'
-import { locations, type Location } from '@/types/crawlv2'
+import { locations, type Location, type GameState } from '@/types/crawlv2'
 import playspaceImg from '@/assets/images/playspace.png'
-import cardImg from '@/assets/images/cards/card.png'
-import effectImg from '@/assets/images/cards/effect.png'
-import trapImg from '@/assets/images/cards/trap.png'
 import { type GameCard } from '@/types/cards'
 import { createEffectResolver } from '@/composables/crawlv2/EffectResolver'
 import { computed, ref, type Ref } from 'vue'
@@ -76,6 +74,7 @@ import { EventBus, Event } from '@/composables/crawlv2/EventBus'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
 import { registerBuffSystems } from '@/composables/crawlv2/BuffSystem'
+import { defaultGameState } from '@/types/defaultGameState'
 
 const { ask } = useActivationPrompt()
 const { pending, selectedTargets, toggleTarget, cancelSelection } = useTargetSelector()
@@ -85,14 +84,6 @@ const selectedCard = ref<GameCard | null>(null)
 const selectedCardLocation = computed<Location | null>(() => selectedCard.value?.location ?? null)
 
 // ─── Turn state ─────────────────────────────────────────────────────────────
-
-interface GameState {
-  cards: GameCard[]
-  turn: number
-  currentPlayer: 'player1' | 'player2'
-  player1HP: number
-  player2HP: number
-}
 
 // ─── Card helpers ────────────────────────────────────────────────────────────
 
@@ -141,7 +132,11 @@ const swapStance = (card: GameCard) => {
 }
 
 const activateEffect = async (card: GameCard) => {
-  await effectResolver.activateEffect(card, gameState.value.cards)
+  if (card.location.type === 'hand' && card.type === 'effect') {
+    await effectResolver.activateEffectFromHand(card, gameState.value.cards)
+  } else {
+    await effectResolver.activateEffect(card, gameState.value.cards)
+  }
 }
 
 // ─── Turn management ──────────────────────────────────────────────────────────
@@ -166,263 +161,7 @@ const endTurn = async () => {
 
 // ─── Game state ──────────────────────────────────────────────────────────────
 
-const gameState: Ref<GameState> = ref({
-  turn: 1,
-  currentPlayer: 'player1',
-  player1HP: 40,
-  player2HP: 40,
-  cards: [
-    {
-      id: 1,
-      gameId: '1',
-      name: 'Warrior',
-      image: cardImg,
-      atk: 10,
-      def: 10,
-      cost: 1,
-      type: 'unit',
-      race: 'warrior',
-      damage: 'physical',
-      description: 'A strong guy',
-      effect: 'He kills people',
-      rarity: 'common',
-      location: { id: 'deck1', type: 'deck', index: 1, player: 'player1', name: 'Deck' } as Location,
-      owner: 'player1',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-    },
-    {
-      id: 1,
-      gameId: '2',
-      name: 'Warrior',
-      image: cardImg,
-      atk: 10,
-      def: 10,
-      cost: 1,
-      type: 'unit',
-      race: 'warrior',
-      damage: 'physical',
-      description: 'A strong guy',
-      effect: 'He kills people',
-      rarity: 'common',
-      location: { id: 'deck1', type: 'deck', index: 2, player: 'player1', name: 'Deck' } as Location,
-      owner: 'player1',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-    },
-    {
-      id: 3,
-      gameId: '3',
-      name: 'Dragon',
-      image: cardImg,
-      atk: 12,
-      def: 8,
-      cost: 2,
-      type: 'unit',
-      race: 'dragon',
-      damage: 'void',
-      description: 'A fire breathing dragon',
-      effect: 'He kills people',
-      rarity: 'rare',
-      location: { id: 'deck2', type: 'deck', index: 3, player: 'player2', name: 'Deck' } as Location,
-      owner: 'player2',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-    },
-    {
-      id: 3,
-      gameId: '4',
-      name: 'Fire Dragon',
-      image: cardImg,
-      atk: 12,
-      def: 8,
-      cost: 2,
-      type: 'unit',
-      race: 'dragon',
-      damage: 'fire',
-      description: 'A fire breathing dragon',
-      effect: "Adjacent dragon's attacks are treated as fire damage",
-      rarity: 'rare',
-      location: { id: 'deck2', type: 'deck', index: 4, player: 'player2', name: 'Deck' } as Location,
-      owner: 'player2',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-      effects: [
-        {
-          effect: 'damage_type',
-          ongoing: true,
-          options: {
-            damageType: 'fire',
-          },
-          trigger: Event.UNIT_SUMMONED,
-          target: [
-            { comparitor: 'equals', key: 'race', value: 'dragon' },
-            { combinator: 'and', comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player2' },
-            { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-            { combinator: 'and', comparitor: 'adjacent' },
-          ],
-        },
-      ],
-    },
-    {
-      id: 3,
-      gameId: '8',
-      name: 'Burn Dragon',
-      image: cardImg,
-      atk: 12,
-      def: 8,
-      cost: 2,
-      type: 'unit',
-      race: 'dragon',
-      damage: 'fire',
-      description: 'A fire breathing dragon',
-      effect: "Once per turn you can apply 2x burn to an opponent's unit",
-      rarity: 'rare',
-      location: { id: 'deck2', type: 'deck', index: 5, player: 'player2', name: 'Deck' } as Location,
-      owner: 'player2',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-      effects: [
-        {
-          effect: 'debuff',
-          eventName: Event.BURN_APPLIED,
-          options: {
-            debuff: 'burn',
-            value: 2,
-          },
-          trigger: 'manual',
-          persistent: true,
-          optional: true,
-          resetOnEvent: Event.TURN_START,
-          uses: 1,
-          activations: 0,
-          target: [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player1' },
-            { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        },
-      ],
-    },
-    {
-      id: 3,
-      gameId: '9',
-      name: 'Cleanse Warrior',
-      image: cardImg,
-      atk: 7,
-      def: 9,
-      cost: 2,
-      type: 'unit',
-      race: 'warrior',
-      damage: 'psychic',
-      description: '',
-      effect: 'Once per turn, you can apply 1x Cleanse to this card',
-      rarity: 'rare',
-      location: { id: 'deck1', type: 'deck', index: 5, player: 'player1', name: 'Deck' } as Location,
-      owner: 'player1',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-      effects: [
-        {
-          effect: 'buff',
-          eventName: Event.CLEANSE_APPLIED,
-          options: {
-            buff: 'cleanse',
-            value: 1,
-          },
-          resetOnEvent: Event.TURN_START,
-          uses: 1,
-          activations: 0,
-          trigger: 'manual',
-          persistent: true,
-          optional: false,
-          target: [{ comparitor: 'itself' }],
-        },
-      ],
-    },
-    {
-      id: 2,
-      gameId: '5',
-      name: 'Effect',
-      image: effectImg,
-      cost: 0,
-      type: 'effect',
-      description: 'If you control a Warrior unit, you can add one spent unit to your hand.',
-      location: { id: 'deck1', type: 'deck', index: 3, player: 'player1', name: 'Deck' } as Location,
-      owner: 'player1',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-    },
-    {
-      id: 2,
-      gameId: '6',
-      name: 'Effect',
-      image: effectImg,
-      cost: 0,
-      type: 'effect',
-      description: 'If you control a Dragon unit, you can add one spent unit to your hand.',
-      location: { id: 'deck2', type: 'deck', index: 2, player: 'player2', name: 'Deck' } as Location,
-      owner: 'player2',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-      effects: [
-        {
-          effect: 'add_to_hand',
-          conditions: [
-            {
-              test: 'has_card',
-              checks: [
-                { comparitor: 'equals', key: 'race', value: 'dragon' },
-                { combinator: 'and', comparitor: 'equals', key: 'location.type', value: 'unit' },
-                { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player2' },
-              ],
-            },
-          ],
-          target: [
-            { comparitor: 'equals', key: 'location.type', value: 'spent' },
-            { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player2' },
-            { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        },
-      ],
-    },
-    {
-      id: 3,
-      gameId: '7',
-      name: 'Trap',
-      image: trapImg,
-      cost: 0,
-      type: 'trap',
-      description: 'Negate an attack',
-      location: { id: 'deck1', type: 'deck', index: 4, player: 'player1', name: 'Deck' } as Location,
-      owner: 'player1',
-      buffs: {},
-      debuffs: {},
-      faceUp: false,
-      defensePosition: false,
-      effects: [
-        { trigger: Event.TARGETED_ATTACK, effect: 'negate_attack', optional: true, eventName: Event.TRAP_ACTIVATED },
-      ],
-    },
-  ],
-})
+const gameState: Ref<GameState> = ref(defaultGameState)
 
 // Register buff/debuff systems (burn, cleanse) after gameState is defined
 registerBuffSystems(() => gameState.value.cards)
