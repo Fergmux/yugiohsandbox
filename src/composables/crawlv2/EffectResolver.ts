@@ -1,59 +1,184 @@
-import type { GameCard, Check } from '@/types/cards'
+import type { GameCard, EffectDef } from '@/types/cards'
 import { Event, EventBus } from './EventBus'
-import { getLocationId, locations } from '@/types/crawlv2'
+import { getLocationId, type Location } from '@/types/crawlv2'
 import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
+import { effectHandlers, cleanupEffects } from './EffectHandlers'
+import { evaluateCondition } from './CheckSystem'
+import { relocateCard } from './CardMovement'
 
-export type Comparitors = 'equals' | 'not_equals' | 'less_than' | 'adjacent'
-
-function getNestedValue<T extends object>(obj: T, key?: string): unknown {
-  let current: unknown = obj
-  if (!key) return
-  for (const k of key.split('.')) {
-    current = (current as Record<string, unknown>)?.[k]
-  }
-  return current
+export type GameState = {
+  player1HP: number
+  player2HP: number
 }
 
-export function filterByChecks(target: Check[], card: GameCard, cards: GameCard[]): GameCard[] {
-  return cards.filter((_card) => {
-    return target.every((_target) => {
-      switch (_target.comparitor) {
-        case 'equals':
-          return getNestedValue(_card, _target.key) === _target.value
-        case 'adjacent':
-          return card.location.adjacent?.includes(_card.location.id)
-        default:
-          return false
-      }
-    })
-  })
+export type EffectResolverConfig = {
+  getCard: (location: Location) => GameCard | null
+  selectCard: (card: GameCard | null) => void
+  ask: (card: GameCard) => Promise<boolean>
+  getCurrentPlayer: () => string
+  gameState: GameState
 }
 
 export class EffectResolver {
-  constructor() {}
+  private config: EffectResolverConfig
 
-  private findTarget(target: Check[], card: GameCard, cards: GameCard[]): GameCard[] | null {
-    return filterByChecks(target, card, cards)
+  constructor(config: EffectResolverConfig) {
+    this.config = config
+    this.setupGlobalListeners()
   }
 
-  private makeChecks(checks: Check[] | undefined, cards: GameCard[]): boolean {
-    if (!checks) return true
+  private setupGlobalListeners() {
+    EventBus.on(Event.PLAYER_DAMAGE, 'game', (_e, _id, data) => {
+      const { player, amount } = data as { player: 'player1' | 'player2'; amount: number }
+      if (player === 'player1') {
+        this.config.gameState.player1HP = Math.max(0, this.config.gameState.player1HP - amount)
+      } else {
+        this.config.gameState.player2HP = Math.max(0, this.config.gameState.player2HP - amount)
+      }
+    })
 
-    return cards.some((c) => {
-      return checks.every((check) => {
-        switch (check.comparitor) {
-          case 'equals':
-            return getNestedValue(c, check.key) === check.value
-          case 'not_equals':
-            return getNestedValue(c, check.key) !== check.value
-          case 'less_than':
-            return (getNestedValue(c, check.key) as number) < (check.value as unknown as number)
-          default:
-            return false
-        }
-      })
+    EventBus.on(Event.UNIT_STANCE_SWAP, 'game', (_e, _id, data) => {
+      const { card } = data as { card?: GameCard }
+      if (!card || card.type !== 'unit' || card.location.type !== 'unit') return
+      card.defensePosition = !card.defensePosition
     })
   }
+
+  // ─── Effect Registration ─────────────────────────────────────────────────────
+
+  registerEffects(card: GameCard, cards: GameCard[]) {
+    for (const effect of card.effects ?? []) {
+      if (effect.trigger === 'manual') continue
+
+      const handler = effectHandlers[effect.effect]
+      if (!handler) continue
+
+      EventBus.on(effect.trigger as Event, card.gameId, async (_e, _id, data, ctx) => {
+        // Check uses limit
+        if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
+
+        // Only fire on the owner's turn if flagged
+        if (effect.activateOnOwnerTurn) {
+          const { currentPlayer } = data as { currentPlayer?: string }
+          if (currentPlayer !== card.owner) return
+        }
+
+        if (effect.optional) {
+          const activate = await this.config.ask(card)
+          if (!activate) return
+        }
+
+        await handler(data, ctx, card, effect, cards)
+
+        // Increment activations
+        if (effect.uses !== undefined) {
+          effect.activations = (effect.activations ?? 0) + 1
+        }
+
+        // Fire notification event AFTER handler (consistent ordering)
+        if (effect.eventName) {
+          const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card })
+          if (cancelled) return
+        }
+
+        if (!effect.persistent) {
+          EventBus.off(effect.trigger as Event, card.gameId)
+        }
+      })
+    }
+
+    // Register reset listeners for effects with uses
+    for (const effect of card.effects ?? []) {
+      if (effect.resetOnEvent) {
+        const resetKey = `reset:${card.gameId}:${effect.effect}`
+        EventBus.on(effect.resetOnEvent, resetKey, () => {
+          effect.activations = 0
+        })
+      }
+    }
+
+    // Auto-cleanup when card leaves the field (distinct key avoids collisions)
+    if ((card.effects ?? []).length) {
+      const cleanupKey = `cleanup:${card.gameId}`
+      EventBus.on(Event.CARD_LEFT_FIELD, cleanupKey, (_e, _id, data) => {
+        const { card: leftCard } = data as { card: GameCard }
+        if (leftCard.gameId === card.gameId) {
+          EventBus.off(Event.CARD_LEFT_FIELD, cleanupKey)
+          cleanupEffects(card)
+        }
+      })
+    }
+  }
+
+  // ─── Manual Effect Activation ────────────────────────────────────────────────
+
+  async activateEffect(card: GameCard, cards: GameCard[]) {
+    const manualEffects = card.effects?.filter(
+      (e) => e.trigger === 'manual' && (e.uses === undefined || (e.activations ?? 0) < e.uses),
+    )
+    if (!manualEffects?.length) return
+
+    for (const effect of manualEffects) {
+      await this.activateManualEffect(card, effect, cards)
+    }
+  }
+
+  private async activateManualEffect(card: GameCard, effect: EffectDef, cards: GameCard[]) {
+    if (effect.trigger !== 'manual') return
+    if (this.config.getCurrentPlayer() !== card.owner) return
+    if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
+
+    const handler = effectHandlers[effect.effect]
+    if (!handler) return
+
+    const ctx = {
+      cancelled: false,
+      cancel() {
+        this.cancelled = true
+      },
+    }
+    await handler({}, ctx, card, effect, cards)
+
+    if (effect.uses !== undefined) {
+      effect.activations = (effect.activations ?? 0) + 1
+    }
+
+    if (!effect.persistent) {
+      const idx = card.effects?.indexOf(effect)
+      if (idx !== undefined && idx > -1) card.effects?.splice(idx, 1)
+    }
+
+    // Fire notification event AFTER handler (consistent ordering)
+    if (effect.eventName) {
+      await EventBus.emit(effect.eventName, card.gameId, { card })
+    }
+  }
+
+  // ─── Effect Execution (play-time and ongoing reapplication) ──────────────────
+
+  private async executeCardEffects(card: GameCard, cards: GameCard[], trigger?: Event, onlyOngoing = false) {
+    for (const effect of card.effects ?? []) {
+      if (!onlyOngoing) {
+        if (trigger !== undefined && effect.trigger !== trigger) continue
+        if (trigger === undefined && effect.trigger !== undefined) continue
+      }
+      if (onlyOngoing && !effect.ongoing) continue
+      if (effect.conditions?.some((c) => !evaluateCondition(c, card, cards))) continue
+
+      const handler = effectHandlers[effect.effect]
+      if (!handler) continue
+
+      const ctx = {
+        cancelled: false,
+        cancel() {
+          this.cancelled = true
+        },
+      }
+      await handler({}, ctx, card, effect, cards)
+    }
+  }
+
+  // ─── Game Actions ────────────────────────────────────────────────────────────
 
   async damage({ target, source }: { target: GameCard | null; source: GameCard | null }) {
     if (!target || !source) return
@@ -61,25 +186,28 @@ export class EffectResolver {
     const { cancelled } = await EventBus.emit(Event.TARGETED_ATTACK, target.gameId, { target, source })
     if (cancelled) return
 
+    // Attack resolved (not negated) — post-attack effects like burn self-damage
+    await EventBus.emit(Event.ATTACK_RESOLVED, target.gameId, { target, source })
+
     if (source.atk && target.def && target.atk) {
       if (target.def <= source.atk) {
-        target.location = {
+        await EventBus.emit(Event.DAMAGE_DEALT, target.gameId, { target, source })
+        await EventBus.emit(Event.UNIT_DEFEATED, target.gameId, { target, source })
+        await relocateCard(target, {
           id: getLocationId('spent', 1, target.owner ?? null),
           type: 'spent',
           index: 1,
           player: target.owner ?? null,
           name: 'Spent',
-        }
-        EventBus.emit(Event.DAMAGE_DEALT, target.gameId, { target, source })
-        EventBus.emit(Event.UNIT_DEFEATED, target.gameId, { target, source })
+        })
       }
     }
   }
 
-  async setTrap(card: GameCard, location: GameCard['location']) {
+  async setTrap(card: GameCard, location: Location) {
     const { cancelled } = await EventBus.emit(Event.TRAP_SET, card.gameId, { card })
     if (cancelled) return
-    card.location = location
+    await relocateCard(card, location)
   }
 
   async swapStance({ card }: { card: GameCard | null }) {
@@ -100,49 +228,67 @@ export class EffectResolver {
     )
   }
 
-  async summon(card: GameCard, cards: GameCard[], location: GameCard['location']) {
+  async summon(card: GameCard, cards: GameCard[], location: Location) {
     const { cancelled } = await EventBus.emit(Event.UNIT_SUMMONED, card.gameId, { card })
     if (cancelled) return
-    card.location = location
-    this.executeCardEffects(card, cards, Event.UNIT_SUMMONED)
+    await relocateCard(card, location)
+    await this.executeCardEffects(card, cards, Event.UNIT_SUMMONED)
     this.registerOngoingEffects(card, cards)
-    EventBus.emit(Event.CARD_MOVED, card.gameId, { card })
   }
 
-  executeCardEffects(card: GameCard, cards: GameCard[], trigger?: Event, onlyOngoing = false) {
-    for (const effect of card.effects ?? []) {
-      if (!onlyOngoing) {
-        if (trigger !== undefined && effect.trigger !== trigger) continue
-        if (trigger === undefined && effect.trigger !== undefined) continue
-      }
-      if (onlyOngoing && !effect.ongoing) continue
-      if (effect.conditions?.some((c) => !this.makeChecks(c.checks, cards))) continue
+  async playCard(card: GameCard, location: Location, cards: GameCard[]) {
+    let ctx
+    switch (card.type) {
+      case 'unit':
+        ctx = await EventBus.emit(Event.UNIT_PLAYED, card.gameId, { card })
+        if (ctx.cancelled) return
+        this.registerEffects(card, cards)
+        await this.summon(card, cards, location)
+        break
+      case 'effect':
+        ctx = await EventBus.emit(Event.TARGETED_EFFECT, card.gameId, { card })
+        if (ctx.cancelled) return
+        await this.executeCardEffects(card, cards)
+        break
+      case 'trap':
+        ctx = await EventBus.emit(Event.TRAP_PLAYED, card.gameId, { card })
+        if (ctx.cancelled) return
+        this.registerEffects(card, cards)
+        await this.setTrap(card, location)
+        break
+      case 'power':
+        ctx = await EventBus.emit(Event.POWER_PLAYED, card.gameId, { card })
+        if (ctx.cancelled) return
+        this.registerEffects(card, cards)
+        await EventBus.emit(Event.POWER_SET, card.gameId, { card })
+        break
+    }
 
-      const target = effect.target && this.findTarget(effect.target, card, cards)
+    this.config.selectCard(null)
+  }
 
-      switch (effect.effect) {
-        case 'add_to_hand':
-          if (!target) continue
+  async moveCard(selectedCard: GameCard, location: Location, cards: GameCard[]) {
+    const cardAtLocation = this.config.getCard(location)
 
-          const openHandSlot = locations.find(
-            (loc) => loc.type === 'hand' && loc.player === card.owner && !cards.some((c) => c.location.id === loc.id),
-          )
-          if (!openHandSlot) continue
+    if (['unit', 'power', 'trap'].includes(location.type) && !cardAtLocation) {
+      await this.playCard(selectedCard, location, cards)
+      return
+    }
 
-          EventBus.emit(Event.CARD_MOVED, target[0].gameId, { target: target[0], source: card })
-
-          target[0].location = { ...openHandSlot }
-          break
-        case 'damage_type':
-          if (!target) continue
-
-          target.forEach((t) => {
-            t.buffs[`${card.gameId}:damage`] = effect.options?.damageType ?? ''
-          })
-          break
-      }
+    if (
+      cardAtLocation &&
+      cardAtLocation.location.type === 'unit' &&
+      selectedCard.location.type === 'unit' &&
+      cardAtLocation.gameId !== selectedCard.gameId
+    ) {
+      await this.damage({ target: cardAtLocation, source: selectedCard })
+      this.config.selectCard(null)
+    } else if (!cardAtLocation) {
+      await relocateCard(selectedCard, location)
     }
   }
 }
 
-export const effectResolver = new EffectResolver()
+export function createEffectResolver(config: EffectResolverConfig): EffectResolver {
+  return new EffectResolver(config)
+}

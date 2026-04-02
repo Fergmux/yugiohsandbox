@@ -1,8 +1,10 @@
 import cardImg from '@/assets/images/cards/card.png'
 import effectImg from '@/assets/images/cards/effect.png'
 import { type Location } from './crawlv2'
-import type { Comparitors } from '@/composables/crawlv2/EffectResolver'
+import type { Comparator } from '@/composables/crawlv2/CheckSystem'
 import type { Event } from '@/composables/crawlv2/EventBus'
+
+export type EffectTrigger = Event | 'manual'
 
 type NestedKeyOf<T, Prefix extends string = ''> = {
   [K in keyof T & string]: T[K] extends Record<string, number>
@@ -18,7 +20,7 @@ export type Condition = {
 }
 export type Check = {
   combinator?: 'and' | 'or'
-  comparitor: Comparitors
+  comparitor: Comparator
   key?: NestedKeyOf<GameCard>
   value?: string
 }
@@ -39,7 +41,7 @@ export type Card = {
 }
 
 export type EffectDef = {
-  trigger?: Event
+  trigger?: EffectTrigger
   effect: string
   ongoing?: boolean
   /** Stays registered after firing — re-fires on subsequent triggers */
@@ -51,6 +53,12 @@ export type EffectDef = {
   target?: Check[]
   optional?: boolean
   eventName?: Event
+  /** Maximum number of times this effect can be activated */
+  uses?: number
+  /** Current number of times this effect has been activated */
+  activations?: number
+  /** Event that resets the activations counter */
+  resetOnEvent?: Event
 }
 
 export type GameCard = Card & {

@@ -61,23 +61,46 @@
     >
       {{ card.defensePosition ? 'ATK' : 'DEF' }}
     </button>
+
+    <button
+      v-if="canActivateEffect"
+      class="absolute bottom-1 left-1 z-20 rounded bg-amber-600/80 px-1.5 py-0.5 text-[8px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-amber-500"
+      @mousedown.stop
+      @mouseup.stop
+      @click.stop="emit('activate-effect', card)"
+    >
+      Activate
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { type GameCard } from '@/types/cards'
 import { getEffective } from '@/composables/crawlv2/BuffSystem'
+import { propOf } from '@/composables/crawlv2/CheckSystem'
 import { computed } from 'vue'
 
 const props = defineProps<{
   card: GameCard
+  currentPlayer?: 'player1' | 'player2'
 }>()
 const emit = defineEmits<{
   (e: 'swap-stance', card: GameCard): void
+  (e: 'activate-effect', card: GameCard): void
 }>()
 
 const effective = computed(() => getEffective(props.card))
-const canSwapStance = computed(() => props.card.type === 'unit' && props.card.location.type === 'unit')
+const canSwapStance = computed(
+  () => props.card.type === 'unit' && props.card.location.type === 'unit' && props.card.owner === props.currentPlayer,
+)
+const canActivateEffect = computed(
+  () =>
+    props.card.location.type === 'unit' &&
+    (props.card.effects ?? []).some(
+      (e) => e.trigger === 'manual' && (e.uses === undefined || (e.activations ?? 0) < e.uses),
+    ) &&
+    props.card.owner === props.currentPlayer,
+)
 
 const isTrapOrEffect = computed(() => ['trap', 'effect'].includes(props.card.type ?? ''))
 
@@ -92,9 +115,6 @@ const isDebuffed = (key: keyof GameCard) => {
   const eff = effective.value[key]
   return typeof base === 'number' && (eff as number) < base
 }
-
-// Strip source-card prefix from buff keys (e.g. "4:damage" → "damage")
-const propName = (key: string) => key.split(':').slice(1).join(':') || key
 
 const BUFF_LABELS: Record<string, string> = { damage: 'DMG', atk: 'ATK', def: 'DEF' }
 const DEBUFF_LABELS: Record<string, string> = { burn: 'BURN', atk: 'ATK', def: 'DEF' }
@@ -111,11 +131,11 @@ const DEBUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   def: (v) => `-${v} DEF`,
 }
 
-const buffBadgeLabel = (key: string) => BUFF_LABELS[propName(key)] ?? propName(key).toUpperCase().slice(0, 4)
+const buffBadgeLabel = (key: string) => BUFF_LABELS[propOf(key)] ?? propOf(key).toUpperCase().slice(0, 4)
 const debuffBadgeLabel = (key: string) => DEBUFF_LABELS[key] ?? key.toUpperCase().slice(0, 4)
 
 const buffDescription = (key: string, value: string | number) =>
-  BUFF_DESCRIPTIONS[propName(key)]?.(value) ?? `${propName(key)}: ${value}`
+  BUFF_DESCRIPTIONS[propOf(key)]?.(value) ?? `${propOf(key)}: ${value}`
 const debuffDescription = (key: string, value: string | number) =>
   DEBUFF_DESCRIPTIONS[key]?.(value) ?? `${key}: ${value}`
 </script>

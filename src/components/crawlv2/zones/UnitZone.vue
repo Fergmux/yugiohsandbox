@@ -1,5 +1,12 @@
 <template>
-  <ZoneBase :name="name" :card="card" :location="location" class="aspect-square bg-amber-500/75" />
+  <ZoneBase
+    :name="name"
+    :card="card"
+    :location="location"
+    :current-player="currentPlayer"
+    class="aspect-square bg-amber-500/75"
+    @activate-effect="emit('activate-effect', $event)"
+  />
 </template>
 
 <script setup lang="ts">
@@ -11,5 +18,9 @@ defineProps<{
   name: string
   card?: GameCard | null
   location: Location
+  currentPlayer?: 'player1' | 'player2'
+}>()
+const emit = defineEmits<{
+  (e: 'activate-effect', card: GameCard): void
 }>()
 </script>

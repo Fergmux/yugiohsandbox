@@ -4,7 +4,9 @@
     :name="name"
     :card="card"
     :location="location"
+    :current-player="currentPlayer"
     @swap-stance="emit('swap-stance', $event)"
+    @activate-effect="emit('activate-effect', $event)"
   />
 </template>
 
@@ -27,9 +29,11 @@ const props = defineProps<{
   card?: GameCard | null
   location: Location
   type: ZoneType
+  currentPlayer?: 'player1' | 'player2'
 }>()
 const emit = defineEmits<{
   (e: 'swap-stance', card: GameCard): void
+  (e: 'activate-effect', card: GameCard): void
 }>()
 
 const component = computed(() => {

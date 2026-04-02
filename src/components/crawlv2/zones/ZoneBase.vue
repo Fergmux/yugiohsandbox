@@ -4,12 +4,20 @@
       <div v-if="rotate" class="relative w-full overflow-hidden" style="aspect-ratio: 3/2">
         <CardBase
           :card="card"
+          :current-player="currentPlayer"
           class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90"
           style="height: 150%; width: full"
           @swap-stance="emit('swap-stance', $event)"
+          @activate-effect="emit('activate-effect', $event)"
         />
       </div>
-      <CardBase v-else :card="card" @swap-stance="emit('swap-stance', $event)" />
+      <CardBase
+        v-else
+        :card="card"
+        :current-player="currentPlayer"
+        @swap-stance="emit('swap-stance', $event)"
+        @activate-effect="emit('activate-effect', $event)"
+      />
 
       <div
         v-if="pending?.card.gameId === card.gameId"
@@ -48,9 +56,11 @@ defineProps<{
   card?: GameCard | null
   location: Location
   rotate?: boolean
+  currentPlayer?: 'player1' | 'player2'
 }>()
 const emit = defineEmits<{
   (e: 'swap-stance', card: GameCard): void
+  (e: 'activate-effect', card: GameCard): void
 }>()
 
 const { pending, respond } = useActivationPrompt()

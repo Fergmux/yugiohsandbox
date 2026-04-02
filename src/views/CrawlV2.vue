@@ -52,9 +52,11 @@
         :card="getCard(location)"
         :type="location.type"
         :location="location"
+        :current-player="gameState.currentPlayer"
         @mousedown="selectCard(location)"
         @mouseup="moveCard(location)"
         @swap-stance="swapStance"
+        @activate-effect="activateEffect"
       />
     </div>
   </div>
@@ -68,13 +70,12 @@ import cardImg from '@/assets/images/cards/card.png'
 import effectImg from '@/assets/images/cards/effect.png'
 import trapImg from '@/assets/images/cards/trap.png'
 import { type GameCard } from '@/types/cards'
-import { effectResolver } from '@/composables/crawlv2/EffectResolver'
+import { createEffectResolver } from '@/composables/crawlv2/EffectResolver'
 import { computed, ref, type Ref } from 'vue'
 import { EventBus, Event } from '@/composables/crawlv2/EventBus'
-import { effectHandlers } from '@/composables/crawlv2/EffectHandlers'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
-import { registerBurnSystem } from '@/composables/crawlv2/BurnSystem'
+import { registerBuffSystems } from '@/composables/crawlv2/BuffSystem'
 
 const { ask } = useActivationPrompt()
 const { pending, selectedTargets, toggleTarget, cancelSelection } = useTargetSelector()
@@ -91,59 +92,6 @@ interface GameState {
   currentPlayer: 'player1' | 'player2'
   player1HP: number
   player2HP: number
-}
-
-// ─── Effect registration ─────────────────────────────────────────────────────
-
-const registerEffects = (card: GameCard) => {
-  for (const effect of card.effects ?? []) {
-    const handler = effectHandlers[effect.effect]
-    if (!handler) continue
-
-    EventBus.on(effect.trigger as Event, card.gameId, async (_e, _id, data, ctx) => {
-      // Only fire on the owner's turn if flagged
-      if (effect.activateOnOwnerTurn) {
-        const { currentPlayer } = data as { currentPlayer?: string }
-        if (currentPlayer !== card.owner) return
-      }
-
-      if (effect.optional) {
-        const activate = await ask(card)
-        if (!activate) return
-      }
-
-      if (effect.eventName) {
-        const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card })
-        if (cancelled) return
-      }
-
-      await handler(data, ctx, card, effect, gameState.value.cards)
-
-      if (!effect.persistent) {
-        EventBus.off(effect.trigger as Event, card.gameId)
-      }
-    })
-  }
-
-  // When a card with persistent effects leaves the field, clean up its listeners
-  if ((card.effects ?? []).some((e) => e.persistent)) {
-    const cleanupKey = `effects:${card.gameId}`
-    const cleanup = () => {
-      for (const effect of card.effects ?? []) {
-        if (effect.persistent && effect.trigger) {
-          EventBus.off(effect.trigger as Event, card.gameId)
-        }
-      }
-      EventBus.off(Event.CARD_MOVED, cleanupKey)
-      EventBus.off(Event.UNIT_DEFEATED, cleanupKey)
-    }
-
-    for (const checkEvent of [Event.CARD_MOVED, Event.UNIT_DEFEATED] as Event[]) {
-      EventBus.on(checkEvent, cleanupKey, (_e, targetId) => {
-        if (targetId === card.gameId && card.location.type !== 'unit') cleanup()
-      })
-    }
-  }
 }
 
 // ─── Card helpers ────────────────────────────────────────────────────────────
@@ -178,71 +126,25 @@ const selectCard = (location: Location | null) => {
   selectedCard.value = location ? getCard(location) : null
 }
 
-const playCard = async (location: Location) => {
-  if (!selectedCard.value) return
-  const card = selectedCard.value
-
-  let ctx
-  switch (card.type) {
-    case 'unit':
-      ctx = await EventBus.emit(Event.UNIT_PLAYED, card.gameId, { card })
-      if (ctx.cancelled) return
-      registerEffects(card)
-
-      await effectResolver.summon(card, gameState.value.cards, location)
-      break
-    case 'effect': {
-      ctx = await EventBus.emit(Event.TARGETED_EFFECT, card.gameId, { card })
-      if (ctx.cancelled) return
-      effectResolver.executeCardEffects(card, gameState.value.cards)
-      break
-    }
-    case 'trap':
-      ctx = await EventBus.emit(Event.TRAP_PLAYED, card.gameId, { card })
-      if (ctx.cancelled) return
-      registerEffects(card)
-      await effectResolver.setTrap(card, location)
-      break
-    case 'power':
-      ctx = await EventBus.emit(Event.POWER_PLAYED, card.gameId, { card })
-      if (ctx.cancelled) return
-      registerEffects(card)
-      ctx = await EventBus.emit(Event.POWER_SET, card.gameId, { card })
-      break
-  }
-
-  selectCard(null)
-}
-
 const moveCard = (location: Location) => {
   if (pending.value) return
   if (!selectedCard.value) return
 
-  const cardAtLocation = getCard(location)
-  if (['unit', 'power', 'trap'].includes(location.type) && !cardAtLocation) {
-    playCard(location)
-    return
-  }
+  // Prevent moving cards whose owner does not match the current player
+  if (selectedCard.value.owner !== gameState.value.currentPlayer) return
 
-  if (
-    cardAtLocation &&
-    cardAtLocation.location.type === 'unit' &&
-    selectedCard.value?.location.type === 'unit' &&
-    cardAtLocation.gameId !== selectedCard.value?.gameId
-  ) {
-    effectResolver.damage({
-      target: cardAtLocation,
-      source: selectedCard.value,
-    })
-    selectCard(null)
-  } else if (!cardAtLocation) {
-    selectedCard.value.location = location
-    EventBus.emit(Event.CARD_MOVED, selectedCard.value.gameId, { target: selectedCard.value })
-  }
+  // Prevent moving cards to locations with a different owner
+  if (location.player && location.player !== selectedCard.value.owner) return
+
+  effectResolver.moveCard(selectedCard.value, location, gameState.value.cards)
 }
 
 const swapStance = (card: GameCard) => {
   effectResolver.swapStance({ card })
+}
+
+const activateEffect = async (card: GameCard) => {
+  await effectResolver.activateEffect(card, gameState.value.cards)
 }
 
 // ─── Turn management ──────────────────────────────────────────────────────────
@@ -264,23 +166,6 @@ const endTurn = async () => {
     cards: gameState.value.cards,
   })
 }
-
-// ─── Player damage ───────────────────────────────────────────────────────────
-
-EventBus.on(Event.PLAYER_DAMAGE, 'game', (_e, _id, data) => {
-  const { player, amount } = data as { player: 'player1' | 'player2'; amount: number }
-  if (player === 'player1') {
-    gameState.value.player1HP = Math.max(0, gameState.value.player1HP - amount)
-  } else {
-    gameState.value.player2HP = Math.max(0, gameState.value.player2HP - amount)
-  }
-})
-
-EventBus.on(Event.UNIT_STANCE_SWAP, 'game', (_e, _id, data) => {
-  const { card } = data as { card?: GameCard }
-  if (!card || card.type !== 'unit' || card.location.type !== 'unit') return
-  card.defensePosition = !card.defensePosition
-})
 
 // ─── Game state ──────────────────────────────────────────────────────────────
 
@@ -414,19 +299,60 @@ const gameState: Ref<GameState> = ref({
       effects: [
         {
           effect: 'debuff',
+          eventName: Event.BURN_APPLIED,
           options: {
             debuff: 'burn',
             value: 2,
           },
-          trigger: Event.TURN_START,
+          trigger: 'manual',
           persistent: true,
           optional: true,
-          activateOnOwnerTurn: true,
+          resetOnEvent: Event.TURN_START,
+          uses: 1,
+          activations: 0,
           target: [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
             { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player1' },
             { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
           ],
+        },
+      ],
+    },
+    {
+      id: 3,
+      gameId: '9',
+      name: 'Cleanse Warrior',
+      image: cardImg,
+      atk: 7,
+      def: 9,
+      cost: 2,
+      type: 'unit',
+      race: 'warrior',
+      damage: 'psychic',
+      description: '',
+      effect: 'Once per turn, you can apply 1x Cleanse to this card',
+      rarity: 'rare',
+      location: { id: 'hand15', type: 'hand', index: 5, player: 'player1', name: 'Hand' } as Location,
+      owner: 'player1',
+      buffs: {},
+      debuffs: {},
+      faceUp: true,
+      defensePosition: false,
+      effects: [
+        {
+          effect: 'buff',
+          eventName: Event.CLEANSE_APPLIED,
+          options: {
+            buff: 'cleanse',
+            value: 1,
+          },
+          resetOnEvent: Event.TURN_START,
+          uses: 1,
+          activations: 0,
+          trigger: 'manual',
+          persistent: true,
+          optional: false,
+          target: [{ comparitor: 'itself' }],
         },
       ],
     },
@@ -501,29 +427,18 @@ const gameState: Ref<GameState> = ref({
   ],
 })
 
-// Register burn system after gameState is defined
-registerBurnSystem(gameState.value)
+// Register buff/debuff systems (burn, cleanse) after gameState is defined
+registerBuffSystems(() => gameState.value.cards)
 
-// ─── Off-field modifier cleanup ───────────────────────────────────────────────
-// Clear a card's own buffs/debuffs when it leaves the field (to hand, spent, dead, deck).
-
-const OFF_FIELD_TYPES = new Set<string>(['spent', 'dead', 'hand', 'deck'])
-
-const clearModifiers = (card: GameCard | undefined) => {
-  if (!card || !OFF_FIELD_TYPES.has(card.location.type)) return
-  card.buffs = {}
-  card.debuffs = {}
-}
-
-EventBus.on(Event.CARD_MOVED, 'modifier_cleanup', (_e, _id, data) => {
-  const { target, card: c } = data as { target?: GameCard; card?: GameCard }
-  clearModifiers(target ?? c)
-})
-
-// UNIT_DEFEATED moves the card to 'spent' without emitting CARD_MOVED, so handle it too
-EventBus.on(Event.UNIT_DEFEATED, 'modifier_cleanup', (_e, _id, data) => {
-  const { target } = data as { target: GameCard }
-  clearModifiers(target)
+// Create effect resolver with all dependencies
+const effectResolver = createEffectResolver({
+  getCard,
+  selectCard: (card) => {
+    selectedCard.value = card
+  },
+  ask,
+  getCurrentPlayer: () => gameState.value.currentPlayer,
+  gameState: gameState.value,
 })
 </script>
 

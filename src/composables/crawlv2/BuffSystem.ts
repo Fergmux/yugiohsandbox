@@ -1,5 +1,8 @@
 import type { GameCard } from '@/types/cards'
 import { Event, EventBus } from './EventBus'
+import { propOf } from './CheckSystem'
+import { registerBurnSystem } from './debuffs/BurnSystem'
+import { registerCleanseSystem } from './buffs/CleanseSystem'
 
 // Add events here as new mechanics require buff re-evaluation.
 // Note: UNIT_SUMMONED is intentionally excluded — it fires before card placement,
@@ -10,7 +13,6 @@ export function getEffective(card: GameCard): GameCard {
   if (!Object.keys(card.buffs).length && !Object.keys(card.debuffs).length) return card
 
   const effective = { ...card } as Record<string, unknown>
-  const propOf = (key: string) => key.split(':').slice(1).join(':') || key
 
   const apply = (mods: GameCard['buffs'], sign: 1 | -1) => {
     for (const [key, value] of Object.entries(mods)) {
@@ -65,4 +67,24 @@ export function registerBuffReevaluation(sourceCard: GameCard, reapply: () => vo
       }
     })
   }
+}
+
+/**
+ * Returns true if the card has an active cleanse buff (value > 0).
+ * Cards with cleanse cannot receive new debuffs.
+ */
+export function isDebuffBlocked(card: GameCard): boolean {
+  return typeof card.buffs.cleanse === 'number' && card.buffs.cleanse > 0
+}
+
+/**
+ * Registers all buff/debuff systems (burn, cleanse) with the provided card getter.
+ * Call once during app setup — subsequent calls are safe because EventBus.on
+ * appends to the listener array for the same (event, key) pair.
+ *
+ * @param getCards - A function that returns the current game cards array
+ */
+export function registerBuffSystems(getCards: () => GameCard[]) {
+  registerBurnSystem(getCards)
+  registerCleanseSystem(getCards)
 }
