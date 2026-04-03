@@ -6,8 +6,7 @@
     :location="location"
     :current-player="currentPlayer"
     :all-cards="allCards"
-    @swap-stance="emit('swap-stance', $event)"
-    @activate-effect="emit('activate-effect', $event)"
+    @activate-effect="onActivateEffect"
   />
 </template>
 
@@ -34,9 +33,12 @@ const props = defineProps<{
   allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
-  (e: 'swap-stance', card: GameCard): void
-  (e: 'activate-effect', card: GameCard): void
+  (e: 'activate-effect', card: GameCard, effectIndex: number): void
 }>()
+
+function onActivateEffect(card: GameCard, effectIndex: number) {
+  emit('activate-effect', card, effectIndex)
+}
 
 const component = computed(() => {
   switch (props.type) {

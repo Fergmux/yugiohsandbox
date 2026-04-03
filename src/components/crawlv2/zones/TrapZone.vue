@@ -1,5 +1,13 @@
 <template>
-  <ZoneBase :name="name" :card="card" :location="location" rotate class="bg-red-700/75 text-white" />
+  <ZoneBase
+    :name="name"
+    :card="card"
+    :location="location"
+    :current-player="currentPlayer"
+    rotate
+    class="bg-red-700/75 text-white"
+    @sacrifice="emit('sacrifice', $event)"
+  />
 </template>
 
 <script setup lang="ts">
@@ -11,5 +19,9 @@ defineProps<{
   name: string
   card?: GameCard | null
   location: Location
+  currentPlayer?: 'player1' | 'player2'
+}>()
+const emit = defineEmits<{
+  (e: 'sacrifice', card: GameCard): void
 }>()
 </script>

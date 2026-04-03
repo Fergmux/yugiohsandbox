@@ -1,6 +1,15 @@
 import type { GameCard, Check, Condition } from '@/types/cards'
+import { getGameState } from './GameState'
 
-export type Comparator = 'equals' | 'not_equals' | 'less_than' | 'adjacent' | 'itself' | 'owner'
+export type Comparator =
+  | 'equals'
+  | 'not_equals'
+  | 'less_than'
+  | 'more_than'
+  | 'adjacent'
+  | 'neighbouring'
+  | 'itself'
+  | 'owner'
 
 function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   if (!key) return undefined
@@ -11,16 +20,36 @@ function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   return current
 }
 
+/** Compares two numeric values using the given comparator. */
+function compareValues(comparitor: Comparator, actual: number | undefined, expected: number | undefined): boolean {
+  if (actual === undefined || expected === undefined) return false
+  switch (comparitor) {
+    case 'equals':
+      return actual === expected
+    case 'more_than':
+      return actual > expected
+    case 'less_than':
+      return actual < expected
+    default:
+      return false
+  }
+}
+
 function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boolean {
   switch (check.comparitor) {
     case 'equals':
-      return getNestedValue(candidate, check.key) === check.value
     case 'not_equals':
-      return getNestedValue(candidate, check.key) !== check.value
     case 'less_than':
-      return (getNestedValue(candidate, check.key) as number) < (check.value as unknown as number)
+    case 'more_than': {
+      const actual = getNestedValue(candidate, check.key) as number | undefined
+      const expected = check.value as number | undefined
+      const result = compareValues(check.comparitor, actual, expected)
+      return check.comparitor === 'not_equals' ? !result : result
+    }
     case 'adjacent':
       return source.location.adjacent?.includes(candidate.location.id) ?? false
+    case 'neighbouring':
+      return source.location.neighbouring?.includes(candidate.location.id) ?? false
     case 'itself':
       return candidate.gameId === source.gameId
     case 'owner':
@@ -31,27 +60,28 @@ function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boo
 }
 
 /**
- * Evaluates a list of checks against a candidate card, respecting combinators.
- * First check has no combinator (implicit start). Subsequent checks use
- * 'and' (default) or 'or'. Evaluated left-to-right with no precedence grouping.
+ * Evaluates a list of check groups against a candidate card.
+ * Each group (nested array) is AND'd together, and groups are OR'd.
+ * Returns true if any group's checks all pass.
  */
-export function evaluateChecks(checks: Check[], source: GameCard, candidate: GameCard): boolean {
+export function evaluateChecks(checks: Check[][], source: GameCard, candidate: GameCard): boolean {
   if (!checks.length) return true
-  let result = evaluateCheck(checks[0], source, candidate)
-  for (let i = 1; i < checks.length; i++) {
-    const check = checks[i]
-    const value = evaluateCheck(check, source, candidate)
-    if (check.combinator === 'or') {
-      result = result || value
-    } else {
-      result = result && value
-    }
-  }
-  return result
+  return checks.some((group) => group.every((check) => evaluateCheck(check, source, candidate)))
 }
 
-export function filterByChecks(checks: Check[], source: GameCard, cards: GameCard[]): GameCard[] {
-  return cards.filter((c) => evaluateChecks(checks, source, c))
+export function filterByChecks(checks: Check[][], source: GameCard): GameCard[] {
+  return getGameState().cards.filter((c) => evaluateChecks(checks, source, c))
+}
+
+/** Returns the union of cards matching any of the provided check groups. */
+export function filterByTargets(targets: Check[][], source: GameCard): GameCard[] {
+  const seen = new Set<GameCard>()
+  for (const checks of targets) {
+    for (const card of filterByChecks([checks], source)) {
+      seen.add(card)
+    }
+  }
+  return [...seen]
 }
 
 /**
@@ -59,30 +89,39 @@ export function filterByChecks(checks: Check[], source: GameCard, cards: GameCar
  * 'has_card': returns true if at least one card matches all checks.
  * 'event_target': returns true if the event's target card matches all checks.
  */
-export function evaluateCondition(
-  condition: Condition,
-  source: GameCard,
-  cards: GameCard[],
-  eventTarget?: GameCard,
-): boolean {
+export function evaluateCondition(condition: Condition, source: GameCard, eventTarget?: GameCard): boolean {
   switch (condition.test) {
     case 'event_target':
       if (!eventTarget) return false
       return evaluateChecks(condition.checks ?? [], source, eventTarget)
+    case 'has_property':
+      return evaluateChecks(condition.checks ?? [], source, source)
+    case 'has_energy': {
+      if (!source.owner) return false
+      const gs = getGameState()
+      const ap = source.owner === 'player1' ? gs.player1AP : gs.player2AP
+      const checks = condition.checks ?? []
+      if (!checks.length) return true
+      return checks.some((group) =>
+        group.every((check) => {
+          const threshold = getNestedValue(source, check.key) as number | undefined
+          return compareValues(check.comparitor, ap, threshold)
+        }),
+      )
+    }
     case 'has_card':
     default:
-      return cards.some((c) => evaluateChecks(condition.checks ?? [], source, c))
+      return getGameState().cards.some((c) => evaluateChecks(condition.checks ?? [], source, c))
   }
 }
 
 export function evaluateConditions(
   conditions: Condition[] | undefined,
   source: GameCard,
-  cards: GameCard[],
   eventTarget?: GameCard,
 ): boolean {
   if (!conditions) return true
-  return conditions.every((c) => evaluateCondition(c, source, cards, eventTarget))
+  return conditions.every((c) => evaluateCondition(c, source, eventTarget))
 }
 
 /** Strip source-card prefix from buff/debuff keys (e.g. "4:damage" -> "damage") */
@@ -93,7 +132,7 @@ export const propOf = (key: string) => key.split(':').slice(1).join(':') || key
  * Returns true if the card has no target requirements (self-targeting or no target),
  * or if there are valid targets in the game state.
  */
-export function hasAvailableTargets(card: GameCard, cards: GameCard[]): boolean {
+export function hasAvailableTargets(card: GameCard): boolean {
   const manualEffects = card.effects?.filter(
     (e) => e.trigger === 'manual' && (e.uses === undefined || (e.activations ?? 0) < e.uses),
   )
@@ -103,10 +142,10 @@ export function hasAvailableTargets(card: GameCard, cards: GameCard[]): boolean 
   // Check each manual effect for available targets
   for (const effect of manualEffects) {
     // If effect has no target definition, it doesn't need targets
-    if (!effect.target) return true
+    if (!effect.targets?.length) return true
 
-    // Filter cards by the effect's target checks
-    const validTargets = filterByChecks(effect.target, card, cards)
+    // Filter cards by the effect's target checks (union across all target groups)
+    const validTargets = filterByTargets(effect.targets, card)
     if (validTargets.length > 0) return true
   }
 

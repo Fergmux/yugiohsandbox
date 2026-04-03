@@ -6,9 +6,18 @@ import { type Location } from '@/types/crawlv2'
 import { Event } from '@/composables/crawlv2/EventBus'
 import { cards, type GameCard } from './cards'
 
-// 1, 2, 4, 21, 27
-export const defaultDeck1Ids: number[] = [1, 2, 4, 21, 27]
-export const defaultDeck2Ids: number[] = [1, 2, 4, 21, 27]
+// 1: 'Chaos Mage',
+// 2: 'Torch Mage',
+// 4: 'Dante',
+// 7: 'Cosmic Dragon',
+// 9: 'Blue Crystal Dragon',
+// 21: 'Book of Arcane',
+// 27: 'Magic shield',
+
+// Mage
+export const defaultDeck1Ids: number[] = [1, 1, 2, 2, 21, 21, 27, 27]
+// Dragon warrior
+export const defaultDeck2Ids: number[] = [4, 4, 7, 7, 9, 9, 21, 21, 27, 27]
 
 export const convertToGameCard = (
   id: number,
@@ -22,6 +31,7 @@ export const convertToGameCard = (
   }
   return {
     ...card,
+    effects: card.effects?.map((e) => ({ ...e })),
     gameId: gameId,
     faceUp: false,
     defensePosition: false,
@@ -51,6 +61,8 @@ export const defaultGameState: GameState = {
   currentPlayer: 'player1',
   player1HP: 40,
   player2HP: 40,
+  player1AP: 2,
+  player2AP: 2,
   cards: [...defaultDeck1, ...defaultDeck2],
 }
 

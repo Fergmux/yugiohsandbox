@@ -53,36 +53,32 @@
         </div>
       </div>
 
-      <button
-        v-if="canSwapStance"
-        class="absolute right-1 bottom-1 z-20 rounded bg-black/80 px-1.5 py-0.5 text-[8px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black"
-        @mousedown.stop
-        @mouseup.stop
-        @click.stop="emit('swap-stance', card)"
+      <div
+        v-if="effectButtons.length"
+        class="absolute bottom-1 left-1 z-20 flex flex-col items-start gap-px opacity-0 transition-opacity group-hover:opacity-100"
       >
-        {{ card.defensePosition ? 'ATK' : 'DEF' }}
-      </button>
-
-      <button
-        v-if="showActivateButton"
-        class="absolute bottom-1 left-1 z-20 cursor-pointer rounded bg-amber-600/80 px-1.5 py-0.5 text-[8px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-amber-500"
-        :class="{ '!group-hover:opacity-0 cursor-not-allowed! opacity-50 hover:bg-amber-600/80': !activationEnabled }"
-        :disabled="!activationEnabled"
-        @mousedown.stop
-        @mouseup.stop
-        @click.stop="activationEnabled && emit('activate-effect', card)"
-      >
-        Activate
-      </button>
+        <button
+          v-for="btn in effectButtons"
+          :key="btn.index"
+          class="rounded bg-amber-600/80 px-1.5 py-0.5 text-[8px] font-bold text-white hover:bg-amber-500"
+          :class="{ 'cursor-not-allowed opacity-50 hover:bg-amber-600/80': !btn.enabled }"
+          :disabled="!btn.enabled"
+          @mousedown.stop
+          @mouseup.stop
+          @click.stop="btn.enabled && emit('activate-effect', card, btn.index)"
+        >
+          {{ btn.name }}
+        </button>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { type GameCard } from '@/types/cards'
+import { type GameCard, type EffectDef } from '@/types/cards'
 import { getEffective } from '@/composables/crawlv2/BuffSystem'
-import { propOf, hasAvailableTargets, evaluateConditions } from '@/composables/crawlv2/CheckSystem'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { propOf, filterByTargets, filterByChecks, evaluateConditions } from '@/composables/crawlv2/CheckSystem'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import CardBack from '@/assets/images/cards/cardback.png'
 import { EventBus, Event } from '@/composables/crawlv2/EventBus'
 
@@ -92,46 +88,61 @@ const props = defineProps<{
   allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
-  (e: 'swap-stance', card: GameCard): void
-  (e: 'activate-effect', card: GameCard): void
+  (e: 'activate-effect', card: GameCard, effectIndex: number): void
 }>()
 
-// Reactive state for target availability
-const activationEnabled = ref(false)
+type EffectButton = { index: number; name: string; enabled: boolean }
+const effectButtons = ref<EffectButton[]>([])
 
-const updateTargetAvailability = () => {
-  if (!props.card.effects?.some((e) => e.trigger === 'manual')) return
+const canShowEffectButtons = () => props.card.owner === props.currentPlayer
 
-  showActivateButton.value =
-    props.card.owner === props.currentPlayer &&
-    ((props.card.type === 'unit' && props.card.location.type === 'unit') ||
-      (props.card.type === 'effect' && props.card.location.type === 'hand'))
-
-  // Check if there are available targets
-  activationEnabled.value =
-    evaluateConditions(props.card.effects[0].conditions, props.card, props.allCards ?? []) &&
-    hasAvailableTargets(props.card, props.allCards ?? [])
+const isEffectEnabled = (effect: EffectDef) => {
+  if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return false
+  if (!evaluateConditions(effect.conditions, props.card)) return false
+  if (!effect.targets?.length) return true
+  let validTargets = filterByTargets(effect.targets, props.card)
+  if (effect.effect === 'damage') {
+    validTargets = validTargets.filter((t) => !(typeof t.buffs.in_flight === 'number' && t.buffs.in_flight > 0))
+    const opponentUnits = filterByChecks(
+      [
+        [
+          { comparitor: 'equals', key: 'location.type', value: 'unit' },
+          { comparitor: 'owner', value: 'opponent' },
+        ],
+      ],
+      props.card,
+    )
+    return validTargets.length > 0 || opponentUnits.length === 0
+  }
+  return validTargets.length > 0
 }
 
-const onCardMoved = () => {
-  updateTargetAvailability()
+const updateEffectButtons = () => {
+  if (!canShowEffectButtons()) {
+    effectButtons.value = []
+    return
+  }
+  effectButtons.value = (props.card.effects ?? [])
+    .map((effect, index) => {
+      if (effect.trigger !== 'manual') return null
+      return { index, name: effect.name ?? 'Activate', enabled: isEffectEnabled(effect) }
+    })
+    .filter((x): x is EffectButton => x !== null)
 }
+
+watch(() => props.currentPlayer, updateEffectButtons)
 
 onMounted(() => {
-  updateTargetAvailability()
-  EventBus.on(Event.UPDATED, `cardbase:${props.card.gameId}`, onCardMoved)
+  updateEffectButtons()
+  EventBus.on(Event.UPDATED, props.card.gameId, updateEffectButtons)
 })
 
 onUnmounted(() => {
-  EventBus.off(Event.UPDATED, `cardbase:${props.card.gameId}`)
+  EventBus.off(Event.UPDATED, props.card.gameId)
 })
 
 const cardImg = computed(() => (props.card.faceUp ? props.card.image : CardBack))
 const effective = computed(() => getEffective(props.card))
-const canSwapStance = computed(
-  () => props.card.type === 'unit' && props.card.location.type === 'unit' && props.card.owner === props.currentPlayer,
-)
-const showActivateButton = ref(false)
 
 const isTrapOrEffect = computed(() => ['trap', 'effect'].includes(props.card.type ?? ''))
 
@@ -147,7 +158,14 @@ const isDebuffed = (key: keyof GameCard) => {
   return typeof base === 'number' && (eff as number) < base
 }
 
-const BUFF_LABELS: Record<string, string> = { damage: 'DMG', cleanse: 'CLEANSE', atk: 'ATK', def: 'DEF' }
+const BUFF_LABELS: Record<string, string> = {
+  damage: 'DMG',
+  cleanse: 'CLEANSE',
+  atk: 'ATK',
+  def: 'DEF',
+  empower: 'EMPOWER',
+  in_flight: 'IN-FLIGHT',
+}
 const DEBUFF_LABELS: Record<string, string> = { burn: 'BURN', atk: 'ATK', def: 'DEF' }
 
 const BUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
@@ -155,6 +173,8 @@ const BUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   cleanse: (v) => `Cleanse ×${v}: prevents debuffs`,
   atk: (v) => `+${v} ATK`,
   def: (v) => `+${v} DEF`,
+  empower: (v) => `Empower ×${v}: +${v} ATK`,
+  in_flight: (v) => `In-Flight ×${v}: untargetable by attacks`,
 }
 
 const DEBUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {

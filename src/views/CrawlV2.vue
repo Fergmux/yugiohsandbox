@@ -5,6 +5,7 @@
       <div class="flex items-center gap-2 rounded bg-black/70 px-3 py-1 text-sm text-white">
         <span class="text-gray-300">Player 1</span>
         <span class="font-bold text-red-400">{{ gameState.player1HP }} LP</span>
+        <span class="font-bold text-blue-400">{{ gameState.player1AP }} AP</span>
       </div>
 
       <div class="flex items-center gap-3">
@@ -21,12 +22,13 @@
       </div>
 
       <div class="flex items-center gap-2 rounded bg-black/70 px-3 py-1 text-sm text-white">
+        <span class="font-bold text-blue-400">{{ gameState.player2AP }} AP</span>
         <span class="font-bold text-red-400">{{ gameState.player2HP }} LP</span>
         <span class="text-gray-300">Player 2</span>
       </div>
     </div>
 
-    <!-- Target selection prompt -->
+    <!-- Prompts -->
     <div
       v-if="targetPending"
       class="absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded bg-amber-400 px-4 py-1.5 text-sm font-bold text-black shadow-lg"
@@ -34,6 +36,15 @@
       Select a target ({{ selectedTargets.length }}/{{ targetPending.maxTargets }})
       <button @click="cancelSelection()" class="ml-3 text-red-700 hover:text-red-900">Cancel</button>
     </div>
+    <div
+      v-else-if="pendingZone"
+      class="absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded bg-emerald-400 px-4 py-1.5 text-sm font-bold text-black shadow-lg"
+    >
+      Select a zone to summon {{ pendingZone.label ?? 'card' }}
+      <button @click="cancelZoneSelection()" class="ml-3 text-red-700 hover:text-red-900">Cancel</button>
+    </div>
+
+    <CardPickerModal />
 
     <div
       class="mx-auto grid w-[130vh] grid-cols-[2fr_2fr_3fr_3fr_3fr_2fr_2fr] grid-rows-[3fr_2fr_3fr_3fr_0.5fr_3fr_3fr_2fr_3fr] gap-x-[min(80px,3vh)] gap-y-2 bg-cover bg-center bg-no-repeat px-[min(15vw,30vh)] py-[5vh] select-none"
@@ -43,9 +54,9 @@
         v-for="location in locations"
         class="col-span-1"
         :class="{
-          'ring-2 ring-yellow-400': !targetPending && location.id === selectedCardLocation?.id,
           'cursor-crosshair ring-2 ring-red-500': isValidTarget(location),
           'ring-2 ring-orange-400': isSelectedTarget(location),
+          'cursor-pointer ring-2 ring-emerald-400': isValidSummonTarget(location),
         }"
         :key="location.id"
         :name="location.name"
@@ -54,9 +65,7 @@
         :location="location"
         :current-player="gameState.currentPlayer"
         :all-cards="gameState.cards"
-        @mousedown="selectCard(location)"
-        @mouseup="moveCard(location)"
-        @swap-stance="swapStance"
+        @click="handleZoneClick(location)"
         @activate-effect="activateEffect"
       />
     </div>
@@ -65,25 +74,32 @@
 
 <script setup lang="ts">
 import FieldZone from '@/components/crawlv2/zones/FieldZone.vue'
+import CardPickerModal from '@/components/crawlv2/CardPickerModal.vue'
 import { locations, type Location, type GameState } from '@/types/crawlv2'
 import playspaceImg from '@/assets/images/playspace.png'
 import { type GameCard } from '@/types/cards'
-import { createEffectResolver } from '@/composables/crawlv2/EffectResolver'
-import { computed, ref, type Ref } from 'vue'
+import { computed, onMounted, ref, type Ref } from 'vue'
 import { EventBus, Event } from '@/composables/crawlv2/EventBus'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
 import { registerBuffSystems } from '@/composables/crawlv2/BuffSystem'
 import { defaultGameState } from '@/types/defaultGameState'
+import { registerEffectResolver } from '@/composables/crawlv2/EffectResolver'
+import { registerGameState } from '@/composables/crawlv2/GameState'
 
 const { ask } = useActivationPrompt()
-const { pending, selectedTargets, toggleTarget, cancelSelection } = useTargetSelector()
+const {
+  pending,
+  selectedTargets,
+  toggleTarget,
+  cancelSelection,
+  pendingZone,
+  pickZone,
+  cancelZoneSelection,
+} = useTargetSelector()
 const targetPending = computed(() => pending.value)
 
 const selectedCard = ref<GameCard | null>(null)
-const selectedCardLocation = computed<Location | null>(() => selectedCard.value?.location ?? null)
-
-// ─── Turn state ─────────────────────────────────────────────────────────────
 
 // ─── Card helpers ────────────────────────────────────────────────────────────
 
@@ -104,39 +120,25 @@ const isSelectedTarget = (location: Location): boolean => {
   return card ? selectedTargets.value.some((t) => t.gameId === card.gameId) : false
 }
 
-const selectCard = (location: Location | null) => {
-  // Intercept clicks for target selection
+const isValidSummonTarget = (location: Location): boolean =>
+  pendingZone.value?.validZones.some((z) => z.id === location.id) ?? false
+
+const handleZoneClick = (location: Location) => {
   if (pending.value) {
-    if (!location) return
     const card = getCard(location)
     if (card && pending.value.validTargets.some((t) => t.gameId === card.gameId)) {
       toggleTarget(card)
     }
     return
   }
-  selectedCard.value = location ? getCard(location) : null
-}
-
-const moveCard = (location: Location) => {
-  if (pending.value) return
-  if (!selectedCard.value) return
-
-  // Prevent moving cards whose owner does not match the current player
-  if (selectedCard.value.owner !== gameState.value.currentPlayer) return
-
-  effectResolver.moveCard(selectedCard.value, location, gameState.value.cards)
-}
-
-const swapStance = (card: GameCard) => {
-  effectResolver.swapStance({ card })
-}
-
-const activateEffect = async (card: GameCard) => {
-  if (card.location.type === 'hand' && card.type === 'effect') {
-    await effectResolver.activateEffectFromHand(card, gameState.value.cards)
-  } else {
-    await effectResolver.activateEffect(card, gameState.value.cards)
+  if (pendingZone.value) {
+    if (isValidSummonTarget(location)) pickZone(location)
+    else cancelZoneSelection()
   }
+}
+
+const activateEffect = async (card: GameCard, effectIndex: number) => {
+  await effectResolver.activateEffect(card, effectIndex)
 }
 
 // ─── Turn management ──────────────────────────────────────────────────────────
@@ -163,18 +165,26 @@ const endTurn = async () => {
 
 const gameState: Ref<GameState> = ref(defaultGameState)
 
-// Register buff/debuff systems (burn, cleanse) after gameState is defined
-registerBuffSystems(() => gameState.value.cards)
+// Register global game state, buff systems, and effect resolver
+registerGameState(gameState.value)
+registerBuffSystems()
 
-// Create effect resolver with all dependencies
-const effectResolver = createEffectResolver({
-  getCard,
+const effectResolver = registerEffectResolver({
   selectCard: (card) => {
     selectedCard.value = card
   },
   ask,
-  getCurrentPlayer: () => gameState.value.currentPlayer,
-  gameState: gameState.value,
+})
+
+// Emit game start event on mount
+onMounted(async () => {
+  await EventBus.emit(Event.GAME_START, 'game', {
+    cards: gameState.value.cards,
+  })
+  await EventBus.emit(Event.TURN_START, 'game:ap', {
+    currentPlayer: gameState.value.currentPlayer,
+    cards: gameState.value.cards,
+  })
 })
 </script>
 

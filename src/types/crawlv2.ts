@@ -24,6 +24,8 @@ export interface GameState {
   currentPlayer: 'player1' | 'player2'
   player1HP: number
   player2HP: number
+  player1AP: number
+  player2AP: number
 }
 
 export const indexableZones = ['hand', 'power', 'unit', 'trap']

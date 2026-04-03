@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { GameCard } from '@/types/cards'
+import type { Location } from '@/types/crawlv2'
 
 type PendingSelection = {
   validTargets: GameCard[]
@@ -7,8 +8,26 @@ type PendingSelection = {
   maxTargets: number
 }
 
+type PendingZoneSelection = {
+  validZones: Location[]
+  resolve: (zone: Location | null) => void
+  label?: string
+}
+
+type PendingCardPick = {
+  cards: GameCard[]
+  count: number
+  label?: string
+  resolve: (selected: GameCard[]) => void
+}
+
 const pending = ref<PendingSelection | null>(null)
 const selectedTargets = ref<GameCard[]>([])
+
+const pendingZone = ref<PendingZoneSelection | null>(null)
+
+const pendingCardPick = ref<PendingCardPick | null>(null)
+const pickedCards = ref<GameCard[]>([])
 
 export function useTargetSelector() {
   function selectTargets(validTargets: GameCard[], maxTargets = 1): Promise<GameCard[]> {
@@ -46,5 +65,74 @@ export function useTargetSelector() {
     selectedTargets.value = []
   }
 
-  return { pending, selectedTargets, selectTargets, toggleTarget, confirmSelection, cancelSelection }
+  function selectZone(validZones: Location[], label?: string): Promise<Location | null> {
+    return new Promise((resolve) => {
+      pendingZone.value = { validZones, resolve, label }
+    })
+  }
+
+  function pickZone(location: Location) {
+    if (!pendingZone.value) return
+    pendingZone.value.resolve(location)
+    pendingZone.value = null
+  }
+
+  function cancelZoneSelection() {
+    if (!pendingZone.value) return
+    pendingZone.value.resolve(null)
+    pendingZone.value = null
+  }
+
+  function selectCards(cards: GameCard[], count: number, label?: string): Promise<GameCard[]> {
+    return new Promise((resolve) => {
+      pickedCards.value = []
+      pendingCardPick.value = { cards, count, label, resolve }
+    })
+  }
+
+  function togglePickCard(card: GameCard) {
+    const idx = pickedCards.value.findIndex((c) => c.gameId === card.gameId)
+    if (idx >= 0) {
+      pickedCards.value.splice(idx, 1)
+      return
+    }
+    if (pendingCardPick.value && pickedCards.value.length >= pendingCardPick.value.count) return
+    pickedCards.value.push(card)
+    if (pendingCardPick.value && pickedCards.value.length >= pendingCardPick.value.count) {
+      confirmCardPick()
+    }
+  }
+
+  function confirmCardPick() {
+    if (!pendingCardPick.value) return
+    pendingCardPick.value.resolve([...pickedCards.value])
+    pendingCardPick.value = null
+    pickedCards.value = []
+  }
+
+  function cancelCardPick() {
+    if (!pendingCardPick.value) return
+    pendingCardPick.value.resolve([])
+    pendingCardPick.value = null
+    pickedCards.value = []
+  }
+
+  return {
+    pending,
+    selectedTargets,
+    selectTargets,
+    toggleTarget,
+    confirmSelection,
+    cancelSelection,
+    pendingZone,
+    selectZone,
+    pickZone,
+    cancelZoneSelection,
+    pendingCardPick,
+    pickedCards,
+    selectCards,
+    togglePickCard,
+    confirmCardPick,
+    cancelCardPick,
+  }
 }

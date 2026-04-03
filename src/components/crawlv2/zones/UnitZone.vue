@@ -6,7 +6,8 @@
     :current-player="currentPlayer"
     :all-cards="allCards"
     class="aspect-square bg-amber-500/75"
-    @activate-effect="emit('activate-effect', $event)"
+    @activate-effect="onActivateEffect"
+    @sacrifice="emit('sacrifice', $event)"
   />
 </template>
 
@@ -23,6 +24,11 @@ defineProps<{
   allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
-  (e: 'activate-effect', card: GameCard): void
+  (e: 'activate-effect', card: GameCard, effectIndex: number): void
+  (e: 'sacrifice', card: GameCard): void
 }>()
+
+function onActivateEffect(card: GameCard, effectIndex: number) {
+  emit('activate-effect', card, effectIndex)
+}
 </script>

@@ -1,13 +1,24 @@
 import type { GameCard } from '@/types/cards'
 import { Event, EventBus } from './EventBus'
 import { propOf } from './CheckSystem'
+import { getGameState } from './GameState'
 import { registerBurnSystem } from './debuffs/BurnSystem'
 import { registerCleanseSystem } from './buffs/CleanseSystem'
+import { registerEmpowerSystem } from './buffs/EmpowerSystem'
+import { registerInFlightSystem } from './buffs/InFlightSystem'
 
 // Add events here as new mechanics require buff re-evaluation.
 // Note: UNIT_SUMMONED is intentionally excluded — it fires before card placement,
 // so adjacency checks would see the old location. CARD_MOVED covers placement instead.
 export const BUFF_REEVALUATE_EVENTS = [Event.CARD_MOVED, Event.UNIT_DEFEATED] as const satisfies readonly Event[]
+
+/**
+ * Maps named buff/debuff keys to the card stat they modify per stack.
+ * Add new buff → stat relationships here as more buffs are introduced.
+ */
+export const BUFF_STAT_MAP: Partial<Record<string, keyof GameCard>> = {
+  empower: 'atk',
+}
 
 export function getEffective(card: GameCard): GameCard {
   if (!Object.keys(card.buffs).length && !Object.keys(card.debuffs).length) return card
@@ -16,12 +27,24 @@ export function getEffective(card: GameCard): GameCard {
 
   const apply = (mods: GameCard['buffs'], sign: 1 | -1) => {
     for (const [key, value] of Object.entries(mods)) {
-      const prop = propOf(key)
-      const base = effective[prop]
+      const stripped = propOf(key)
+
+      // Named buff → stat translation (e.g. empower → atk)
+      const mappedStat = BUFF_STAT_MAP[stripped] as string | undefined
+      if (mappedStat && typeof value === 'number') {
+        const base = effective[mappedStat]
+        if (typeof base === 'number') {
+          effective[mappedStat] = base + sign * value
+        }
+        continue
+      }
+
+      // Direct key → property mapping
+      const base = effective[stripped]
       if (typeof base === 'number' && typeof value === 'number') {
-        effective[prop] = base + sign * value
+        effective[stripped] = base + sign * value
       } else if (sign === 1) {
-        effective[prop] = value
+        effective[stripped] = value
       }
     }
   }
@@ -32,9 +55,9 @@ export function getEffective(card: GameCard): GameCard {
   return effective as GameCard
 }
 
-export function clearBuffsFromSource(sourceId: string, cards: GameCard[]) {
+export function clearBuffsFromSource(sourceId: string) {
   const prefix = `${sourceId}:`
-  for (const card of cards) {
+  for (const card of getGameState().cards) {
     for (const key of Object.keys(card.buffs)) {
       if (key.startsWith(prefix)) delete card.buffs[key]
     }
@@ -84,7 +107,9 @@ export function isDebuffBlocked(card: GameCard): boolean {
  *
  * @param getCards - A function that returns the current game cards array
  */
-export function registerBuffSystems(getCards: () => GameCard[]) {
-  registerBurnSystem(getCards)
-  registerCleanseSystem(getCards)
+export function registerBuffSystems() {
+  registerBurnSystem()
+  registerCleanseSystem()
+  registerEmpowerSystem()
+  registerInFlightSystem()
 }

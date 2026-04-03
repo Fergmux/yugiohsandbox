@@ -8,34 +8,64 @@ function getMap(event: string): Map<string, EventListener[]> {
 }
 
 export enum Event {
+  // Game flow
   UPDATED = 'updated',
-  TARGETED_ATTACK = 'targeted_attack',
-  ATTACK_RESOLVED = 'attack_resolved',
-  TARGETED_EFFECT = 'targeted_effect',
-  DAMAGE_DEALT = 'damage_dealt',
-  UNIT_PLAYED = 'unit_played',
-  UNIT_SUMMONED = 'unit_summoned',
-  UNIT_DEFEATED = 'unit_defeated',
-  TRAP_PLAYED = 'trap_played',
-  TRAP_ACTIVATED = 'trap_activated',
-  TRAP_SPENT = 'trap_spent',
-  TRAP_SET = 'trap_set',
-  EFFECT_PLAYED = 'effect_played',
-  POWER_PLAYED = 'power_played',
-  POWER_SET = 'power_set',
-  UNIT_ABILITY = 'unit_ability',
-  UNIT_STANCE_SWAP = 'unit_stance_swap',
-  CARD_MOVED = 'card_moved',
-  CARD_LEFT_FIELD = 'card_left_field',
+  GAME_START = 'game_start',
   TURN_START = 'turn_start',
   TURN_END = 'turn_end',
-  PLAYER_DAMAGE = 'player_damage',
-  ACTIVATE_EFFECT = 'activate_effect',
-  CLEANSE_APPLIED = 'cleanse_applied',
-  BURN_APPLIED = 'burn_applied',
+
+  // Units
+  UNIT_PLAYED = 'unit_played', // Negateable
+  UNIT_SUMMONED = 'unit_summoned',
+  UNIT_ATTACKED = 'unit_attacked', // Negateable
+  UNIT_DEFEATED = 'unit_defeated',
+  UNIT_ABILITY_ATTEMPTED = 'unit_ability_attempted', // Negateable
+  UNIT_ABILITY_SUCCESSFUL = 'unit_ability_successful',
+  STANCE_SWAP_ATTEMPTED = 'unit_stance_swap_attempted', // Negateable
+  STANCE_SWAP_SUCCESSFUL = 'unit_stance_swap_successful',
+  SACRIFICE_ATTEMPTED = 'sacrifice_attempted', // Negateable
+  SACRIFICE_SUCCESSFUL = 'sacrifice_successful',
+
+  // Combat
+  ATTACK_DECLARED = 'attack_declared', // Negateable
+  ATTACK_SUCCESSFUL = 'attack_successful',
+  DAMAGE_ATTEMPTED = 'damage_attempted', // Negateable
+  DAMAGE_DEALT = 'damage_dealt',
+
+  // Traps
+  TRAP_PLAYED = 'trap_played', // Negateable
+  TRAP_SET = 'trap_set',
+  TRAP_ACTIVATED = 'trap_activated', // Negateable
+  TRAP_SUCCESSFUL = 'trap_successful',
+
+  // Effects
+  EFFECT_PLAYED = 'effect_played', // Negateable
+  EFFECT_APPLIED = 'effect_applied',
+
+  // Powers
+  POWER_PLAYED = 'power_played', // Negateable
+  POWER_SET = 'power_set',
+  POWER_ACTIVATED = 'power_activated', // Negateable
+  POWER_SUCCESSFUL = 'power_successful',
+
+  // Card movement
+  CARD_MOVED = 'card_moved',
+  CARD_LEFT_FIELD = 'card_left_field',
   CARD_DRAWN = 'card_drawn',
-  ATTACK_NEGATED = 'attack_negated',
+  CARD_SPENT = 'card_spent',
+
+  // Buffs
+  BUFF_ATTEMPTED = 'buff_attempted', // Negateable
+  CLEANSE_APPLIED = 'cleanse_applied',
+  EMPOWER_APPLIED = 'empower_applied',
+  IN_FLIGHT_APPLIED = 'in_flight_applied',
+
+  // Debuffs
+  DEBUFF_ATTEMPTED = 'debuff_attempted', // Negateable
+  BURN_APPLIED = 'burn_applied',
 }
+
+export const costedEvents = [Event.UNIT_PLAYED, Event.TRAP_PLAYED, Event.EFFECT_PLAYED, Event.POWER_PLAYED]
 
 export const EventBus = {
   on(event: Event | Event[], key: string, fn: EventListener) {
@@ -45,8 +75,7 @@ export const EventBus = {
       }
     } else {
       const map = getMap(event)
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(fn)
+      map.set(key, [fn])
     }
   },
 
