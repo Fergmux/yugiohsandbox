@@ -46,8 +46,6 @@ export type EffectDef = {
   trigger?: EffectTrigger
   effect: string
   ongoing?: boolean
-  /** Stays registered after firing — re-fires on subsequent triggers */
-  persistent?: boolean
   options?: Record<string, string | number>
   conditions?: Condition[]
   targets?: Check[][]
@@ -99,7 +97,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -123,9 +120,6 @@ export const cards: Card[] = [
         targets: [
           [
             { comparitor: 'equals', key: 'race', value: 'mage' },
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'player' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
             { comparitor: 'location', value: 'adjacent' },
           ],
         ],
@@ -135,7 +129,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -157,7 +150,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -186,7 +178,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -220,7 +211,6 @@ export const cards: Card[] = [
           value: 2,
         },
         trigger: 'manual',
-        persistent: true,
         optional: true,
         resetOnEvent: Event.TURN_START,
         uses: 1,
@@ -245,7 +235,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -263,7 +252,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -285,7 +273,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -314,7 +301,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -349,16 +335,12 @@ export const cards: Card[] = [
           select: 1,
         },
         trigger: 'manual',
-        persistent: true,
         optional: true,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
         targets: [
           [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'player' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
             { comparitor: 'location', value: 'adjacent' },
           ],
         ],
@@ -369,7 +351,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -387,7 +368,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -409,7 +389,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -438,7 +417,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -471,7 +449,6 @@ export const cards: Card[] = [
           value: 1,
         },
         trigger: Event.TURN_START,
-        persistent: true,
         optional: false,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
@@ -484,7 +461,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         optional: false,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
@@ -501,7 +477,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -533,7 +508,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -567,16 +541,12 @@ export const cards: Card[] = [
           value: 1,
         },
         trigger: 'manual',
-        persistent: true,
         optional: true,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
         targets: [
           [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
             { comparitor: 'location', value: 'column' },
           ],
         ],
@@ -587,7 +557,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -605,7 +574,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -627,7 +595,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -656,7 +623,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -690,7 +656,6 @@ export const cards: Card[] = [
           value: 1,
         },
         trigger: 'manual',
-        persistent: true,
         optional: true,
         resetOnEvent: Event.TURN_START,
         uses: 1,
@@ -709,7 +674,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -727,7 +691,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -749,7 +712,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -778,7 +740,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -813,16 +774,12 @@ export const cards: Card[] = [
           select: 1,
         },
         trigger: 'manual',
-        persistent: true,
         optional: true,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
         targets: [
           [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'player' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
             { comparitor: 'equals', key: 'race', value: 'dragon' },
             { comparitor: 'location', value: 'adjacent' },
           ],
@@ -846,7 +803,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -864,7 +820,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -886,7 +841,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -915,7 +869,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -970,7 +923,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -988,7 +940,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -1010,7 +961,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -1039,7 +989,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -1074,9 +1023,6 @@ export const cards: Card[] = [
         },
         targets: [
           [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'player' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
             { comparitor: 'equals', key: 'race', value: 'dragon' },
             { comparitor: 'location', value: 'neighbouring' },
           ],
@@ -1090,7 +1036,6 @@ export const cards: Card[] = [
         eventName: Event.UNIT_PLAYED,
         targets: [[{ comparitor: 'itself' }]],
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -1108,7 +1053,6 @@ export const cards: Card[] = [
         effect: 'sacrifice',
         eventName: Event.SACRIFICE_ATTEMPTED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {
@@ -1130,7 +1074,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
         conditions: [
@@ -1159,7 +1102,6 @@ export const cards: Card[] = [
         activations: 0,
         resetOnEvent: Event.TURN_START,
         trigger: 'manual',
-        persistent: true,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -1184,7 +1126,6 @@ export const cards: Card[] = [
         effect: 'move_card',
         eventName: Event.EFFECT_PLAYED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         options: {
           destination: 'hand',
@@ -1234,7 +1175,6 @@ export const cards: Card[] = [
         effect: 'set_trap',
         eventName: Event.TRAP_PLAYED,
         trigger: 'manual',
-        persistent: true,
         triggerCardConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
           {

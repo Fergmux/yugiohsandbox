@@ -300,7 +300,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
  */
 export const cleanupEffects = (card: GameCard) => {
   for (const effect of card.effects ?? []) {
-    if (effect.persistent && effect.trigger) {
+    if (effect.trigger) {
       EventBus.off(effect.trigger as Event, card.gameId)
     }
     if (effect.resetOnEvent) {

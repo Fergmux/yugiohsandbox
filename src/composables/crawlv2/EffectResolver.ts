@@ -148,10 +148,6 @@ export class EffectResolver {
         if (effect.spentOnUse) {
           await spendCard(card)
         }
-
-        if (!effect.persistent) {
-          EventBus.off(effect.trigger as Event, card.gameId)
-        }
       })
     }
 
@@ -208,11 +204,6 @@ export class EffectResolver {
 
     if (effect.uses !== undefined) {
       effect.activations = (effect.activations ?? 0) + 1
-    }
-
-    if (!effect.persistent) {
-      const idx = card.effects?.indexOf(effect)
-      if (idx !== undefined && idx > -1) card.effects?.splice(idx, 1)
     }
 
     await EventBus.emit(Event.UPDATED, card.gameId, { card })
