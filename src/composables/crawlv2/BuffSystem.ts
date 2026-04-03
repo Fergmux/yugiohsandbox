@@ -3,13 +3,16 @@ import { Event, EventBus } from './EventBus'
 import { propOf } from './CheckSystem'
 import { getGameState } from './GameState'
 import { registerBurnSystem } from './debuffs/BurnSystem'
+import { registerBlindSystem } from './debuffs/BlindSystem'
 import { registerCleanseSystem } from './buffs/CleanseSystem'
 import { registerEmpowerSystem } from './buffs/EmpowerSystem'
+import { registerShieldSystem } from './buffs/ShieldSystem'
 import { registerInFlightSystem } from './buffs/InFlightSystem'
+import { registerPiercingSystem } from './buffs/PiercingSystem'
 
 // Add events here as new mechanics require buff re-evaluation.
-// Note: UNIT_SUMMONED is intentionally excluded — it fires before card placement,
-// so adjacency checks would see the old location. CARD_MOVED covers placement instead.
+// UNIT_SUMMONED fires after placement, so it can be added here if adjacency-based
+// ongoing buffs need reevaluation on summon. CARD_MOVED covers most placement cases.
 export const BUFF_REEVALUATE_EVENTS = [Event.CARD_MOVED, Event.UNIT_DEFEATED] as const satisfies readonly Event[]
 
 /**
@@ -18,6 +21,7 @@ export const BUFF_REEVALUATE_EVENTS = [Event.CARD_MOVED, Event.UNIT_DEFEATED] as
  */
 export const BUFF_STAT_MAP: Partial<Record<string, keyof GameCard>> = {
   empower: 'atk',
+  shield: 'def',
 }
 
 export function getEffective(card: GameCard): GameCard {
@@ -111,5 +115,8 @@ export function registerBuffSystems() {
   registerBurnSystem()
   registerCleanseSystem()
   registerEmpowerSystem()
+  registerShieldSystem()
   registerInFlightSystem()
+  registerPiercingSystem()
+  registerBlindSystem()
 }

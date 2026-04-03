@@ -6,7 +6,7 @@ export interface Card {
 }
 
 export type ZoneType = 'hand' | 'power' | 'unit' | 'leader' | 'trap' | 'empty' | 'deck' | 'spent' | 'dead'
-
+export type LocationKeys = 'adjacent' | 'neighbouring' | 'column'
 export type Location = {
   id: string
   type: ZoneType

@@ -27,9 +27,19 @@ export type TriggerHandler = (
 const { selectTargets, selectZone, selectCards } = useTargetSelector()
 
 async function destroyUnit(unit: GameCard, source: GameCard) {
-  await EventBus.emit(Event.DAMAGE_DEALT, unit.gameId, { target: unit, source })
   await EventBus.emit(Event.UNIT_DEFEATED, unit.gameId, { target: unit, source })
   await spendCard(unit)
+}
+
+async function applyDamage(gameId: string, player: string | undefined, amount: number) {
+  if (amount <= 0) return
+  const { cancelled } = await EventBus.emit(Event.DAMAGE_ATTEMPTED, gameId, {
+    player,
+    amount,
+  })
+  if (!cancelled) {
+    await EventBus.emit(Event.DAMAGE_DEALT, gameId, { player, amount })
+  }
 }
 
 export async function resolveCombat(source: GameCard, target: GameCard) {
@@ -40,32 +50,24 @@ export async function resolveCombat(source: GameCard, target: GameCard) {
     const tgtDef = getEffective(target).def ?? 0
     if (srcAtk >= tgtDef) {
       await destroyUnit(target, source)
+      if (source.buffs.piercing) {
+        const piercingDmg = srcAtk - tgtDef
+        await applyDamage(target.gameId, target.owner, piercingDmg)
+      }
     } else {
-      const dmg = tgtDef - srcAtk
-      const { cancelled } = await EventBus.emit(Event.DAMAGE_ATTEMPTED, source.gameId, {
-        player: source.owner,
-        amount: dmg,
-      })
-      if (!cancelled) await EventBus.emit(Event.DAMAGE_DEALT, source.gameId, { player: source.owner, amount: dmg })
+      const reflectDmg = tgtDef - srcAtk
+      await applyDamage(source.gameId, source.owner, reflectDmg)
     }
   } else {
     const tgtAtk = getEffective(target).atk ?? 0
     if (srcAtk > tgtAtk) {
       await destroyUnit(target, source)
       const dmg = srcAtk - tgtAtk
-      const { cancelled } = await EventBus.emit(Event.DAMAGE_ATTEMPTED, target.gameId, {
-        player: target.owner,
-        amount: dmg,
-      })
-      if (!cancelled) await EventBus.emit(Event.DAMAGE_DEALT, target.gameId, { player: target.owner, amount: dmg })
+      await applyDamage(target.gameId, target.owner, dmg)
     } else if (srcAtk < tgtAtk) {
       await destroyUnit(source, target)
       const dmg = tgtAtk - srcAtk
-      const { cancelled } = await EventBus.emit(Event.DAMAGE_ATTEMPTED, source.gameId, {
-        player: source.owner,
-        amount: dmg,
-      })
-      if (!cancelled) await EventBus.emit(Event.DAMAGE_DEALT, source.gameId, { player: source.owner, amount: dmg })
+      await applyDamage(source.gameId, source.owner, dmg)
     } else {
       await destroyUnit(target, source)
       await destroyUnit(source, target)
@@ -190,10 +192,9 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       if (cancelled) return
       utils.deductAP(card)
       utils.registerEffects(card)
-      const summonResult = await EventBus.emit(Event.UNIT_SUMMONED, card.gameId, { card })
-      if (summonResult.cancelled) return
       await relocateCard(card, zone)
       utils.registerOngoingEffects(card)
+      await EventBus.emit(Event.UNIT_SUMMONED, card.gameId, { card })
     } else {
       const { cancelled } = await EventBus.emit(Event.POWER_PLAYED, card.gameId, { card })
       if (cancelled) return
@@ -275,7 +276,13 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
     if (!validTargets.length) return
 
-    const selected = await selectTargets(validTargets, 1)
+    let selected
+    if (card.debuffs.blind !== undefined && (card.debuffs.blind as number) > 0) {
+      selected = [validTargets[Math.floor(Math.random() * validTargets.length)]]
+    } else {
+      selected = await selectTargets(validTargets, 1)
+    }
+
     if (!selected.length) return
 
     const target = selected[0]

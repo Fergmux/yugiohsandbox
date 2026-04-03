@@ -3,7 +3,7 @@ import { Event, EventBus } from './EventBus'
 import type { Location } from '@/types/crawlv2'
 import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
 import { effectHandlers, cleanupEffects, type HandlerUtils } from './EffectHandlers'
-import { evaluateConditions } from './CheckSystem'
+import { evaluateConditions, evaluateChecks } from './CheckSystem'
 import { spendCard, drawCardForPlayer, shuffleDeck } from './CardMovement'
 import { getGameState } from './GameState'
 
@@ -105,17 +105,20 @@ export class EffectResolver {
       const handler = effectHandlers[effect.effect]
       if (!handler) continue
 
-      EventBus.on(effect.trigger as Event, card.gameId, async (_e, _id, data, ctx) => {
+      EventBus.on(effect.trigger as Event, card.gameId, async (_e, _sourceId, data, ctx) => {
         if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
 
-        if (effect.activateOnOwnerTurn) {
-          const { currentPlayer } = data as { currentPlayer?: string }
-          if (currentPlayer !== card.owner) return
+        // Evaluate trigger card conditions against the card that caused the event.
+        // When no trigger card exists in data (e.g. TURN_START), use the source card
+        // so comparators that don't need a candidate (like current_player) still work.
+        if (effect.triggerCardConditions?.length) {
+          const { card: triggerCard } = data as { card?: GameCard }
+          if (!evaluateChecks(effect.triggerCardConditions, card, triggerCard ?? card)) return
         }
 
-        const { target: eventTarget } = data as { target?: GameCard }
+        const { target } = data as { target?: GameCard }
 
-        if (!evaluateConditions(effect.conditions, card, eventTarget)) return
+        if (!evaluateConditions(effect.conditions, card, target)) return
 
         if (effect.optional) {
           const activate = await this.config.ask(card)
@@ -211,6 +214,8 @@ export class EffectResolver {
       const idx = card.effects?.indexOf(effect)
       if (idx !== undefined && idx > -1) card.effects?.splice(idx, 1)
     }
+
+    await EventBus.emit(Event.UPDATED, card.gameId, { card })
   }
 
   // ─── Ongoing Effect Reapplication ───────────────────────────────────────────

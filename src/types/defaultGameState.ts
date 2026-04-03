@@ -1,9 +1,5 @@
 import type { GameState } from '@/types/crawlv2'
-import cardImg from '@/assets/images/cards/card.png'
-import effectImg from '@/assets/images/cards/effect.png'
-import trapImg from '@/assets/images/cards/trap.png'
 import { type Location } from '@/types/crawlv2'
-import { Event } from '@/composables/crawlv2/EventBus'
 import { cards, type GameCard } from './cards'
 
 // 1: 'Chaos Mage',
@@ -15,9 +11,9 @@ import { cards, type GameCard } from './cards'
 // 27: 'Magic shield',
 
 // Mage
-export const defaultDeck1Ids: number[] = [1, 1, 2, 2, 21, 21, 27, 27]
+export const defaultDeck1Ids: number[] = [1, 1, 2, 2, 3, 3, 5, 5, 6, 6, 21, 21, 27, 27]
 // Dragon warrior
-export const defaultDeck2Ids: number[] = [4, 4, 7, 7, 9, 9, 21, 21, 27, 27]
+export const defaultDeck2Ids: number[] = [4, 4, 7, 7, 8, 8, 9, 9, 21, 21, 27, 27]
 
 export const convertToGameCard = (
   id: number,

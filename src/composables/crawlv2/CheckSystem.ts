@@ -1,15 +1,16 @@
 import type { GameCard, Check, Condition } from '@/types/cards'
 import { getGameState } from './GameState'
+import type { LocationKeys } from '@/types/crawlv2'
 
 export type Comparator =
   | 'equals'
   | 'not_equals'
   | 'less_than'
   | 'more_than'
-  | 'adjacent'
-  | 'neighbouring'
+  | 'location'
   | 'itself'
   | 'owner'
+  | 'current_player'
 
 function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   if (!key) return undefined
@@ -46,14 +47,16 @@ function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boo
       const result = compareValues(check.comparitor, actual, expected)
       return check.comparitor === 'not_equals' ? !result : result
     }
-    case 'adjacent':
-      return source.location.adjacent?.includes(candidate.location.id) ?? false
-    case 'neighbouring':
-      return source.location.neighbouring?.includes(candidate.location.id) ?? false
+    case 'location':
+      return source.location[check.value as LocationKeys]?.includes(candidate.location.id) ?? false
     case 'itself':
       return candidate.gameId === source.gameId
     case 'owner':
       return check.value === 'player' ? candidate.owner === source.owner : candidate.owner !== source.owner
+    case 'current_player':
+      return check.value === 'player'
+        ? source.owner === getGameState().currentPlayer
+        : source.owner !== getGameState().currentPlayer
     default:
       return false
   }

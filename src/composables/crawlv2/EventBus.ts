@@ -1,5 +1,5 @@
 export type EventContext = { cancelled: boolean; cancel(): void }
-type EventListener = (event: Event, targetId: string, data: unknown, ctx: EventContext) => void | Promise<void>
+type EventListener = (event: Event, sourceId: string, data: unknown, ctx: EventContext) => void | Promise<void>
 const listeners: Record<string, Map<string, EventListener[]>> = {}
 
 function getMap(event: string): Map<string, EventListener[]> {
@@ -83,21 +83,22 @@ export const EventBus = {
     listeners[event]?.delete(key)
   },
 
-  async emit(event: Event, triggerCardId: string, data: unknown): Promise<{ cancelled: boolean }> {
+  async emit(event: Event, sourceId: string, data: unknown): Promise<{ cancelled: boolean }> {
     const ctx: EventContext = {
       cancelled: false,
       cancel() {
         this.cancelled = true
       },
     }
+    console.log(event)
     const map = listeners[event]
     if (map) {
       for (const fns of map.values()) {
-        for (const fn of fns) await fn(event, triggerCardId, data, ctx)
+        for (const fn of fns) await fn(event, sourceId, data, ctx)
       }
     }
     if (event !== Event.UPDATED) {
-      await EventBus.emit(Event.UPDATED, triggerCardId, { card: data })
+      await EventBus.emit(Event.UPDATED, sourceId, { card: data })
     }
     return ctx
   },
