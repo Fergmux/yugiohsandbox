@@ -20,14 +20,16 @@ import { cards, type GameCard } from './cards'
 // 19: Dragon's Wrath
 // 20: Huddle Up
 // 21: Book of Arcane
+// 25: Spell Breaker - Unit
+// 26: Spell Breaker
 // 27: Magic shield
 
 // Mage
 export const defaultDeck1Ids: number[] = [1, 2, 3, 5, 6, 21, 25, 27]
 // Dragon
-export const defaultDeckxIds: number[] = [4, 7, 10, 11, 13, 19, 27]
+export const defaultDeck2Ids: number[] = [4, 7, 10, 11, 13, 19, 26, 27]
 // Warrior
-export const defaultDeck2Ids: number[] = [4, 8, 9, 12, 14, 15, 20, 27]
+export const defaultDeckxIds: number[] = [4, 8, 9, 12, 14, 15, 20, 27]
 
 export const convertToGameCard = (
   id: number,

@@ -135,6 +135,8 @@ const effectButtons = computed(() => {
     .filter((x): x is EffectButton => x !== null)
 })
 
+const revisionKey = `revision:${props.card.gameId}`
+
 onMounted(() => {
   EventBus.on(Event.UPDATED, props.card.gameId, () => {
     revision.value++
@@ -143,6 +145,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   EventBus.off(Event.UPDATED, props.card.gameId)
+  EventBus.off(Event.CARD_MOVED, revisionKey)
+  EventBus.off(Event.CARD_SPENT, revisionKey)
 })
 
 const cardImg = computed(() => (props.card.faceUp ? props.card.image : CardBack))

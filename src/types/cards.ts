@@ -381,7 +381,13 @@ export const cards: Card[] = [
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
-        targets: [[{ comparitor: 'location', value: 'column' }]],
+        targets: [
+          [
+            { comparitor: 'location', value: 'column' },
+            { comparitor: 'owner', value: 'opponent' },
+            { comparitor: 'equals', key: 'type', value: 'unit' },
+          ],
+        ],
       },
     ],
   },
@@ -570,7 +576,13 @@ export const cards: Card[] = [
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
-        targets: [[{ comparitor: 'location', value: 'column' }]],
+        targets: [
+          [
+            { comparitor: 'location', value: 'column' },
+            { comparitor: 'owner', value: 'opponent' },
+            { comparitor: 'equals', key: 'type', value: 'unit' },
+          ],
+        ],
       },
     ],
   },
@@ -602,6 +614,7 @@ export const cards: Card[] = [
           [
             { comparitor: 'location', value: 'column' },
             { comparitor: 'owner', value: 'player' },
+            { comparitor: 'equals', key: 'type', value: 'unit' },
           ],
         ],
       },
@@ -753,6 +766,8 @@ export const cards: Card[] = [
           [
             { comparitor: 'equals', key: 'race', value: 'warrior' },
             { comparitor: 'location', value: 'column' },
+            { comparitor: 'owner', value: 'player' },
+            { comparitor: 'equals', key: 'type', value: 'unit' },
           ],
         ],
       },
@@ -892,9 +907,11 @@ export const cards: Card[] = [
     description: 'If you control a Mage unit, you can add one spent unit to your hand.',
     effects: [
       {
+        eventName: Event.EFFECT_PLAYED,
         name: 'Activate',
         effect: 'move_card',
         trigger: 'manual',
+        spentOnUse: true,
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         options: {
           destination: 'hand',
@@ -953,9 +970,47 @@ export const cards: Card[] = [
             checks: [[{ comparitor: 'equals', key: 'location.type', value: 'trap' }]],
           },
         ],
+        triggerConditions: [[{ comparitor: 'current_player', value: 'opponent' }]],
         spentOnUse: true,
         effect: 'negate_effect',
         optional: true,
+      },
+    ],
+  },
+  // 26: Spell Breaker
+  {
+    id: 26,
+    name: 'Spell Breaker',
+    image: trapImg,
+    cost: 0,
+    type: 'trap',
+    description:
+      'When an opponent plays an Effect negate the acitviation and if you do, apply 2x Cursed to All units in this column.',
+    effects: [
+      setTrap,
+      {
+        trigger: Event.EFFECT_PLAYED,
+        conditions: [
+          {
+            test: 'has_property',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'trap' }]],
+          },
+        ],
+        effect: 'negate_effect',
+        optional: true,
+        then: {
+          effect: 'debuff',
+          spentOnUse: true,
+          options: {
+            debuffs: [{ key: 'cursed', count: 2 }],
+          },
+          targets: [
+            [
+              { comparitor: 'equals', key: 'location.type', value: 'unit' },
+              { comparitor: 'location', value: 'column' },
+            ],
+          ],
+        },
       },
     ],
   },
@@ -988,6 +1043,7 @@ export const cards: Card[] = [
             checks: [[{ comparitor: 'equals', key: 'location.type', value: 'trap' }]],
           },
         ],
+        triggerConditions: [[{ comparitor: 'current_player', value: 'opponent' }]],
         spentOnUse: true,
         effect: 'negate_attack',
         optional: true,

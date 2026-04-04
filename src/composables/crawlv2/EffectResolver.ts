@@ -154,8 +154,8 @@ export class EffectResolver {
         await this.effectEnded(card, effect)
 
         // Run chained follow-up effect if the parent resolved
-        if (effect.then && ctx.resolved && !ctx.cancelled) {
-          await this.runThenChain(card, effect.then)
+        if (effect.then && ctx.resolved) {
+          await this.activateEffect(card, effect.then)
         }
       })
     }
@@ -183,33 +183,11 @@ export class EffectResolver {
     }
   }
 
-  // ─── Then Chain Execution ─────────────────────────────────────────────────────
-
-  private async runThenChain(card: GameCard, thenEffect: EffectDef) {
-    const handler = effectHandlers[thenEffect.effect]
-    if (!handler) return
-
-    const ctx = {
-      cancelled: false,
-      resolved: true,
-      cancel() {
-        this.cancelled = true
-      },
-    }
-    await handler(ctx, card, thenEffect, this.handlerUtils)
-
-    // Recurse for nested then chains
-    if (thenEffect.then && ctx.resolved && !ctx.cancelled) {
-      await this.runThenChain(card, thenEffect.then)
-    }
-  }
-
   // ─── Manual Effect Activation ────────────────────────────────────────────────
 
-  async activateEffect(card: GameCard, effectIndex: number) {
-    const effect = card.effects?.[effectIndex]
-    if (!effect || effect.trigger !== 'manual') return
-    if (getGameState().currentPlayer !== card.owner) return
+  async activateEffect(card: GameCard, effect: EffectDef | undefined) {
+    debugger
+    if (!effect) return
     const maxUses = getEffectiveUses(card, effect)
     if (maxUses !== undefined && (effect.activations ?? 0) >= maxUses) return
 
@@ -237,7 +215,7 @@ export class EffectResolver {
 
     // Run chained follow-up effect if the parent resolved
     if (effect.then && ctx.resolved && !ctx.cancelled) {
-      await this.runThenChain(card, effect.then)
+      await this.activateEffect(card, effect.then)
     }
 
     await EventBus.emit(Event.UPDATED, card.gameId, { card })
