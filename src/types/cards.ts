@@ -65,6 +65,8 @@ export type EffectDef = {
    *  Uses the same Check[][] format as targets — OR of AND groups.
    *  The "source" for these checks is the listening card, and the "candidate" is the trigger card. */
   triggerConditions?: Check[][]
+  /** Follow-up effect that only runs if this effect resolved successfully (not negated/cancelled). */
+  then?: EffectDef
 }
 
 type Buff = {
@@ -184,7 +186,6 @@ export const cards: Card[] = [
     type: 'unit',
     race: 'mage',
     damage: 'cosmic',
-    // effect: 'Mages adjacent to this unit gain 2x Empower and their attacks are treated as Fire. On summon, this card gains 1x Intangible.',
     description:
       "On summon Adjacent Mage units gain 2x Empower and this card gains 1x Eternal. Adjacent mage unit's attacks are treated as Fire",
     rarity: 'common',
@@ -762,6 +763,59 @@ export const cards: Card[] = [
             { comparitor: 'equals', key: 'faceUp', value: false },
           ],
         ],
+      },
+    ],
+  },
+  // 19: Dragon's Wrath
+  {
+    id: 19,
+    name: 'Swoop from above',
+    image: effectImg,
+    cost: 0,
+    type: 'effect',
+    description: 'If you control a Dragon unit, destroy a traps and if you do inflict 2HP damage.',
+    effects: [
+      {
+        name: 'Activate',
+        effect: 'move_card',
+        trigger: 'manual',
+        spentOnUse: true,
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+        options: {
+          destination: 'spent',
+        },
+        optional: true,
+        selectCount: 1,
+        targets: [
+          [
+            { comparitor: 'equals', key: 'type', value: 'trap' },
+            { comparitor: 'equals', key: 'location.type', value: 'trap' },
+          ],
+        ],
+        conditions: [
+          {
+            test: 'has_property',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
+          },
+          {
+            test: 'has_energy',
+            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
+          },
+          {
+            test: 'has_card',
+            checks: [
+              [
+                { comparitor: 'equals', key: 'race', value: 'dragon' },
+                { comparitor: 'equals', key: 'location.type', value: 'unit' },
+                { comparitor: 'owner', value: 'player' },
+              ],
+            ],
+          },
+        ],
+        then: {
+          effect: 'direct_damage',
+          options: { amount: 2, target: 'opponent' },
+        },
       },
     ],
   },

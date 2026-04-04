@@ -1,4 +1,4 @@
-import type { GameCard } from '@/types/cards'
+import type { GameCard, EffectDef } from '@/types/cards'
 import { Event, EventBus } from './EventBus'
 import type { Location } from '@/types/crawlv2'
 import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
@@ -130,7 +130,7 @@ export class EffectResolver {
           if (cancelled) return
         }
 
-        await handler(data, ctx, card, effect, this.handlerUtils)
+        await handler(ctx, card, effect, this.handlerUtils)
 
         if (effect.uses !== undefined) {
           effect.activations = (effect.activations ?? 0) + 1
@@ -138,6 +138,11 @@ export class EffectResolver {
 
         if (effect.spentOnUse) {
           await spendCard(card)
+        }
+
+        // Run chained follow-up effect if the parent resolved
+        if (effect.then && ctx.resolved && !ctx.cancelled) {
+          await this.runThenChain(card, effect.then)
         }
       })
     }
@@ -165,6 +170,27 @@ export class EffectResolver {
     }
   }
 
+  // ─── Then Chain Execution ─────────────────────────────────────────────────────
+
+  private async runThenChain(card: GameCard, thenEffect: EffectDef) {
+    const handler = effectHandlers[thenEffect.effect]
+    if (!handler) return
+
+    const ctx = {
+      cancelled: false,
+      resolved: true,
+      cancel() {
+        this.cancelled = true
+      },
+    }
+    await handler(ctx, card, thenEffect, this.handlerUtils)
+
+    // Recurse for nested then chains
+    if (thenEffect.then && ctx.resolved && !ctx.cancelled) {
+      await this.runThenChain(card, thenEffect.then)
+    }
+  }
+
   // ─── Manual Effect Activation ────────────────────────────────────────────────
 
   async activateEffect(card: GameCard, effectIndex: number) {
@@ -184,11 +210,12 @@ export class EffectResolver {
 
     const ctx = {
       cancelled: false,
+      resolved: true,
       cancel() {
         this.cancelled = true
       },
     }
-    await handler({}, ctx, card, effect, this.handlerUtils)
+    await handler(ctx, card, effect, this.handlerUtils)
 
     if (effect.uses !== undefined) {
       effect.activations = (effect.activations ?? 0) + 1
@@ -196,6 +223,11 @@ export class EffectResolver {
 
     if (effect.spentOnUse) {
       await spendCard(card)
+    }
+
+    // Run chained follow-up effect if the parent resolved
+    if (effect.then && ctx.resolved && !ctx.cancelled) {
+      await this.runThenChain(card, effect.then)
     }
 
     await EventBus.emit(Event.UPDATED, card.gameId, { card })
@@ -213,11 +245,12 @@ export class EffectResolver {
 
       const ctx = {
         cancelled: false,
+        resolved: false,
         cancel() {
           this.cancelled = true
         },
       }
-      await handler({}, ctx, card, effect, this.handlerUtils)
+      await handler(ctx, card, effect, this.handlerUtils)
     }
   }
 

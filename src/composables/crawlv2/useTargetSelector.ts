@@ -32,6 +32,7 @@ const pickedCards = ref<GameCard[]>([])
 
 export function useTargetSelector() {
   function selectTargets(validTargets: GameCard[], effect: EffectDef): Promise<GameCard[]> {
+    debugger
     const maxTargets = effect.selectCount
     const optional = !!effect.optional
     const autoApply = validTargets.length === 1

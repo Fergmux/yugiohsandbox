@@ -18,7 +18,6 @@ export type HandlerUtils = {
 }
 
 export type TriggerHandler = (
-  data: unknown,
   ctx: EventContext,
   card: GameCard,
   effect: EffectDef,
@@ -99,22 +98,31 @@ export async function resolveCombat(source: GameCard, target: GameCard) {
 }
 
 export const effectHandlers: Record<string, TriggerHandler> = {
-  negate_attack: async (_data, ctx) => {
+  negate_attack: async (ctx) => {
     ctx.cancel()
   },
 
-  negate_spend: async (_data, ctx) => {
+  negate_spend: async (ctx) => {
     ctx.cancel()
   },
 
-  debuff: async (_data, _ctx, card, effect) => {
-    if (!effect.targets?.length) return
+  debuff: async (ctx, card, effect) => {
+    if (!effect.targets?.length) {
+      ctx.resolved = false
+      return
+    }
 
     const validTargets = filterByTargets(effect.targets, card)
-    if (!validTargets.length) return
+    if (!validTargets.length) {
+      ctx.resolved = false
+      return
+    }
 
     const selected = await selectTargets(validTargets, effect)
-    if (!selected.length) return
+    if (!selected.length) {
+      ctx.resolved = false
+      return
+    }
 
     if (Array.isArray(effect.options?.debuffs)) {
       for (const { key, count, countChecks } of effect.options.debuffs as {
@@ -137,14 +145,23 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
   },
 
-  buff: async (_data, _ctx, card, effect) => {
-    if (!effect.targets?.length) return
+  buff: async (ctx, card, effect) => {
+    if (!effect.targets?.length) {
+      ctx.resolved = false
+      return
+    }
 
     const validTargets = filterByTargets(effect.targets, card)
-    if (!validTargets.length) return
+    if (!validTargets.length) {
+      ctx.resolved = false
+      return
+    }
 
     const targets = await selectTargets(validTargets, effect)
-    if (!targets.length) return
+    if (!targets.length) {
+      ctx.resolved = false
+      return
+    }
 
     if (Array.isArray(effect.options?.buffs)) {
       for (const { key, count, countChecks } of effect.options.buffs as {
@@ -170,20 +187,31 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
   },
 
-  move_card: async (data, _ctx, card, effect, utils) => {
-    if (!effect.targets?.length) return
+  move_card: async (ctx, card, effect, utils) => {
+    if (!effect.targets?.length) {
+      ctx.resolved = false
+      return
+    }
     const targets = filterByTargets(effect.targets, card)
-    if (!targets.length) return
+    if (!targets.length) {
+      ctx.resolved = false
+      return
+    }
 
     const { cancelled } = await EventBus.emit(Event.EFFECT_PLAYED, card.gameId, { card })
     if (cancelled) return
 
-    const moveData = data as { destination: ZoneType; count?: number } | null
+    debugger
+
+    const moveData = effect.options as { destination: ZoneType; count?: number } | null
     const destination: ZoneType = moveData?.destination ?? 'hand'
     const count = moveData?.count ?? 1
 
     let cardsToMove = targets
-    if (count < targets.length) {
+
+    if (targets.every((t) => fieldZones.includes(t.location.type))) {
+      cardsToMove = await selectTargets(targets, effect)
+    } else if (count < targets.length) {
       cardsToMove = await selectCards(targets, count, `Select cards to move to ${destination}`)
       if (!cardsToMove.length) return
     }
@@ -212,7 +240,16 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
   },
 
-  damage_type: (_data, _ctx, card, effect) => {
+  direct_damage: async (_ctx, card, effect) => {
+    debugger
+    const amount = (effect.options?.amount as number) ?? 0
+    if (!amount) return
+    const target = effect.options?.target as string | undefined
+    const player = target === 'opponent' ? getOpponent(card) : card.owner
+    await applyDamage(card.gameId, player, amount)
+  },
+
+  damage_type: (_ctx, card, effect) => {
     if (!effect.targets?.length) return
     const targets = filterByTargets(effect.targets, card)
     for (const t of targets) {
@@ -220,7 +257,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
   },
 
-  summon: async (_data, _ctx, card, _effect, utils) => {
+  summon: async (_ctx, card, _effect, utils) => {
     const zoneType = card.type === 'unit' ? 'unit' : card.type === 'power' ? 'power' : null
     if (!zoneType) return
     const validZones = locations.filter(
@@ -249,7 +286,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     utils.selectCard(null)
   },
 
-  set_trap: async (_data, _ctx, card, _effect, utils) => {
+  set_trap: async (_ctx, card, _effect, utils) => {
     const validZones = locations.filter(
       (loc) => loc.type === 'trap' && loc.player === card.owner && !utils.getCard(loc),
     )
@@ -265,7 +302,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     utils.selectCard(null)
   },
 
-  sacrifice: async (_data, _ctx, card, _effect, utils) => {
+  sacrifice: async (_ctx, card, _effect, utils) => {
     const { cancelled } = await EventBus.emit(Event.SACRIFICE_ATTEMPTED, card.gameId, { card })
     if (cancelled) return
     utils.addAP(card)
@@ -274,7 +311,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     await EventBus.emit(Event.SACRIFICE_SUCCESSFUL, card.gameId, { card })
   },
 
-  swap_stance: async (_data, _ctx, card, effect) => {
+  swap_stance: async (_ctx, card, effect) => {
     if (!effect.targets?.length) return
 
     const targets = filterByTargets(effect.targets, card)
@@ -290,13 +327,22 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
   },
 
-  flip_card: async (_data, _ctx, card, effect, utils) => {
-    if (!effect.targets?.length) return
+  flip_card: async (ctx, card, effect, utils) => {
+    if (!effect.targets?.length) {
+      ctx.resolved = false
+      return
+    }
     const validTargets = filterByTargets(effect.targets, card)
-    if (!validTargets.length) return
+    if (!validTargets.length) {
+      ctx.resolved = false
+      return
+    }
     // select a target
     const targets = await selectTargets(validTargets, effect)
-    if (!targets.length) return
+    if (!targets.length) {
+      ctx.resolved = false
+      return
+    }
 
     for (const target of targets) {
       const { cancelled } = await EventBus.emit(Event.CARD_FLIPPED, target.gameId, { card: target, source: card })
@@ -306,7 +352,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     utils.selectCard(null)
   },
 
-  damage: async (_data, _ctx, card, effect) => {
+  damage: async (_ctx, card, effect) => {
     if (!effect.targets?.length) return
 
     const validTargets = filterByTargets(effect.targets, card).filter(

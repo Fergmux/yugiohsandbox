@@ -1,4 +1,4 @@
-export type EventContext = { cancelled: boolean; cancel(): void }
+export type EventContext = { cancelled: boolean; resolved: boolean; cancel(): void }
 type EventListener = (event: Event, sourceId: string, data: unknown, ctx: EventContext) => void | Promise<void>
 const listeners: Record<string, Map<string, EventListener[]>> = {}
 
@@ -99,6 +99,7 @@ export const EventBus = {
   async emit(event: Event, sourceId: string, data: unknown): Promise<{ cancelled: boolean }> {
     const ctx: EventContext = {
       cancelled: false,
+      resolved: true,
       cancel() {
         this.cancelled = true
       },

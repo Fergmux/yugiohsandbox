@@ -2,18 +2,32 @@ import type { GameState } from '@/types/crawlv2'
 import { type Location } from '@/types/crawlv2'
 import { cards, type GameCard } from './cards'
 
-// 1: 'Chaos Mage',
-// 2: 'Torch Mage',
-// 4: 'Dante',
-// 7: 'Cosmic Dragon',
-// 9: 'Blue Crystal Dragon',
-// 21: 'Book of Arcane',
-// 27: 'Magic shield',
+// 1: Chaos Mage
+// 2: Torch Mage
+// 3: Sports Mage
+// 4: Dante
+// 5: Tag Duo - F
+// 6: Tag Duo - J
+// 7	Cosmic Dragon
+// 8: Captain
+// 9: Blue Crystal Dragon
+// 10: Fell Dragon
+// 11: Cave Dragon
+// 12: Lone warrior
+// 13: Rage Dragon
+// 14: Steadfast Knight
+// 15: Flat Foot
+// 19: Dragon's Wrath
+// 20: Huddle Up
+// 21: Book of Arcane
+// 27: Magic shield
 
 // Mage
-export const defaultDeck1Ids: number[] = [1, 1, 2, 2, 3, 3, 5, 5, 6, 6, 21, 21, 27, 27]
-// Dragon warrior
-export const defaultDeck2Ids: number[] = [4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 21, 27, 27]
+export const defaultDeck1Ids: number[] = [1, 2, 3, 5, 6, 21, 27]
+// Dragon
+export const defaultDeck2Ids: number[] = [4, 7, 10, 11, 13, 19, 27]
+// Warrior
+export const defaultDeck3Ids: number[] = [4, 8, 9, 12, 14, 15, 20, 27]
 
 export const convertToGameCard = (
   id: number,
@@ -61,276 +75,3 @@ export const defaultGameState: GameState = {
   player2AP: 2,
   cards: [...defaultDeck1, ...defaultDeck2],
 }
-
-// {
-//     id: 1,
-//     gameId: '1',
-//     name: 'Warrior',
-//     image: cardImg,
-//     atk: 10,
-//     def: 10,
-//     cost: 1,
-//     type: 'unit',
-//     race: 'warrior',
-//     damage: 'physical',
-//     description: 'A strong guy',
-//     effect: 'He kills people',
-//     rarity: 'common',
-//     location: { id: 'deck1', type: 'deck', index: 1, player: 'player1', name: 'Deck' } as Location,
-//     owner: 'player1',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//   },
-//   {
-//     id: 1,
-//     gameId: '2',
-//     name: 'Warrior',
-//     image: cardImg,
-//     atk: 10,
-//     def: 10,
-//     cost: 1,
-//     type: 'unit',
-//     race: 'warrior',
-//     damage: 'physical',
-//     description: 'A strong guy',
-//     effect: 'He kills people',
-//     rarity: 'common',
-//     location: { id: 'deck1', type: 'deck', index: 2, player: 'player1', name: 'Deck' } as Location,
-//     owner: 'player1',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//   },
-//   {
-//     id: 3,
-//     gameId: '3',
-//     name: 'Dragon',
-//     image: cardImg,
-//     atk: 12,
-//     def: 8,
-//     cost: 2,
-//     type: 'unit',
-//     race: 'dragon',
-//     damage: 'void',
-//     description: 'A fire breathing dragon',
-//     effect: 'He kills people',
-//     rarity: 'rare',
-//     location: { id: 'deck2', type: 'deck', index: 3, player: 'player2', name: 'Deck' } as Location,
-//     owner: 'player2',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//   },
-//   {
-//     id: 3,
-//     gameId: '4',
-//     name: 'Fire Dragon',
-//     image: cardImg,
-//     atk: 12,
-//     def: 8,
-//     cost: 2,
-//     type: 'unit',
-//     race: 'dragon',
-//     damage: 'fire',
-//     description: 'A fire breathing dragon',
-//     effect: "Adjacent dragon's attacks are treated as fire damage",
-//     rarity: 'rare',
-//     location: { id: 'deck2', type: 'deck', index: 4, player: 'player2', name: 'Deck' } as Location,
-//     owner: 'player2',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//     effects: [
-//       {
-//         effect: 'damage_type',
-//         ongoing: true,
-//         options: {
-//           damageType: 'fire',
-//         },
-//         trigger: Event.UNIT_SUMMONED,
-//         target: [
-//           { comparitor: 'equals', key: 'race', value: 'dragon' },
-//           { combinator: 'and', comparitor: 'equals', key: 'location.type', value: 'unit' },
-//           { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player2' },
-//           { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-//           { combinator: 'and', comparitor: 'adjacent' },
-//         ],
-//       },
-//     ],
-//   },
-//   {
-//     id: 3,
-//     gameId: '8',
-//     name: 'Burn Dragon',
-//     image: cardImg,
-//     atk: 12,
-//     def: 8,
-//     cost: 2,
-//     type: 'unit',
-//     race: 'dragon',
-//     damage: 'fire',
-//     description: 'A fire breathing dragon',
-//     effect: "Once per turn you can apply 2x burn to an opponent's unit",
-//     rarity: 'rare',
-//     location: { id: 'deck2', type: 'deck', index: 5, player: 'player2', name: 'Deck' } as Location,
-//     owner: 'player2',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//     effects: [
-//       {
-//         effect: 'debuff',
-//         eventName: Event.BURN_APPLIED,
-//         options: {
-//           debuff: 'burn',
-//           value: 2,
-//         },
-//         trigger: 'manual',
-//         persistent: true,
-//         optional: true,
-//         resetOnEvent: Event.TURN_START,
-//         uses: 1,
-//         activations: 0,
-//         target: [
-//           { comparitor: 'equals', key: 'location.type', value: 'unit' },
-//           { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player1' },
-//           { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-//         ],
-//       },
-//     ],
-//   },
-//   {
-//     id: 3,
-//     gameId: '9',
-//     name: 'Cleanse Warrior',
-//     image: cardImg,
-//     atk: 7,
-//     def: 9,
-//     cost: 2,
-//     type: 'unit',
-//     race: 'warrior',
-//     damage: 'psychic',
-//     description: '',
-//     effect: 'Once per turn, you can apply 1x Cleanse to this card',
-//     rarity: 'rare',
-//     location: { id: 'deck1', type: 'deck', index: 5, player: 'player1', name: 'Deck' } as Location,
-//     owner: 'player1',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//     effects: [
-//       {
-//         effect: 'buff',
-//         eventName: Event.CLEANSE_APPLIED,
-//         options: {
-//           buff: 'cleanse',
-//           value: 1,
-//         },
-//         resetOnEvent: Event.TURN_START,
-//         uses: 1,
-//         activations: 0,
-//         trigger: 'manual',
-//         persistent: true,
-//         optional: false,
-//         target: [{ comparitor: 'itself' }],
-//       },
-//     ],
-//   },
-//   {
-//     id: 2,
-//     gameId: '5',
-//     name: 'Warrior Effect',
-//     image: effectImg,
-//     cost: 0,
-//     type: 'effect',
-//     description: 'If you control a Warrior unit, you can add one spent unit to your hand.',
-//     location: { id: 'deck1', type: 'deck', index: 3, player: 'player1', name: 'Deck' } as Location,
-//     owner: 'player1',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//     effects: [
-//       {
-//         effect: 'add_to_hand',
-//         trigger: 'manual',
-//         conditions: [
-//           {
-//             test: 'has_card',
-//             checks: [
-//               { comparitor: 'equals', key: 'race', value: 'warrior' },
-//               { combinator: 'and', comparitor: 'equals', key: 'location.type', value: 'unit' },
-//               { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player1' },
-//             ],
-//           },
-//         ],
-//         target: [
-//           { comparitor: 'equals', key: 'location.type', value: 'spent' },
-//           { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player1' },
-//           { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-//         ],
-//       },
-//     ],
-//   },
-//   {
-//     id: 2,
-//     gameId: '6',
-//     name: 'Dragon Effect',
-//     image: effectImg,
-//     cost: 0,
-//     type: 'effect',
-//     description: 'If you control a Dragon unit, you can add one spent unit to your hand.',
-//     location: { id: 'deck2', type: 'deck', index: 2, player: 'player2', name: 'Deck' } as Location,
-//     owner: 'player2',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//     effects: [
-//       {
-//         effect: 'add_to_hand',
-//         trigger: 'manual',
-//         conditions: [
-//           {
-//             test: 'has_card',
-//             checks: [
-//               { comparitor: 'equals', key: 'race', value: 'dragon' },
-//               { combinator: 'and', comparitor: 'equals', key: 'location.type', value: 'unit' },
-//               { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player2' },
-//             ],
-//           },
-//         ],
-//         target: [
-//           { comparitor: 'equals', key: 'location.type', value: 'spent' },
-//           { combinator: 'and', comparitor: 'equals', key: 'owner', value: 'player2' },
-//           { combinator: 'and', comparitor: 'equals', key: 'type', value: 'unit' },
-//         ],
-//       },
-//     ],
-//   },
-//   {
-//     id: 3,
-//     gameId: '7',
-//     name: 'Trap',
-//     image: trapImg,
-//     cost: 0,
-//     type: 'trap',
-//     description: 'Negate an attack',
-//     location: { id: 'deck1', type: 'deck', index: 4, player: 'player1', name: 'Deck' } as Location,
-//     owner: 'player1',
-//     buffs: {},
-//     debuffs: {},
-//     faceUp: false,
-//     defensePosition: false,
-//     effects: [
-//       { trigger: Event.TARGETED_ATTACK, effect: 'negate_attack', optional: true, eventName: Event.TRAP_ACTIVATED },
-//     ],
-//   },
-// ],
