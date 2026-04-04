@@ -7,13 +7,19 @@ import { registerBlindSystem } from './debuffs/BlindSystem'
 import { registerCleanseSystem } from './buffs/CleanseSystem'
 import { registerEmpowerSystem } from './buffs/EmpowerSystem'
 import { registerShieldSystem } from './buffs/ShieldSystem'
-import { registerInFlightSystem } from './buffs/InFlightSystem'
+import { registerEvasiveSystem } from './buffs/EvasiveSystem'
 import { registerPiercingSystem } from './buffs/PiercingSystem'
+import { registerEternalSystem } from './buffs/EternalSystem'
+import { registerCursedSystem } from './debuffs/CursedSystem'
+import { registerAngerSystem } from './buffs/AngerSystem'
+import { registerWeakSystem } from './debuffs/WeakSystem'
 
 // Add events here as new mechanics require buff re-evaluation.
-// UNIT_SUMMONED fires after placement, so it can be added here if adjacency-based
-// ongoing buffs need reevaluation on summon. CARD_MOVED covers most placement cases.
-export const BUFF_REEVALUATE_EVENTS = [Event.CARD_MOVED, Event.UNIT_DEFEATED] as const satisfies readonly Event[]
+export const BUFF_REEVALUATE_EVENTS = [
+  Event.CARD_MOVED,
+  Event.UNIT_DEFEATED,
+  Event.UNIT_SUMMONED,
+] as const satisfies readonly Event[]
 
 /**
  * Maps named buff/debuff keys to the card stat they modify per stack.
@@ -22,6 +28,8 @@ export const BUFF_REEVALUATE_EVENTS = [Event.CARD_MOVED, Event.UNIT_DEFEATED] as
 export const BUFF_STAT_MAP: Partial<Record<string, keyof GameCard>> = {
   empower: 'atk',
   shield: 'def',
+  weak: 'atk',
+  expose: 'def',
 }
 
 export function getEffective(card: GameCard): GameCard {
@@ -97,14 +105,6 @@ export function registerBuffReevaluation(sourceCard: GameCard, reapply: () => vo
 }
 
 /**
- * Returns true if the card has an active cleanse buff (value > 0).
- * Cards with cleanse cannot receive new debuffs.
- */
-export function isDebuffBlocked(card: GameCard): boolean {
-  return typeof card.buffs.cleanse === 'number' && card.buffs.cleanse > 0
-}
-
-/**
  * Registers all buff/debuff systems (burn, cleanse) with the provided card getter.
  * Call once during app setup — subsequent calls are safe because EventBus.on
  * appends to the listener array for the same (event, key) pair.
@@ -116,7 +116,11 @@ export function registerBuffSystems() {
   registerCleanseSystem()
   registerEmpowerSystem()
   registerShieldSystem()
-  registerInFlightSystem()
+  registerEvasiveSystem()
   registerPiercingSystem()
   registerBlindSystem()
+  registerEternalSystem()
+  registerCursedSystem()
+  registerAngerSystem()
+  registerWeakSystem()
 }

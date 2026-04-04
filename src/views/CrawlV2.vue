@@ -34,7 +34,7 @@
       class="absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded bg-amber-400 px-4 py-1.5 text-sm font-bold text-black shadow-lg"
     >
       Select a target ({{ selectedTargets.length }}/{{ targetPending.maxTargets }})
-      <button @click="cancelSelection()" class="ml-3 text-red-700 hover:text-red-900">Cancel</button>
+      <button v-if="targetPending.optional" @click="cancelSelection()" class="ml-3 text-red-700 hover:text-red-900">Cancel</button>
     </div>
     <div
       v-else-if="pendingZone"

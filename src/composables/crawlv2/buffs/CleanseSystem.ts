@@ -1,3 +1,4 @@
+import type { GameCard } from '@/types/cards'
 import { Event, EventBus } from '../EventBus'
 import { getGameState } from '../GameState'
 
@@ -6,6 +7,18 @@ export function registerCleanseSystem() {
     const card = getGameState().cards.find((c) => c.gameId === targetId)
     if (card) {
       card.debuffs = {}
+    }
+  })
+
+  EventBus.on(Event.DEBUFF_ATTEMPTED, 'cleanse_blocker', (_e, _id, data, ctx) => {
+    const { target } = data as { target?: GameCard }
+    if (!target) return
+    if (typeof target.buffs.cleanse === 'number' && target.buffs.cleanse > 0) {
+      target.buffs.cleanse -= 1
+      if (target.buffs.cleanse <= 0) {
+        delete target.buffs.cleanse
+      }
+      ctx.cancel()
     }
   })
 

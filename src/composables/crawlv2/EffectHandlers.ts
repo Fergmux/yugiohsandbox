@@ -3,7 +3,7 @@ import type { EventContext } from './EventBus'
 import { Event, EventBus } from './EventBus'
 import { filterByTargets, filterByChecks } from './CheckSystem'
 import { useTargetSelector } from './useTargetSelector'
-import { isDebuffBlocked, getEffective } from './BuffSystem'
+import { getEffective } from './BuffSystem'
 import { spendCard, returnToHand, relocateCard, moveToDead, moveToDeck } from './CardMovement'
 import { locations, fieldZones, type Location, type ZoneType } from '@/types/crawlv2'
 
@@ -24,11 +24,29 @@ export type TriggerHandler = (
   utils: HandlerUtils,
 ) => void | Promise<void>
 
+const buffEventMap: Record<string, Event> = {
+  cleanse: Event.CLEANSE_APPLIED,
+  empower: Event.EMPOWER_APPLIED,
+  evasive: Event.evasive_APPLIED,
+  eternal: Event.ETERNAL_APPLIED,
+  piercing: Event.PIERCING_APPLIED,
+  burn: Event.BURN_APPLIED,
+  shield: Event.SHIELD_APPLIED,
+  anger: Event.ANGER_APPLIED,
+  intangible: Event.INTANGIBLE_APPLIED,
+  damage_type: Event.DAMAGE_TYPE_APPLIED,
+  weak: Event.WEAK_APPLIED,
+  cursed: Event.CURSED_APPLIED,
+  blind: Event.BLIND_APPLIED,
+}
+
 const { selectTargets, selectZone, selectCards } = useTargetSelector()
 
 async function destroyUnit(unit: GameCard, source: GameCard) {
-  await EventBus.emit(Event.UNIT_DEFEATED, unit.gameId, { target: unit, source })
+  const { cancelled } = await EventBus.emit(Event.UNIT_DEFEATED, unit.gameId, { target: unit, source })
+  if (cancelled) return
   await spendCard(unit)
+  await EventBus.emit(Event.UNIT_SPENT, unit.gameId, { target: unit, source })
 }
 
 async function applyDamage(gameId: string, player: string | undefined, amount: number) {
@@ -40,6 +58,10 @@ async function applyDamage(gameId: string, player: string | undefined, amount: n
   if (!cancelled) {
     await EventBus.emit(Event.DAMAGE_DEALT, gameId, { player, amount })
   }
+}
+
+function getOpponent(card: GameCard) {
+  return card.owner === 'player1' ? 'player2' : 'player1'
 }
 
 export async function resolveCombat(source: GameCard, target: GameCard) {
@@ -63,7 +85,7 @@ export async function resolveCombat(source: GameCard, target: GameCard) {
     if (srcAtk > tgtAtk) {
       await destroyUnit(target, source)
       const dmg = srcAtk - tgtAtk
-      await applyDamage(target.gameId, target.owner, dmg)
+      await applyDamage(target.gameId, getOpponent(target), dmg)
     } else if (srcAtk < tgtAtk) {
       await destroyUnit(source, target)
       const dmg = tgtAtk - srcAtk
@@ -80,25 +102,35 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     ctx.cancel()
   },
 
+  negate_spend: async (_data, ctx) => {
+    ctx.cancel()
+  },
+
   debuff: async (_data, _ctx, card, effect) => {
     if (!effect.targets?.length) return
 
-    const validTargets = filterByTargets(effect.targets, card).filter((t) => !isDebuffBlocked(t))
+    const validTargets = filterByTargets(effect.targets, card)
     if (!validTargets.length) return
 
-    const selected = await selectTargets(validTargets, 1)
+    // Auto-apply when mandatory and there's exactly one valid target (no selection needed)
+    const autoApply = !effect.optional && validTargets.length === 1
+    const selected = autoApply ? validTargets : await selectTargets(validTargets, 1, !!effect.optional)
     if (!selected.length) return
 
-    const { cancelled } = await EventBus.emit(Event.DEBUFF_ATTEMPTED, card.gameId, { card, targets: selected })
-    if (cancelled) return
-
     const debuffName = String(effect.options?.debuff ?? 'unknown')
-    const value = Number(effect.options?.value ?? 1)
+    const value = effect.valueChecks
+      ? filterByChecks(effect.valueChecks, card).length
+      : Number(effect.options?.value ?? 1)
+    if (!value) return
     for (const target of selected) {
+      const { cancelled } = await EventBus.emit(Event.DEBUFF_ATTEMPTED, target.gameId, { card, target })
+      if (cancelled) continue
+
       const current = (target.debuffs[debuffName] as number) || 0
       target.debuffs[debuffName] = current + value
 
-      if (debuffName === 'burn') await EventBus.emit(Event.BURN_APPLIED, target.gameId, { card: target, source: card })
+      const appliedEvent = buffEventMap[debuffName]
+      if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
     }
   },
 
@@ -112,18 +144,17 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     const targets = selectCount !== undefined ? await selectTargets(validTargets, selectCount) : validTargets
     if (!targets.length) return
 
-    const { cancelled } = await EventBus.emit(Event.BUFF_ATTEMPTED, card.gameId, { card, targets })
-    if (cancelled) return
+    const buffName = effect.options?.buff
+    const value = effect.valueChecks ? filterByChecks(effect.valueChecks, card).length : effect.options?.value
+    if (!buffName || !value) return
 
-    const buffName = String(effect.options?.buff ?? 'unknown')
-    const value = Number(effect.options?.value ?? 1)
-    const buffEventMap: Record<string, Event> = {
-      cleanse: Event.CLEANSE_APPLIED,
-      empower: Event.EMPOWER_APPLIED,
-      in_flight: Event.IN_FLIGHT_APPLIED,
-    }
     for (const target of targets) {
-      const current = (target.buffs[buffName] as number) || 0
+      const current = target.buffs[buffName] || 0
+      if (typeof current !== 'number' || typeof value !== 'number') continue
+
+      const { cancelled } = await EventBus.emit(Event.BUFF_ATTEMPTED, target.gameId, { card, target })
+      if (cancelled) continue
+
       target.buffs[buffName] = current + value
 
       const appliedEvent = buffEventMap[buffName]
@@ -233,7 +264,9 @@ export const effectHandlers: Record<string, TriggerHandler> = {
 
   swap_stance: async (_data, _ctx, card, effect) => {
     if (!effect.targets?.length) return
+
     const targets = filterByTargets(effect.targets, card)
+
     for (const target of targets) {
       const { cancelled } = await EventBus.emit(Event.STANCE_SWAP_ATTEMPTED, target.gameId, {
         card: target,
@@ -249,7 +282,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     if (!effect.targets?.length) return
 
     const validTargets = filterByTargets(effect.targets, card).filter(
-      (t) => !(typeof t.buffs.in_flight === 'number' && t.buffs.in_flight > 0),
+      (t) => !(typeof t.buffs.evasive === 'number' && t.buffs.evasive > 0),
     )
 
     // If there are no opponent units at all, attack life points directly
@@ -264,12 +297,12 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     )
     if (!opponentUnits.length) {
       const { cancelled } = await EventBus.emit(Event.DAMAGE_ATTEMPTED, card.gameId, {
-        player: card.owner,
+        player: getOpponent(card),
         amount: getEffective(card).atk ?? 0,
       })
       if (!cancelled)
         await EventBus.emit(Event.DAMAGE_DEALT, card.gameId, {
-          player: card.owner,
+          player: getOpponent(card),
           amount: getEffective(card).atk ?? 0,
         })
       return
@@ -286,6 +319,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     if (!selected.length) return
 
     const target = selected[0]
+
     const { cancelled } = await EventBus.emit(Event.ATTACK_DECLARED, target.gameId, { target, source: card })
     if (cancelled) return
 

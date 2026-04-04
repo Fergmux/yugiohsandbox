@@ -6,6 +6,7 @@ import { effectHandlers, cleanupEffects, type HandlerUtils } from './EffectHandl
 import { evaluateConditions, evaluateChecks } from './CheckSystem'
 import { spendCard, drawCardForPlayer, shuffleDeck } from './CardMovement'
 import { getGameState } from './GameState'
+import { getEffectiveUses } from './buffs/AngerSystem'
 
 export type EffectResolverConfig = {
   selectCard: (card: GameCard | null) => void
@@ -111,9 +112,9 @@ export class EffectResolver {
         // Evaluate trigger card conditions against the card that caused the event.
         // When no trigger card exists in data (e.g. TURN_START), use the source card
         // so comparators that don't need a candidate (like current_player) still work.
-        if (effect.triggerCardConditions?.length) {
+        if (effect.triggerConditions?.length) {
           const { card: triggerCard } = data as { card?: GameCard }
-          if (!evaluateChecks(effect.triggerCardConditions, card, triggerCard ?? card)) return
+          if (!evaluateChecks(effect.triggerConditions, card, triggerCard ?? card)) return
         }
 
         const { target } = data as { target?: GameCard }
@@ -180,7 +181,8 @@ export class EffectResolver {
     const effect = card.effects?.[effectIndex]
     if (!effect || effect.trigger !== 'manual') return
     if (getGameState().currentPlayer !== card.owner) return
-    if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
+    const maxUses = getEffectiveUses(card, effect)
+    if (maxUses !== undefined && (effect.activations ?? 0) >= maxUses) return
 
     const handler = effectHandlers[effect.effect]
     if (!handler) return
@@ -198,12 +200,12 @@ export class EffectResolver {
     }
     await handler({}, ctx, card, effect, this.handlerUtils)
 
-    if (card.type === 'unit') {
-      await EventBus.emit(Event.UNIT_ABILITY_SUCCESSFUL, card.gameId, { card })
-    }
-
     if (effect.uses !== undefined) {
       effect.activations = (effect.activations ?? 0) + 1
+    }
+
+    if (card.type === 'unit') {
+      await EventBus.emit(Event.UNIT_ABILITY_SUCCESSFUL, card.gameId, { card })
     }
 
     await EventBus.emit(Event.UPDATED, card.gameId, { card })

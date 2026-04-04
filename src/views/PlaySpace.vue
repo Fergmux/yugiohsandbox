@@ -238,12 +238,12 @@ interface EditBatch {
 
 const serverSnapshot = shallowRef<GameState>(createDefaultGameState())
 const pendingEdits = shallowRef<GameEdit[]>([])
-const inflightBatches = shallowRef<EditBatch[]>([])
+const evasiveBatches = shallowRef<EditBatch[]>([])
 let sending = false
 
 const gameState = computed<GameState>(() => {
   const base = JSON.parse(JSON.stringify(serverSnapshot.value)) as GameState
-  for (const batch of inflightBatches.value) {
+  for (const batch of evasiveBatches.value) {
     applyEdits(base, batch.edits)
   }
   applyEdits(base, pendingEdits.value)
@@ -258,7 +258,7 @@ const createGame = async () => {
   initial.players.player1 = userStore.user ?? null
   serverSnapshot.value = initial
   pendingEdits.value = []
-  inflightBatches.value = []
+  evasiveBatches.value = []
   try {
     const response = await authFetch('/.netlify/functions/create-game', {
       method: 'POST',
@@ -279,7 +279,7 @@ const leaveDuel = () => {
   deckId.value = undefined
   serverSnapshot.value = createDefaultGameState()
   pendingEdits.value = []
-  inflightBatches.value = []
+  evasiveBatches.value = []
   sending = false
   unsubscribe()
 }
@@ -509,7 +509,7 @@ const doFlush = async () => {
   const edits = pendingEdits.value
   pendingEdits.value = []
   const batch: EditBatch = { edits, serverVersion: null }
-  inflightBatches.value = [...inflightBatches.value, batch]
+  evasiveBatches.value = [...evasiveBatches.value, batch]
   try {
     const response = await authFetch('/.netlify/functions/update-game', {
       method: 'POST',
@@ -520,11 +520,11 @@ const doFlush = async () => {
     batch.serverVersion = data.version
     const snapshotVersion = serverSnapshot.value._version ?? 0
     if (batch.serverVersion !== null && batch.serverVersion <= snapshotVersion) {
-      inflightBatches.value = inflightBatches.value.filter((b) => b !== batch)
+      evasiveBatches.value = evasiveBatches.value.filter((b) => b !== batch)
     }
   } catch {
     pendingEdits.value = [...edits, ...pendingEdits.value]
-    inflightBatches.value = inflightBatches.value.filter((b) => b !== batch)
+    evasiveBatches.value = evasiveBatches.value.filter((b) => b !== batch)
   } finally {
     sending = false
     if (pendingEdits.value.length > 0) doFlush()
@@ -559,7 +559,7 @@ const joinGame = async (id?: string) => {
     gameCode.value = gameData.code || undefined
     serverSnapshot.value = gameData
     pendingEdits.value = []
-    inflightBatches.value = []
+    evasiveBatches.value = []
     if (gameData.players.player1?.id === userStore.user?.id) {
       deckId.value = gameData.decks.player1 ?? undefined
     } else if (gameData.players.player2?.id === userStore.user?.id) {
@@ -593,9 +593,9 @@ const subscribe = () => {
     const serverState = docSnapshot.data() as GameState
     const snapshotVersion = serverState._version ?? 0
     serverSnapshot.value = serverState
-    const remaining = inflightBatches.value.filter((b) => b.serverVersion === null || b.serverVersion > snapshotVersion)
-    if (remaining.length !== inflightBatches.value.length) {
-      inflightBatches.value = remaining
+    const remaining = evasiveBatches.value.filter((b) => b.serverVersion === null || b.serverVersion > snapshotVersion)
+    if (remaining.length !== evasiveBatches.value.length) {
+      evasiveBatches.value = remaining
     }
     logRef.value?.scrollTo({ top: logRef.value.scrollHeight, behavior: 'smooth' })
   })

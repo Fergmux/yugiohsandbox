@@ -2,7 +2,7 @@ import { Event, EventBus } from '../EventBus'
 import { getGameState } from '../GameState'
 
 export function registerEmpowerSystem() {
-  EventBus.on(Event.TURN_END, 'empower_system', (_e, _id, data, _ctx) => {
+  EventBus.on(Event.TURN_START, 'empower_system', (_e, _id, data, _ctx) => {
     const { currentPlayer } = data as { currentPlayer: string }
     const { cards } = getGameState()
     for (const card of cards) {

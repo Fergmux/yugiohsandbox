@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { GameCard } from '@/types/cards'
 import type { Location } from '@/types/crawlv2'
 
@@ -6,6 +6,7 @@ type PendingSelection = {
   validTargets: GameCard[]
   resolve: (selected: GameCard[]) => void
   maxTargets: number
+  optional: boolean
 }
 
 type PendingZoneSelection = {
@@ -30,10 +31,10 @@ const pendingCardPick = ref<PendingCardPick | null>(null)
 const pickedCards = ref<GameCard[]>([])
 
 export function useTargetSelector() {
-  function selectTargets(validTargets: GameCard[], maxTargets = 1): Promise<GameCard[]> {
+  function selectTargets(validTargets: GameCard[], maxTargets = 1, optional = true): Promise<GameCard[]> {
     return new Promise((resolve) => {
       selectedTargets.value = []
-      pending.value = { validTargets, resolve, maxTargets }
+      pending.value = { validTargets, resolve, maxTargets, optional }
     })
   }
 
@@ -117,7 +118,10 @@ export function useTargetSelector() {
     pickedCards.value = []
   }
 
+  const hasSelection = computed(() => !!(pending.value || pendingZone.value || pendingCardPick.value))
+
   return {
+    hasSelection,
     pending,
     selectedTargets,
     selectTargets,

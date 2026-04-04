@@ -18,7 +18,8 @@ export enum Event {
   UNIT_PLAYED = 'unit_played', // Negateable
   UNIT_SUMMONED = 'unit_summoned',
   UNIT_ATTACKED = 'unit_attacked', // Negateable
-  UNIT_DEFEATED = 'unit_defeated',
+  UNIT_DEFEATED = 'unit_defeated', // Negateable
+  UNIT_SPENT = 'unit_spent',
   UNIT_ABILITY_ATTEMPTED = 'unit_ability_attempted', // Negateable
   UNIT_ABILITY_SUCCESSFUL = 'unit_ability_successful',
   STANCE_SWAP_ATTEMPTED = 'unit_stance_swap_attempted', // Negateable
@@ -58,11 +59,20 @@ export enum Event {
   BUFF_ATTEMPTED = 'buff_attempted', // Negateable
   CLEANSE_APPLIED = 'cleanse_applied',
   EMPOWER_APPLIED = 'empower_applied',
-  IN_FLIGHT_APPLIED = 'in_flight_applied',
+  evasive_APPLIED = 'evasive_applied',
+  ETERNAL_APPLIED = 'eternal_applied',
+  PIERCING_APPLIED = 'piercing_applied',
+  SHIELD_APPLIED = 'shield_applied',
+  INTANGIBLE_APPLIED = 'intangible_applied',
+  DAMAGE_TYPE_APPLIED = 'damage_type_applied',
 
   // Debuffs
   DEBUFF_ATTEMPTED = 'debuff_attempted', // Negateable
   BURN_APPLIED = 'burn_applied',
+  WEAK_APPLIED = 'weak_applied',
+  BLIND_APPLIED = 'blind_applied',
+  CURSED_APPLIED = 'cursed_applied',
+  ANGER_APPLIED = 'anger_applied',
 }
 
 export const costedEvents = [Event.UNIT_PLAYED, Event.TRAP_PLAYED, Event.EFFECT_PLAYED, Event.POWER_PLAYED]
@@ -75,7 +85,9 @@ export const EventBus = {
       }
     } else {
       const map = getMap(event)
-      map.set(key, [fn])
+      const existing = map.get(key) ?? []
+      existing.push(fn)
+      map.set(key, existing)
     }
   },
 

@@ -49,7 +49,7 @@ let unsubscribe: () => void
  * Reference-counted pending field tracker.
  * While a field has a count > 0, incoming snapshots won't overwrite
  * the local value for that field, preventing remote data from clobbering
- * optimistic updates that are still in-flight.
+ * optimistic updates that are still evasive.
  */
 const pendingCounts = new Map<string, number>()
 

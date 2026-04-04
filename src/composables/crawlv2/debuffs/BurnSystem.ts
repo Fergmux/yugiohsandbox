@@ -20,7 +20,7 @@ export function registerBurnSystem() {
     }
   })
 
-  EventBus.on(Event.TURN_END, 'burn_system', (_e, _id, data, _ctx) => {
+  EventBus.on(Event.TURN_START, 'burn_system', (_e, _id, data, _ctx) => {
     const { currentPlayer } = data as { currentPlayer: string }
     const { cards } = getGameState()
     for (const card of cards) {

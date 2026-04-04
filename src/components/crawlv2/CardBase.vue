@@ -54,7 +54,7 @@
       </div>
 
       <div
-        v-if="effectButtons.length"
+        v-if="effectButtons.length && !hasSelection"
         class="absolute bottom-1 left-1 z-20 flex flex-col items-start gap-px opacity-0 transition-opacity group-hover:opacity-100"
       >
         <button
@@ -78,31 +78,37 @@
 import { type GameCard, type EffectDef } from '@/types/cards'
 import { getEffective } from '@/composables/crawlv2/BuffSystem'
 import { propOf, filterByTargets, filterByChecks, evaluateConditions } from '@/composables/crawlv2/CheckSystem'
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import CardBack from '@/assets/images/cards/cardback.png'
 import { EventBus, Event } from '@/composables/crawlv2/EventBus'
+import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
+import { getEffectiveUses } from '@/composables/crawlv2/buffs/AngerSystem'
 
 const props = defineProps<{
   card: GameCard
   currentPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]
 }>()
+
+const { hasSelection } = useTargetSelector()
 const emit = defineEmits<{
   (e: 'activate-effect', card: GameCard, effectIndex: number): void
 }>()
 
 type EffectButton = { index: number; name: string; enabled: boolean }
-const effectButtons = ref<EffectButton[]>([])
 
-const canShowEffectButtons = () => props.card.owner === props.currentPlayer
+// Bump this to force the computed to re-evaluate when non-reactive global state
+// changes (e.g. other cards moving/dying that affect target availability).
+const revision = ref(0)
 
 const isEffectEnabled = (effect: EffectDef) => {
-  if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return false
+  const maxUses = getEffectiveUses(props.card, effect)
+  if (maxUses !== undefined && (effect.activations ?? 0) >= maxUses) return false
   if (!evaluateConditions(effect.conditions, props.card)) return false
   if (!effect.targets?.length) return true
   let validTargets = filterByTargets(effect.targets, props.card)
   if (effect.effect === 'damage') {
-    validTargets = validTargets.filter((t) => !(typeof t.buffs.in_flight === 'number' && t.buffs.in_flight > 0))
+    validTargets = validTargets.filter((t) => !(typeof t.buffs.evasive === 'number' && t.buffs.evasive > 0))
     const opponentUnits = filterByChecks(
       [
         [
@@ -117,24 +123,22 @@ const isEffectEnabled = (effect: EffectDef) => {
   return validTargets.length > 0
 }
 
-const updateEffectButtons = () => {
-  if (!canShowEffectButtons()) {
-    effectButtons.value = []
-    return
-  }
-  effectButtons.value = (props.card.effects ?? [])
+const effectButtons = computed(() => {
+  // Read revision so EventBus-triggered bumps cause re-evaluation
+  void revision.value
+  if (props.card.owner !== props.currentPlayer) return []
+  return (props.card.effects ?? [])
     .map((effect, index) => {
       if (effect.trigger !== 'manual') return null
-      return { index, name: effect.name ?? 'Activate', enabled: isEffectEnabled(effect) }
+      return { index, name: effect.name ?? 'Activate', enabled: isEffectEnabled(effect) } as EffectButton
     })
     .filter((x): x is EffectButton => x !== null)
-}
-
-watch(() => props.currentPlayer, updateEffectButtons)
+})
 
 onMounted(() => {
-  updateEffectButtons()
-  EventBus.on(Event.UPDATED, props.card.gameId, updateEffectButtons)
+  EventBus.on(Event.UPDATED, props.card.gameId, () => {
+    revision.value++
+  })
 })
 
 onUnmounted(() => {
@@ -164,9 +168,16 @@ const BUFF_LABELS: Record<string, string> = {
   atk: 'ATK',
   def: 'DEF',
   empower: 'EMPOWER',
-  in_flight: 'IN-FLIGHT',
+  evasive: 'EVASIVE',
 }
-const DEBUFF_LABELS: Record<string, string> = { burn: 'BURN', atk: 'ATK', def: 'DEF' }
+const DEBUFF_LABELS: Record<string, string> = {
+  burn: 'BURN',
+  atk: 'ATK',
+  def: 'DEF',
+  weak: 'WEAK',
+  cursed: 'CURSED',
+  blind: 'BLIND',
+}
 
 const BUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   damage: (v) => `Damage type changed to ${v}`,
@@ -174,13 +185,16 @@ const BUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   atk: (v) => `+${v} ATK`,
   def: (v) => `+${v} DEF`,
   empower: (v) => `Empower ×${v}: +${v} ATK`,
-  in_flight: (v) => `In-Flight ×${v}: untargetable by attacks`,
+  evasive: (v) => `Evasive ×${v}: untargetable by attacks`,
 }
 
 const DEBUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   burn: (v) => `Burn ×${v}: deals 1 damage to owner when this unit attacks`,
   atk: (v) => `-${v} ATK`,
   def: (v) => `-${v} DEF`,
+  weak: (v) => `Weak ×${v}: -${v} ATK`,
+  cursed: (v) => `Cursed ×${v}: loses all buffs and debuffs`,
+  blind: (v) => `Blind ×${v}: Cannot pick targets for attacks`,
 }
 
 const buffBadgeLabel = (key: string) => BUFF_LABELS[propOf(key)]
