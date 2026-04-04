@@ -1,4 +1,4 @@
-import type { GameCard, EffectDef } from '@/types/cards'
+import type { GameCard, EffectDef, Check } from '@/types/cards'
 import type { EventContext } from './EventBus'
 import { Event, EventBus } from './EventBus'
 import { filterByTargets, filterByChecks } from './CheckSystem'
@@ -6,6 +6,7 @@ import { useTargetSelector } from './useTargetSelector'
 import { getEffective } from './BuffSystem'
 import { spendCard, returnToHand, relocateCard, moveToDead, moveToDeck } from './CardMovement'
 import { locations, fieldZones, type Location, type ZoneType } from '@/types/crawlv2'
+import { validate } from 'uuid'
 
 export type HandlerUtils = {
   getCard: (location: Location) => GameCard | null
@@ -40,6 +41,10 @@ const buffEventMap: Record<string, Event> = {
   blind: Event.BLIND_APPLIED,
 }
 
+function getOpponent(card: GameCard) {
+  return card.owner === 'player1' ? 'player2' : 'player1'
+}
+
 const { selectTargets, selectZone, selectCards } = useTargetSelector()
 
 async function destroyUnit(unit: GameCard, source: GameCard) {
@@ -58,10 +63,6 @@ async function applyDamage(gameId: string, player: string | undefined, amount: n
   if (!cancelled) {
     await EventBus.emit(Event.DAMAGE_DEALT, gameId, { player, amount })
   }
-}
-
-function getOpponent(card: GameCard) {
-  return card.owner === 'player1' ? 'player2' : 'player1'
 }
 
 export async function resolveCombat(source: GameCard, target: GameCard) {
@@ -85,7 +86,7 @@ export async function resolveCombat(source: GameCard, target: GameCard) {
     if (srcAtk > tgtAtk) {
       await destroyUnit(target, source)
       const dmg = srcAtk - tgtAtk
-      await applyDamage(target.gameId, getOpponent(target), dmg)
+      await applyDamage(target.gameId, target.owner, dmg)
     } else if (srcAtk < tgtAtk) {
       await destroyUnit(source, target)
       const dmg = tgtAtk - srcAtk
@@ -112,25 +113,27 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     const validTargets = filterByTargets(effect.targets, card)
     if (!validTargets.length) return
 
-    // Auto-apply when mandatory and there's exactly one valid target (no selection needed)
-    const autoApply = !effect.optional && validTargets.length === 1
-    const selected = autoApply ? validTargets : await selectTargets(validTargets, 1, !!effect.optional)
+    const selected = await selectTargets(validTargets, effect)
     if (!selected.length) return
 
-    const debuffName = String(effect.options?.debuff ?? 'unknown')
-    const value = effect.valueChecks
-      ? filterByChecks(effect.valueChecks, card).length
-      : Number(effect.options?.value ?? 1)
-    if (!value) return
-    for (const target of selected) {
-      const { cancelled } = await EventBus.emit(Event.DEBUFF_ATTEMPTED, target.gameId, { card, target })
-      if (cancelled) continue
-
-      const current = (target.debuffs[debuffName] as number) || 0
-      target.debuffs[debuffName] = current + value
-
-      const appliedEvent = buffEventMap[debuffName]
-      if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
+    if (Array.isArray(effect.options?.debuffs)) {
+      for (const { key, count, countChecks } of effect.options.debuffs as {
+        key?: string
+        count?: number
+        countChecks?: Check[][]
+      }[]) {
+        const value = countChecks ? filterByChecks(countChecks, card).length : count
+        if (!key || !count) continue
+        for (const target of selected) {
+          const { cancelled } = await EventBus.emit(Event.DEBUFF_ATTEMPTED, target.gameId, { card, target })
+          if (cancelled) continue
+          const current = target.debuffs[key] || 0
+          if (typeof current !== 'number' || typeof value !== 'number') continue
+          target.debuffs[key] = current + value
+          const appliedEvent = buffEventMap[key]
+          if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
+        }
+      }
     }
   },
 
@@ -140,25 +143,30 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     const validTargets = filterByTargets(effect.targets, card)
     if (!validTargets.length) return
 
-    const selectCount = effect.options?.select ? Number(effect.options.select) : undefined
-    const targets = selectCount !== undefined ? await selectTargets(validTargets, selectCount) : validTargets
+    const targets = await selectTargets(validTargets, effect)
     if (!targets.length) return
 
-    const buffName = effect.options?.buff
-    const value = effect.valueChecks ? filterByChecks(effect.valueChecks, card).length : effect.options?.value
-    if (!buffName || !value) return
+    if (Array.isArray(effect.options?.buffs)) {
+      for (const { key, count, countChecks } of effect.options.buffs as {
+        key?: string
+        count?: number
+        countChecks?: Check[][]
+      }[]) {
+        const value = countChecks ? filterByChecks(countChecks, card).length : count
+        if (!key || !count) continue
 
-    for (const target of targets) {
-      const current = target.buffs[buffName] || 0
-      if (typeof current !== 'number' || typeof value !== 'number') continue
+        for (const target of targets) {
+          const { cancelled } = await EventBus.emit(Event.BUFF_ATTEMPTED, target.gameId, { card, target })
+          if (cancelled) continue
+          const current = target.buffs[key] || 0
+          if (typeof current !== 'number' || typeof value !== 'number') continue
 
-      const { cancelled } = await EventBus.emit(Event.BUFF_ATTEMPTED, target.gameId, { card, target })
-      if (cancelled) continue
+          target.buffs[key] = current + value
 
-      target.buffs[buffName] = current + value
-
-      const appliedEvent = buffEventMap[buffName]
-      if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
+          const appliedEvent = buffEventMap[key]
+          if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
+        }
+      }
     }
   },
 
@@ -166,6 +174,9 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     if (!effect.targets?.length) return
     const targets = filterByTargets(effect.targets, card)
     if (!targets.length) return
+
+    const { cancelled } = await EventBus.emit(Event.EFFECT_PLAYED, card.gameId, { card })
+    if (cancelled) return
 
     const moveData = data as { destination: ZoneType; count?: number } | null
     const destination: ZoneType = moveData?.destination ?? 'hand'
@@ -205,7 +216,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     if (!effect.targets?.length) return
     const targets = filterByTargets(effect.targets, card)
     for (const t of targets) {
-      t.buffs[`${card.gameId}:damage`] = effect.options?.damageType ?? ''
+      t.buffs['damage'] = (effect.options?.damageType as string) ?? ''
     }
   },
 
@@ -249,6 +260,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     utils.deductAP(card)
     utils.registerEffects(card)
     await relocateCard(card, zone)
+    card.faceUp = false
     await EventBus.emit(Event.TRAP_SET, card.gameId, { card })
     utils.selectCard(null)
   },
@@ -276,6 +288,22 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       target.defensePosition = !target.defensePosition
       await EventBus.emit(Event.STANCE_SWAP_SUCCESSFUL, target.gameId, { card: target, source: card })
     }
+  },
+
+  flip_card: async (_data, _ctx, card, effect, utils) => {
+    if (!effect.targets?.length) return
+    const validTargets = filterByTargets(effect.targets, card)
+    if (!validTargets.length) return
+    // select a target
+    const targets = await selectTargets(validTargets, effect)
+    if (!targets.length) return
+
+    for (const target of targets) {
+      const { cancelled } = await EventBus.emit(Event.CARD_FLIPPED, target.gameId, { card: target, source: card })
+      if (cancelled) continue
+      target.faceUp = !target.faceUp
+    }
+    utils.selectCard(null)
   },
 
   damage: async (_data, _ctx, card, effect) => {
@@ -309,22 +337,21 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
     if (!validTargets.length) return
 
-    let selected
+    let targets
     if (card.debuffs.blind !== undefined && (card.debuffs.blind as number) > 0) {
-      selected = [validTargets[Math.floor(Math.random() * validTargets.length)]]
+      targets = [validTargets[Math.floor(Math.random() * validTargets.length)]]
     } else {
-      selected = await selectTargets(validTargets, 1)
+      targets = await selectTargets(validTargets, effect)
     }
 
-    if (!selected.length) return
+    if (!targets.length) return
 
-    const target = selected[0]
-
-    const { cancelled } = await EventBus.emit(Event.ATTACK_DECLARED, target.gameId, { target, source: card })
-    if (cancelled) return
-
-    await EventBus.emit(Event.ATTACK_SUCCESSFUL, target.gameId, { target, source: card })
-    await resolveCombat(card, target)
+    targets.forEach(async (target) => {
+      const { cancelled } = await EventBus.emit(Event.ATTACK_DECLARED, target.gameId, { target, source: card })
+      if (cancelled) return
+      await EventBus.emit(Event.ATTACK_SUCCESSFUL, target.gameId, { target, source: card })
+      await resolveCombat(card, target)
+    })
   },
 }
 

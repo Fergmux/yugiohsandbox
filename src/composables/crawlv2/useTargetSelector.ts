@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { GameCard } from '@/types/cards'
+import type { EffectDef, GameCard } from '@/types/cards'
 import type { Location } from '@/types/crawlv2'
 
 type PendingSelection = {
@@ -31,10 +31,16 @@ const pendingCardPick = ref<PendingCardPick | null>(null)
 const pickedCards = ref<GameCard[]>([])
 
 export function useTargetSelector() {
-  function selectTargets(validTargets: GameCard[], maxTargets = 1, optional = true): Promise<GameCard[]> {
+  function selectTargets(validTargets: GameCard[], effect: EffectDef): Promise<GameCard[]> {
+    const maxTargets = effect.selectCount
+    const optional = !!effect.optional
+    const autoApply = validTargets.length === 1
+
+    if (!optional && (maxTargets === undefined || autoApply)) return Promise.resolve(validTargets)
+
     return new Promise((resolve) => {
       selectedTargets.value = []
-      pending.value = { validTargets, resolve, maxTargets, optional }
+      pending.value = { validTargets, resolve, maxTargets: (maxTargets as number) ?? 1, optional }
     })
   }
 

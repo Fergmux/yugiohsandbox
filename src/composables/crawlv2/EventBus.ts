@@ -54,6 +54,7 @@ export enum Event {
   CARD_LEFT_FIELD = 'card_left_field',
   CARD_DRAWN = 'card_drawn',
   CARD_SPENT = 'card_spent',
+  CARD_FLIPPED = 'card_flipped',
 
   // Buffs
   BUFF_ATTEMPTED = 'buff_attempted', // Negateable

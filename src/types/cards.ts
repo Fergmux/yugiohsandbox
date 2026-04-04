@@ -16,7 +16,7 @@ type NestedKeyOf<T, Prefix extends string = ''> = {
 }[keyof T & string]
 
 export type Condition = {
-  test?: 'has_card' | 'event_target' | 'has_property' | 'has_energy'
+  test?: 'has_card' | 'event_target' | 'event_source' | 'has_property' | 'has_energy'
   checks?: Check[][]
 }
 export type Check = {
@@ -46,10 +46,12 @@ export type EffectDef = {
   trigger?: EffectTrigger
   effect: string
   ongoing?: boolean
-  options?: Record<string, string | number>
+  options?: Record<string, string | number | { key?: string; count?: number; countChecks?: Check[][] }[]>
+  selectCount?: number // Number of cards to select, undefined will auto select all targets (unless optional is true)
   conditions?: Condition[]
   targets?: Check[][]
-  optional?: boolean
+  optional?: boolean // Falsey will not prompt selection
+  /** Only needed for simple handlers that don't emit their own events (e.g. negate_spend, negate_attack). Handlers that select targets should emit events per-target internally. */
   eventName?: Event
   /** Maximum number of times this effect can be activated */
   uses?: number
@@ -63,9 +65,6 @@ export type EffectDef = {
    *  Uses the same Check[][] format as targets — OR of AND groups.
    *  The "source" for these checks is the listening card, and the "candidate" is the trigger card. */
   triggerConditions?: Check[][]
-  /** When present, the count of cards matching these checks is used as the effect value
-   *  instead of options.value. Uses the same Check[][] format as targets. */
-  valueChecks?: Check[][]
 }
 
 type Buff = {
@@ -91,6 +90,88 @@ export type GameCard = Card & {
   defensePosition?: boolean
 }
 
+const summon: EffectDef = {
+  name: 'Summon',
+  effect: 'summon',
+  targets: [[{ comparitor: 'itself' }]],
+  trigger: 'manual',
+  triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+  conditions: [
+    {
+      test: 'has_property',
+      checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
+    },
+    {
+      test: 'has_energy',
+      checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
+    },
+  ],
+}
+
+const sacrifice: EffectDef = {
+  name: 'Sacrifice',
+  effect: 'sacrifice',
+  trigger: 'manual',
+  triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+  conditions: [
+    {
+      test: 'has_property',
+      checks: [
+        [
+          { comparitor: 'more_than', key: 'cost', value: 0 },
+          { comparitor: 'equals', key: 'location.type', value: 'unit' },
+        ],
+      ],
+    },
+  ],
+}
+
+const swapStance: EffectDef = {
+  name: 'Swap Stance',
+  effect: 'swap_stance',
+  uses: 1,
+  activations: 0,
+  resetOnEvent: Event.TURN_START,
+  trigger: 'manual',
+  triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+  targets: [[{ comparitor: 'itself' }]],
+  conditions: [
+    {
+      test: 'has_property',
+      checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
+    },
+  ],
+}
+
+const attack: EffectDef = {
+  name: 'Attack',
+  effect: 'damage',
+  conditions: [
+    {
+      test: 'has_property',
+      checks: [
+        [
+          { comparitor: 'equals', key: 'defensePosition', value: false },
+          { comparitor: 'equals', key: 'location.type', value: 'unit' },
+        ],
+      ],
+    },
+  ],
+  uses: 1,
+  activations: 0,
+  resetOnEvent: Event.TURN_START,
+  trigger: 'manual',
+  targets: [
+    [
+      { comparitor: 'equals', key: 'location.type', value: 'unit' },
+      { comparitor: 'owner', value: 'opponent' },
+      { comparitor: 'equals', key: 'type', value: 'unit' },
+    ],
+  ],
+}
+
+export const defaultUnitEffects: EffectDef[] = [summon, sacrifice, swapStance, attack]
+
 export const cards: Card[] = [
   // 1: Chaos Mage
   {
@@ -108,13 +189,13 @@ export const cards: Card[] = [
       "On summon Adjacent Mage units gain 2x Empower and this card gains 1x Eternal. Adjacent mage unit's attacks are treated as Fire",
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Empower',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'empower',
-          value: 2,
+          buffs: [{ key: 'empower', count: 2 }],
         },
         targets: [
           [
@@ -128,10 +209,9 @@ export const cards: Card[] = [
       {
         name: 'Eternal',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'eternal',
-          value: 2,
+          buffs: [{ key: 'eternal', count: 1 }],
         },
         targets: [[{ comparitor: 'itself' }]],
         trigger: Event.UNIT_SUMMONED,
@@ -147,86 +227,6 @@ export const cards: Card[] = [
           [
             { comparitor: 'equals', key: 'race', value: 'mage' },
             { comparitor: 'location', value: 'adjacent' },
-          ],
-        ],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
           ],
         ],
       },
@@ -246,16 +246,17 @@ export const cards: Card[] = [
     description: "Once per turn you can apply 2x burn to an opponent's unit",
     rarity: 'rare',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Apply Burn',
         effect: 'debuff',
-        eventName: Event.DEBUFF_ATTEMPTED,
+
         options: {
-          debuff: 'burn',
-          value: 2,
+          debuffs: [{ key: 'burn', count: 2 }],
         },
         trigger: 'manual',
         optional: true,
+        selectCount: 1,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
@@ -271,86 +272,6 @@ export const cards: Card[] = [
             test: 'has_property',
             checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
           },
-        ],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
         ],
       },
     ],
@@ -369,101 +290,21 @@ export const cards: Card[] = [
     description: 'Once per turn, you can apply 1x Piercing to an Adjacent unit',
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Piercing',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'piercing',
-          value: 1,
-          select: 1,
+          buffs: [{ key: 'piercing', count: 1 }],
         },
         trigger: 'manual',
         optional: true,
+        selectCount: 1,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
         targets: [[{ comparitor: 'location', value: 'adjacent' }]],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
       },
     ],
   },
@@ -481,80 +322,16 @@ export const cards: Card[] = [
     description: 'At the start of your turn, apply 1x Cleanse to this card',
     rarity: 'rare',
     effects: [
+      ...defaultUnitEffects,
       {
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'cleanse',
-          value: 1,
+          buffs: [{ key: 'cleanse', count: 1 }],
         },
         trigger: Event.TURN_START,
-        optional: false,
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        optional: false,
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
       },
     ],
   },
@@ -572,100 +349,21 @@ export const cards: Card[] = [
     description: "Once per turn, you can apply 1x Burn to an opponents unit in this unit's column",
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Apply Burn',
         effect: 'debuff',
-        eventName: Event.DEBUFF_ATTEMPTED,
+
         options: {
-          debuff: 'burn',
-          value: 1,
+          debuffs: [{ key: 'burn', count: 1 }],
         },
         trigger: 'manual',
         optional: true,
+        selectCount: 1,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
         targets: [[{ comparitor: 'location', value: 'column' }]],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
       },
     ],
   },
@@ -683,16 +381,17 @@ export const cards: Card[] = [
     description: 'Once per turn, you can apply 1x Blind to an opponents unit',
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Apply Blind',
         effect: 'debuff',
-        eventName: Event.DEBUFF_ATTEMPTED,
+
         options: {
-          debuff: 'blind',
-          value: 1,
+          debuffs: [{ key: 'blind', count: 1 }],
         },
         trigger: 'manual',
         optional: true,
+        selectCount: 1,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
@@ -708,86 +407,6 @@ export const cards: Card[] = [
             test: 'has_property',
             checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
           },
-        ],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
         ],
       },
     ],
@@ -806,18 +425,18 @@ export const cards: Card[] = [
     description: 'Once per turn, you can apply 1x Evasive to itself or an Adjacent Dragon unit',
     rarity: 'rare',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Evasive',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'evasive',
-          value: 1,
-          select: 1,
+          buffs: [{ key: 'evasive', count: 1 }],
         },
         trigger: 'manual',
         optional: true,
         resetOnEvent: Event.TURN_START,
+        selectCount: 1,
         uses: 1,
         activations: 0,
         targets: [
@@ -839,86 +458,6 @@ export const cards: Card[] = [
           },
         ],
       },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
-      },
     ],
   },
   // 8: Captain
@@ -935,109 +474,20 @@ export const cards: Card[] = [
     description: 'At the start of your turn, Adjacent warrior units gain 1x Empower / 1x Shield.',
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Empower',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'empower',
-          value: 1,
-        },
-        trigger: Event.TURN_START,
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'location', value: 'adjacent' }]],
-      },
-      {
-        name: 'Shield',
-        effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
-        options: {
-          buff: 'shield',
-          value: 1,
-        },
-        trigger: Event.TURN_START,
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'location', value: 'adjacent' }]],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
+          buffs: [
+            { key: 'empower', count: 1 },
+            { key: 'shield', count: 1 },
           ],
-        ],
+        },
+        trigger: Event.TURN_START,
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+        targets: [[{ comparitor: 'location', value: 'adjacent' }]],
       },
     ],
   },
@@ -1055,13 +505,13 @@ export const cards: Card[] = [
     description: "On summon, neighbouring Dragon unit's gain x2 Empower.",
     rarity: 'rare',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Empower',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'empower',
-          value: 2,
+          buffs: [{ key: 'empower', count: 2 }],
         },
         targets: [
           [
@@ -1071,86 +521,6 @@ export const cards: Card[] = [
         ],
         trigger: Event.UNIT_SUMMONED,
         triggerConditions: [[{ comparitor: 'itself' }]],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
       },
     ],
   },
@@ -1168,100 +538,21 @@ export const cards: Card[] = [
     description: "Once per turn, you can apply 1x Burn to an opponents unit in this unit's column",
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Apply Burn',
         effect: 'debuff',
-        eventName: Event.DEBUFF_ATTEMPTED,
+
         options: {
-          debuff: 'burn',
-          value: 1,
+          debuffs: [{ key: 'burn', count: 1 }],
         },
         trigger: 'manual',
         optional: true,
+        selectCount: 1,
         resetOnEvent: Event.TURN_START,
         uses: 1,
         activations: 0,
         targets: [[{ comparitor: 'location', value: 'column' }]],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
       },
     ],
   },
@@ -1276,16 +567,16 @@ export const cards: Card[] = [
     type: 'unit',
     race: 'dragon',
     damage: 'fire',
-    description: "At the start of your turn, your units in this unit's column gain x1 Endurance",
+    description: "At the start of your turn, your units in this unit's column gain x1 shield",
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
-        name: 'Endurance',
+        name: 'Shield',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'shield',
-          value: 1,
+          buffs: [{ key: 'shield', count: 1 }],
         },
         trigger: Event.TURN_START,
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
@@ -1293,86 +584,6 @@ export const cards: Card[] = [
           [
             { comparitor: 'location', value: 'column' },
             { comparitor: 'owner', value: 'player' },
-          ],
-        ],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
           ],
         ],
       },
@@ -1392,114 +603,38 @@ export const cards: Card[] = [
     description: 'At the start of your turn, gains x1 Weak for each Adjacent unit. On summon gains x99 cursed.',
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Weak',
         effect: 'debuff',
-        eventName: Event.DEBUFF_ATTEMPTED,
+
         options: {
-          debuff: 'weak',
+          debuffs: [
+            {
+              key: 'weak',
+              countChecks: [
+                [
+                  { comparitor: 'location', value: 'adjacent' },
+                  { comparitor: 'equals', key: 'location.type', value: 'unit' },
+                ],
+              ],
+            },
+          ],
         },
         trigger: Event.TURN_START,
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [[{ comparitor: 'itself' }]],
-        valueChecks: [
-          [
-            { comparitor: 'location', value: 'adjacent' },
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-          ],
-        ],
       },
       {
         name: 'Cursed',
         effect: 'debuff',
-        eventName: Event.DEBUFF_ATTEMPTED,
+
         options: {
-          debuff: 'cursed',
-          value: 99,
+          debuffs: [{ key: 'cursed', count: 99 }],
         },
         trigger: Event.UNIT_SUMMONED,
         triggerConditions: [[{ comparitor: 'itself' }]],
         targets: [[{ comparitor: 'itself' }]],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
       },
     ],
   },
@@ -1517,13 +652,13 @@ export const cards: Card[] = [
     description: 'Once per turn, can apply 1x Anger to itself',
     rarity: 'rare',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'Anger',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'anger',
-          value: 1,
+          buffs: [{ key: 'anger', count: 1 }],
         },
         trigger: 'manual',
         uses: 1,
@@ -1539,72 +674,9 @@ export const cards: Card[] = [
           },
         ],
       },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        optional: false,
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
-          },
-        ],
-      },
-      {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        targets: [
-          [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
-            { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
-          ],
-        ],
-      },
     ],
   },
-  // 14: Chaos Mage
+  // 14: Steadfast Knight
   {
     id: 14,
     name: 'Steadfast Knight',
@@ -1618,121 +690,76 @@ export const cards: Card[] = [
     description: 'Cannot be destroyed by battle with a monster that has more than 15 ATK',
     rarity: 'common',
     effects: [
+      ...defaultUnitEffects,
       {
         name: 'no_spend',
         effect: 'negate_spend',
         eventName: Event.UNIT_ABILITY_ATTEMPTED,
         conditions: [
           {
-            test: 'event_target',
+            test: 'event_source',
             checks: [[{ comparitor: 'more_than', key: 'atk', value: 15 }]],
           },
         ],
         trigger: Event.UNIT_DEFEATED,
         triggerConditions: [[{ comparitor: 'itself' }]],
       },
+    ],
+  },
+  // 15: Flat Foot
+  {
+    id: 15,
+    name: 'Flat Foot',
+    image: cardImg,
+    atk: 3,
+    def: 4,
+    cost: 1,
+    type: 'unit',
+    race: 'warrior',
+    damage: 'physical',
+    description:
+      'At the start of your turn, apply x1 Empower to your Warrior units in this column. Once per turn you can flip one trap on the field face up.',
+    rarity: 'common',
+    effects: [
+      ...defaultUnitEffects,
       {
-        name: 'Eternal',
+        name: 'Empower',
         effect: 'buff',
-        eventName: Event.BUFF_ATTEMPTED,
+
         options: {
-          buff: 'eternal',
-          value: 2,
+          buffs: [{ key: 'empower', count: 1 }],
         },
-        targets: [[{ comparitor: 'itself' }]],
-        trigger: Event.UNIT_SUMMONED,
-        triggerConditions: [[{ comparitor: 'itself' }]],
-      },
-      {
-        effect: 'damage_type',
-        ongoing: true,
-        options: {
-          damageType: 'fire',
-        },
+        trigger: Event.TURN_START,
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [
           [
-            { comparitor: 'equals', key: 'race', value: 'mage' },
-            { comparitor: 'location', value: 'adjacent' },
+            { comparitor: 'equals', key: 'race', value: 'warrior' },
+            { comparitor: 'location', value: 'column' },
           ],
         ],
       },
       {
-        name: 'Summon',
-        effect: 'summon',
-        eventName: Event.UNIT_PLAYED,
-        targets: [[{ comparitor: 'itself' }]],
+        name: 'Flip Trap',
+        effect: 'flip_card',
         trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
-      {
-        name: 'Sacrifice',
-        effect: 'sacrifice',
-        eventName: Event.SACRIFICE_ATTEMPTED,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'more_than', key: 'cost', value: 0 },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'Swap Stance',
-        effect: 'swap_stance',
-        eventName: Event.STANCE_SWAP_ATTEMPTED,
-        uses: 1,
         activations: 0,
         resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        targets: [[{ comparitor: 'itself' }]],
+        uses: 1,
+        optional: true,
+        selectCount: 1,
         conditions: [
           {
             test: 'has_property',
             checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
           },
         ],
-      },
-      {
-        name: 'Attack',
-        effect: 'damage',
-        eventName: Event.ATTACK_DECLARED,
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [
-              [
-                { comparitor: 'equals', key: 'defensePosition', value: false },
-                { comparitor: 'equals', key: 'location.type', value: 'unit' },
-              ],
-            ],
-          },
-        ],
-        uses: 1,
-        activations: 0,
-        resetOnEvent: Event.TURN_START,
-        trigger: 'manual',
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [
           [
-            { comparitor: 'equals', key: 'location.type', value: 'unit' },
+            { comparitor: 'equals', key: 'type', value: 'trap' },
+            { comparitor: 'equals', key: 'location.type', value: 'trap' },
             { comparitor: 'owner', value: 'opponent' },
-            { comparitor: 'equals', key: 'type', value: 'unit' },
+            { comparitor: 'equals', key: 'faceUp', value: false },
           ],
         ],
       },
@@ -1750,12 +777,10 @@ export const cards: Card[] = [
       {
         name: 'Activate',
         effect: 'move_card',
-        eventName: Event.EFFECT_PLAYED,
         trigger: 'manual',
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         options: {
           destination: 'hand',
-          count: 1,
         },
         targets: [
           [
@@ -1799,7 +824,6 @@ export const cards: Card[] = [
       {
         name: 'Set',
         effect: 'set_trap',
-        eventName: Event.TRAP_PLAYED,
         trigger: 'manual',
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         conditions: [
@@ -1814,6 +838,7 @@ export const cards: Card[] = [
         ],
       },
       {
+        eventName: Event.TRAP_ACTIVATED,
         trigger: Event.ATTACK_DECLARED,
         conditions: [
           {
@@ -1834,7 +859,6 @@ export const cards: Card[] = [
         spentOnUse: true,
         effect: 'negate_attack',
         optional: true,
-        eventName: Event.TRAP_ACTIVATED,
       },
     ],
   },

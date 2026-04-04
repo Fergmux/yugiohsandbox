@@ -52,7 +52,15 @@ export function useCardMovement({
 
   function findCardLocation(uid: string): keyof BoardSide | undefined {
     const locations: (keyof BoardSide)[] = [
-      'field', 'zones', 'hand', 'graveyard', 'banished', 'extra', 'deck', 'tokens', 'attached',
+      'field',
+      'zones',
+      'hand',
+      'graveyard',
+      'banished',
+      'extra',
+      'deck',
+      'tokens',
+      'attached',
     ]
     for (const loc of locations) {
       if (getCards(loc).some((c: YugiohCard | null) => c?.uid === uid)) return loc
@@ -94,9 +102,7 @@ export function useCardMovement({
       const target = getCard(destination, index)
       if (target === null) {
         const orientationOptions =
-          currentLocation === 'field' || currentLocation === 'zones'
-            ? {}
-            : { faceDown: false, defence: false }
+          currentLocation === 'field' || currentLocation === 'zones' ? {} : { faceDown: false, defence: false }
         return { ...card, ...orientationOptions, ...opts }
       }
       return { ...card, faceDown: true, defence: false, counters: 0, ...opts }

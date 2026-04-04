@@ -117,9 +117,8 @@ export class EffectResolver {
           if (!evaluateChecks(effect.triggerConditions, card, triggerCard ?? card)) return
         }
 
-        const { target } = data as { target?: GameCard }
-
-        if (!evaluateConditions(effect.conditions, card, target)) return
+        const { target, source } = data as { target?: GameCard; source?: GameCard }
+        if (!evaluateConditions(effect.conditions, card, target, source)) return
 
         if (effect.optional) {
           const activate = await this.config.ask(card)
@@ -127,20 +126,11 @@ export class EffectResolver {
         }
 
         if (effect.eventName) {
-          const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card })
+          const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, target })
           if (cancelled) return
         }
 
         await handler(data, ctx, card, effect, this.handlerUtils)
-
-        // Emit success event based on card type
-        if (card.type === 'trap') {
-          await EventBus.emit(Event.TRAP_SUCCESSFUL, card.gameId, { card })
-        } else if (card.type === 'power') {
-          await EventBus.emit(Event.POWER_SUCCESSFUL, card.gameId, { card })
-        } else if (card.type === 'effect') {
-          await EventBus.emit(Event.EFFECT_APPLIED, card.gameId, { card })
-        }
 
         if (effect.uses !== undefined) {
           effect.activations = (effect.activations ?? 0) + 1

@@ -163,17 +163,14 @@ const isDebuffed = (key: keyof GameCard) => {
 }
 
 const BUFF_LABELS: Record<string, string> = {
-  damage: 'DMG',
+  shield: 'SHIELD',
   cleanse: 'CLEANSE',
-  atk: 'ATK',
-  def: 'DEF',
   empower: 'EMPOWER',
   evasive: 'EVASIVE',
+  eternal: 'ETERNAL',
 }
 const DEBUFF_LABELS: Record<string, string> = {
   burn: 'BURN',
-  atk: 'ATK',
-  def: 'DEF',
   weak: 'WEAK',
   cursed: 'CURSED',
   blind: 'BLIND',
@@ -186,12 +183,11 @@ const BUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   def: (v) => `+${v} DEF`,
   empower: (v) => `Empower ×${v}: +${v} ATK`,
   evasive: (v) => `Evasive ×${v}: untargetable by attacks`,
+  eternal: (v) => `Eternal ×${v}: cannot be destroyed by battle`,
 }
 
 const DEBUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   burn: (v) => `Burn ×${v}: deals 1 damage to owner when this unit attacks`,
-  atk: (v) => `-${v} ATK`,
-  def: (v) => `-${v} DEF`,
   weak: (v) => `Weak ×${v}: -${v} ATK`,
   cursed: (v) => `Cursed ×${v}: loses all buffs and debuffs`,
   blind: (v) => `Blind ×${v}: Cannot pick targets for attacks`,

@@ -11,6 +11,7 @@ export function registerCursedSystem() {
   })
 
   EventBus.on(Event.BUFF_ATTEMPTED, 'cursed_blocker', (_e, _id, data, ctx) => {
+    debugger
     const { target } = data as { target?: GameCard }
     if (!target) return
     if (typeof target.debuffs.cursed === 'number' && target.debuffs.cursed > 0) {

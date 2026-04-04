@@ -1,6 +1,7 @@
 import type { GameCard, Check, Condition } from '@/types/cards'
 import { getGameState } from './GameState'
 import type { LocationKeys } from '@/types/crawlv2'
+import { getEffective } from './BuffSystem'
 
 export type Comparator =
   | 'equals'
@@ -42,7 +43,7 @@ function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boo
     case 'not_equals':
     case 'less_than':
     case 'more_than': {
-      const actual = getNestedValue(candidate, check.key) as number | undefined
+      const actual = getNestedValue(getEffective(candidate), check.key) as number | undefined
       const expected = check.value as number | undefined
       const result = compareValues(check.comparitor, actual, expected)
       return check.comparitor === 'not_equals' ? !result : result
@@ -91,12 +92,21 @@ export function filterByTargets(targets: Check[][], source: GameCard): GameCard[
  * Evaluates a condition against the game state.
  * 'has_card': returns true if at least one card matches all checks.
  * 'event_target': returns true if the event's target card matches all checks.
+ * 'event_source': returns true if the event's source card matches all checks.
  */
-export function evaluateCondition(condition: Condition, source: GameCard, eventTarget?: GameCard): boolean {
+export function evaluateCondition(
+  condition: Condition,
+  source: GameCard,
+  eventTarget?: GameCard,
+  eventSource?: GameCard,
+): boolean {
   switch (condition.test) {
     case 'event_target':
       if (!eventTarget) return false
       return evaluateChecks(condition.checks ?? [], source, eventTarget)
+    case 'event_source':
+      if (!eventSource) return false
+      return evaluateChecks(condition.checks ?? [], source, eventSource)
     case 'has_property':
       return evaluateChecks(condition.checks ?? [], source, source)
     case 'has_energy': {
@@ -122,9 +132,10 @@ export function evaluateConditions(
   conditions: Condition[] | undefined,
   source: GameCard,
   eventTarget?: GameCard,
+  eventSource?: GameCard,
 ): boolean {
   if (!conditions) return true
-  return conditions.every((c) => evaluateCondition(c, source, eventTarget))
+  return conditions.every((c) => evaluateCondition(c, source, eventTarget, eventSource))
 }
 
 /** Strip source-card prefix from buff/debuff keys (e.g. "4:damage" -> "damage") */
