@@ -106,6 +106,10 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     ctx.cancel()
   },
 
+  negate_effect: async (ctx) => {
+    ctx.cancel()
+  },
+
   debuff: async (ctx, card, effect) => {
     if (!effect.targets?.length) {
       ctx.resolved = false
@@ -198,11 +202,6 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       return
     }
 
-    const { cancelled } = await EventBus.emit(Event.EFFECT_PLAYED, card.gameId, { card })
-    if (cancelled) return
-
-    debugger
-
     const moveData = effect.options as { destination: ZoneType; count?: number } | null
     const destination: ZoneType = moveData?.destination ?? 'hand'
     const count = moveData?.count ?? 1
@@ -241,7 +240,6 @@ export const effectHandlers: Record<string, TriggerHandler> = {
   },
 
   direct_damage: async (_ctx, card, effect) => {
-    debugger
     const amount = (effect.options?.amount as number) ?? 0
     if (!amount) return
     const target = effect.options?.target as string | undefined

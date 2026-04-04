@@ -97,6 +97,15 @@ export class EffectResolver {
     else if (card.owner === 'player2') gs.player2AP -= card.cost
   }
 
+  private async effectEnded(card: GameCard, effect: EffectDef) {
+    if (effect.spentOnUse) {
+      await spendCard(card)
+    }
+    if (effect.uses !== undefined) {
+      effect.activations = (effect.activations ?? 0) + 1
+    }
+  }
+
   // ─── Effect Registration ─────────────────────────────────────────────────────
 
   registerEffects(card: GameCard) {
@@ -106,6 +115,9 @@ export class EffectResolver {
       const handler = effectHandlers[effect.effect]
       if (!handler) continue
 
+      console.log(
+        `[registerEffects] registering ${effect.effect} on ${effect.trigger} for ${card.name} (${card.gameId})`,
+      )
       EventBus.on(effect.trigger as Event, card.gameId, async (_e, _sourceId, data, ctx) => {
         if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
 
@@ -117,8 +129,12 @@ export class EffectResolver {
           if (!evaluateChecks(effect.triggerConditions, card, triggerCard ?? card)) return
         }
 
-        const { target, source } = data as { target?: GameCard; source?: GameCard }
-        if (!evaluateConditions(effect.conditions, card, target, source)) return
+        const {
+          target,
+          source,
+          effect: triggerEffect,
+        } = data as { target?: GameCard; source?: GameCard; effect?: EffectDef }
+        if (!evaluateConditions(effect.conditions, card, target, source, triggerEffect)) return
 
         if (effect.optional) {
           const activate = await this.config.ask(card)
@@ -126,19 +142,16 @@ export class EffectResolver {
         }
 
         if (effect.eventName) {
-          const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, target })
-          if (cancelled) return
+          const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, target, effect })
+          if (cancelled) {
+            await this.effectEnded(card, effect)
+            return
+          }
         }
 
         await handler(ctx, card, effect, this.handlerUtils)
 
-        if (effect.uses !== undefined) {
-          effect.activations = (effect.activations ?? 0) + 1
-        }
-
-        if (effect.spentOnUse) {
-          await spendCard(card)
-        }
+        await this.effectEnded(card, effect)
 
         // Run chained follow-up effect if the parent resolved
         if (effect.then && ctx.resolved && !ctx.cancelled) {
@@ -204,8 +217,11 @@ export class EffectResolver {
     if (!handler) return
 
     if (effect.eventName) {
-      const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card })
-      if (cancelled) return
+      const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, effect })
+      if (cancelled) {
+        await this.effectEnded(card, effect)
+        return
+      }
     }
 
     const ctx = {
@@ -217,13 +233,7 @@ export class EffectResolver {
     }
     await handler(ctx, card, effect, this.handlerUtils)
 
-    if (effect.uses !== undefined) {
-      effect.activations = (effect.activations ?? 0) + 1
-    }
-
-    if (effect.spentOnUse) {
-      await spendCard(card)
-    }
+    await this.effectEnded(card, effect)
 
     // Run chained follow-up effect if the parent resolved
     if (effect.then && ctx.resolved && !ctx.cancelled) {

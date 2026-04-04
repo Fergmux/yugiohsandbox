@@ -1,4 +1,4 @@
-import type { GameCard, Check, Condition } from '@/types/cards'
+import type { GameCard, Check, Condition, EffectDef } from '@/types/cards'
 import { getGameState } from './GameState'
 import type { LocationKeys } from '@/types/crawlv2'
 import { getEffective } from './BuffSystem'
@@ -12,6 +12,7 @@ export type Comparator =
   | 'itself'
   | 'owner'
   | 'current_player'
+  | 'is_undefined'
 
 function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   if (!key) return undefined
@@ -37,6 +38,32 @@ function compareValues(comparitor: Comparator, actual: number | undefined, expec
   }
 }
 
+function evaluateEffectCheck(check: Check, source: GameCard, triggerEffect: EffectDef): boolean {
+  switch (check.comparitor) {
+    case 'equals':
+    case 'not_equals':
+    case 'less_than':
+    case 'more_than': {
+      const actual = getNestedValue(triggerEffect, check.key) as number | undefined
+      const expected = check.value as number | undefined
+      const result = compareValues(check.comparitor, actual, expected)
+      return check.comparitor === 'not_equals' ? !result : result
+    }
+    case 'current_player':
+      return check.value === 'player'
+        ? source.owner === getGameState().currentPlayer
+        : source.owner !== getGameState().currentPlayer
+    case 'is_undefined':
+      return getNestedValue(triggerEffect, check.key) === undefined
+    default:
+      return false
+  }
+}
+
+function evaluateEffectChecks(checks: Check[][], source: GameCard, triggerEffect: EffectDef): boolean {
+  return checks.some((group) => group.every((check) => evaluateEffectCheck(check, source, triggerEffect)))
+}
+
 function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boolean {
   switch (check.comparitor) {
     case 'equals':
@@ -58,6 +85,8 @@ function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boo
       return check.value === 'player'
         ? source.owner === getGameState().currentPlayer
         : source.owner !== getGameState().currentPlayer
+    case 'is_undefined':
+      return getNestedValue(candidate, check.key) === undefined
     default:
       return false
   }
@@ -99,6 +128,7 @@ export function evaluateCondition(
   source: GameCard,
   eventTarget?: GameCard,
   eventSource?: GameCard,
+  triggerEffect?: EffectDef,
 ): boolean {
   switch (condition.test) {
     case 'event_target':
@@ -107,6 +137,10 @@ export function evaluateCondition(
     case 'event_source':
       if (!eventSource) return false
       return evaluateChecks(condition.checks ?? [], source, eventSource)
+    case 'trigger_effect': {
+      if (!triggerEffect) return false
+      return evaluateEffectChecks(condition.checks ?? [], source, triggerEffect)
+    }
     case 'has_property':
       return evaluateChecks(condition.checks ?? [], source, source)
     case 'has_energy': {
@@ -133,9 +167,10 @@ export function evaluateConditions(
   source: GameCard,
   eventTarget?: GameCard,
   eventSource?: GameCard,
+  triggerEffect?: EffectDef,
 ): boolean {
   if (!conditions) return true
-  return conditions.every((c) => evaluateCondition(c, source, eventTarget, eventSource))
+  return conditions.every((c) => evaluateCondition(c, source, eventTarget, eventSource, triggerEffect))
 }
 
 /** Strip source-card prefix from buff/debuff keys (e.g. "4:damage" -> "damage") */

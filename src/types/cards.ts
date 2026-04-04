@@ -16,13 +16,13 @@ type NestedKeyOf<T, Prefix extends string = ''> = {
 }[keyof T & string]
 
 export type Condition = {
-  test?: 'has_card' | 'event_target' | 'event_source' | 'has_property' | 'has_energy'
+  test?: 'has_card' | 'event_target' | 'event_source' | 'has_property' | 'has_energy' | 'trigger_effect'
   checks?: Check[][]
 }
 export type Check = {
   combinator?: 'and' | 'or'
   comparitor: Comparator
-  key?: NestedKeyOf<GameCard>
+  key?: NestedKeyOf<GameCard> | NestedKeyOf<EffectDef>
   value?: string | boolean | number
 }
 
@@ -90,6 +90,23 @@ export type GameCard = Card & {
   debuffs: Record<string, string | number>
   faceUp?: boolean
   defensePosition?: boolean
+}
+
+const setTrap: EffectDef = {
+  name: 'Set',
+  effect: 'set_trap',
+  trigger: 'manual',
+  triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+  conditions: [
+    {
+      test: 'has_property',
+      checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
+    },
+    {
+      test: 'has_energy',
+      checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
+    },
+  ],
 }
 
 const summon: EffectDef = {
@@ -848,6 +865,12 @@ export const cards: Card[] = [
             },
           ],
         },
+        conditions: [
+          {
+            test: 'has_property',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
+          },
+        ],
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [
           [
@@ -907,6 +930,35 @@ export const cards: Card[] = [
       },
     ],
   },
+  // 25: Spell Breaker - Unit
+  {
+    id: 25,
+    name: 'Spell Breaker - Unit',
+    image: trapImg,
+    cost: 0,
+    type: 'trap',
+    description: "When an opponent plays an Effect that doesn't select a unit, negate the acitviation",
+    effects: [
+      setTrap,
+      {
+        eventName: Event.TRAP_ACTIVATED,
+        trigger: Event.EFFECT_PLAYED,
+        conditions: [
+          {
+            test: 'trigger_effect',
+            checks: [[{ comparitor: 'is_undefined', key: 'selectCount' }]],
+          },
+          {
+            test: 'has_property',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'trap' }]],
+          },
+        ],
+        spentOnUse: true,
+        effect: 'negate_effect',
+        optional: true,
+      },
+    ],
+  },
   // 27: Magic shield
   {
     id: 27,
@@ -916,22 +968,7 @@ export const cards: Card[] = [
     type: 'trap',
     description: 'When an opponent attacks one of your units, negate the attack.',
     effects: [
-      {
-        name: 'Set',
-        effect: 'set_trap',
-        trigger: 'manual',
-        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
-        conditions: [
-          {
-            test: 'has_property',
-            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
-          },
-          {
-            test: 'has_energy',
-            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
-          },
-        ],
-      },
+      setTrap,
       {
         eventName: Event.TRAP_ACTIVATED,
         trigger: Event.ATTACK_DECLARED,
@@ -941,7 +978,7 @@ export const cards: Card[] = [
             checks: [
               [
                 { comparitor: 'equals', key: 'location.type', value: 'unit' },
-                { comparitor: 'owner', value: 'player' },
+                { comparitor: 'owner', value: 'opponent' },
                 { comparitor: 'equals', key: 'type', value: 'unit' },
               ],
             ],
