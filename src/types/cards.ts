@@ -685,7 +685,7 @@ export const cards: Card[] = [
     def: 5,
     cost: 1,
     type: 'unit',
-    race: 'knight',
+    race: 'warrior',
     damage: 'physical',
     description: 'Cannot be destroyed by battle with a monster that has more than 15 ATK',
     rarity: 'common',
@@ -765,6 +765,46 @@ export const cards: Card[] = [
       },
     ],
   },
+  // 20: Huddle Up
+  {
+    id: 20,
+    name: 'Huddle Up',
+    image: effectImg,
+    cost: 0,
+    type: 'effect',
+    description: 'Apply 1x Shield to your Warrior units for each Warrior unit on your field.',
+    effects: [
+      {
+        eventName: Event.EFFECT_PLAYED,
+        name: 'Activate',
+        effect: 'buff',
+        trigger: 'manual',
+        spentOnUse: true,
+        options: {
+          buffs: [
+            {
+              key: 'shield',
+              countChecks: [
+                [
+                  { comparitor: 'equals', key: 'race', value: 'warrior' },
+                  { comparitor: 'equals', key: 'location.type', value: 'unit' },
+                  { comparitor: 'owner', value: 'player' },
+                ],
+              ],
+            },
+          ],
+        },
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+        targets: [
+          [
+            { comparitor: 'equals', key: 'location.type', value: 'unit' },
+            { comparitor: 'owner', value: 'player' },
+            { comparitor: 'equals', key: 'type', value: 'unit' },
+          ],
+        ],
+      },
+    ],
+  },
   // 21: Book of Arcane
   {
     id: 21,
@@ -782,6 +822,7 @@ export const cards: Card[] = [
         options: {
           destination: 'hand',
         },
+        selectCount: 1,
         targets: [
           [
             { comparitor: 'equals', key: 'location.type', value: 'spent' },

@@ -194,8 +194,8 @@ export class EffectResolver {
       effect.activations = (effect.activations ?? 0) + 1
     }
 
-    if (card.type === 'unit') {
-      await EventBus.emit(Event.UNIT_ABILITY_SUCCESSFUL, card.gameId, { card })
+    if (effect.spentOnUse) {
+      await spendCard(card)
     }
 
     await EventBus.emit(Event.UPDATED, card.gameId, { card })

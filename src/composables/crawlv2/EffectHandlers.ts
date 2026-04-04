@@ -123,7 +123,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
         countChecks?: Check[][]
       }[]) {
         const value = countChecks ? filterByChecks(countChecks, card).length : count
-        if (!key || !count) continue
+        if (!key || !value) continue
         for (const target of selected) {
           const { cancelled } = await EventBus.emit(Event.DEBUFF_ATTEMPTED, target.gameId, { card, target })
           if (cancelled) continue
@@ -153,7 +153,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
         countChecks?: Check[][]
       }[]) {
         const value = countChecks ? filterByChecks(countChecks, card).length : count
-        if (!key || !count) continue
+        if (!key || !value) continue
 
         for (const target of targets) {
           const { cancelled } = await EventBus.emit(Event.BUFF_ATTEMPTED, target.gameId, { card, target })
