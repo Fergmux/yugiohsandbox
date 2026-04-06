@@ -1,9 +1,10 @@
 import cardImg from '@/assets/images/cards/card.png'
 import effectImg from '@/assets/images/cards/effect.png'
 import trapImg from '@/assets/images/cards/trap.png'
-import { type Location } from './crawlv2'
 import type { Comparator } from '@/composables/crawlv2/CheckSystem'
 import { Event } from '@/composables/crawlv2/EventBus'
+
+import { type Location } from './crawlv2'
 
 export type EffectTrigger = Event | 'manual'
 
@@ -146,7 +147,7 @@ const sacrifice: EffectDef = {
 }
 
 const swapStance: EffectDef = {
-  name: 'Swap Stance',
+  name: 'Stance',
   effect: 'swap_stance',
   uses: 1,
   activations: 0,
@@ -165,6 +166,7 @@ const swapStance: EffectDef = {
 const attack: EffectDef = {
   name: 'Attack',
   effect: 'damage',
+  eventName: Event.ATTACK_DECLARED,
   conditions: [
     {
       test: 'has_property',
@@ -180,6 +182,8 @@ const attack: EffectDef = {
   activations: 0,
   resetOnEvent: Event.TURN_START,
   trigger: 'manual',
+  selectCount: 1,
+  optional: true,
   targets: [
     [
       { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -266,7 +270,7 @@ export const cards: Card[] = [
     effects: [
       ...defaultUnitEffects,
       {
-        name: 'Apply Burn',
+        name: 'Burn',
         effect: 'debuff',
 
         options: {
@@ -369,7 +373,7 @@ export const cards: Card[] = [
     effects: [
       ...defaultUnitEffects,
       {
-        name: 'Apply Burn',
+        name: 'Burn',
         effect: 'debuff',
 
         options: {
@@ -407,7 +411,7 @@ export const cards: Card[] = [
     effects: [
       ...defaultUnitEffects,
       {
-        name: 'Apply Blind',
+        name: 'Blind',
         effect: 'debuff',
 
         options: {
@@ -564,7 +568,7 @@ export const cards: Card[] = [
     effects: [
       ...defaultUnitEffects,
       {
-        name: 'Apply Burn',
+        name: 'Burn',
         effect: 'debuff',
 
         options: {
@@ -795,6 +799,54 @@ export const cards: Card[] = [
             { comparitor: 'equals', key: 'faceUp', value: false },
           ],
         ],
+      },
+    ],
+  },
+  // 16: Evade
+  {
+    id: 16,
+    name: 'Evade',
+    image: trapImg,
+    cost: 1,
+    type: 'trap',
+    description:
+      'When an opponents unit attacks one of your units, negate the attack and then you can switch the position of 2 units in the same column as this card',
+    effects: [
+      setTrap,
+      {
+        eventName: Event.TRAP_ACTIVATED,
+        trigger: Event.ATTACK_DECLARED,
+        conditions: [
+          {
+            test: 'event_target',
+            checks: [
+              [
+                { comparitor: 'equals', key: 'location.type', value: 'unit' },
+                { comparitor: 'owner', value: 'player' },
+                { comparitor: 'equals', key: 'type', value: 'unit' },
+              ],
+            ],
+          },
+          {
+            test: 'has_property',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'trap' }]],
+          },
+        ],
+        triggerConditions: [[{ comparitor: 'current_player', value: 'opponent' }]],
+        effect: 'negate_attack',
+        optional: true,
+        then: {
+          effect: 'swap_positions',
+          selectCount: 2,
+          optional: true,
+          spentOnUse: true,
+          targets: [
+            [
+              { comparitor: 'equals', key: 'location.type', value: 'unit' },
+              { comparitor: 'location', value: 'column' },
+            ],
+          ],
+        },
       },
     ],
   },
@@ -1033,7 +1085,7 @@ export const cards: Card[] = [
             checks: [
               [
                 { comparitor: 'equals', key: 'location.type', value: 'unit' },
-                { comparitor: 'owner', value: 'opponent' },
+                { comparitor: 'owner', value: 'player' },
                 { comparitor: 'equals', key: 'type', value: 'unit' },
               ],
             ],

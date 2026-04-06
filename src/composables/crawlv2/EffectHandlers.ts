@@ -1,12 +1,12 @@
-import type { GameCard, EffectDef, Check } from '@/types/cards'
+import type { Check, EffectDef, GameCard } from '@/types/cards'
+import { fieldZones, type Location, locations, type ZoneType } from '@/types/crawlv2'
+
+import { getEffective } from './BuffSystem'
+import { moveToDead, moveToDeck, relocateCard, returnToHand, spendCard } from './CardMovement'
+import { filterByChecks, filterByTargets } from './CheckSystem'
 import type { EventContext } from './EventBus'
 import { Event, EventBus } from './EventBus'
-import { filterByTargets, filterByChecks } from './CheckSystem'
 import { useTargetSelector } from './useTargetSelector'
-import { getEffective } from './BuffSystem'
-import { spendCard, returnToHand, relocateCard, moveToDead, moveToDeck } from './CardMovement'
-import { locations, fieldZones, type Location, type ZoneType } from '@/types/crawlv2'
-import { validate } from 'uuid'
 
 export type HandlerUtils = {
   getCard: (location: Location) => GameCard | null
@@ -236,6 +236,34 @@ export const effectHandlers: Record<string, TriggerHandler> = {
         if (leaderZone) await relocateCard(target, leaderZone)
       }
       await EventBus.emit(Event.CARD_MOVED, target.gameId, { card: target, source: card, destination })
+    }
+  },
+
+  swap_positions: async (ctx, card, effect) => {
+    if (!effect.targets?.length) {
+      ctx.resolved = false
+      return
+    }
+    const targets = filterByTargets(effect.targets, card)
+    if (!targets.length) {
+      ctx.resolved = false
+      return
+    }
+    const selected = await selectTargets(targets, effect)
+    if (!selected.length) {
+      ctx.resolved = false
+      return
+    }
+    if (effect.selectCount == 1) {
+      const cardPosition = card.location
+      const targetPosition = selected[0].location
+      await relocateCard(card, targetPosition)
+      await relocateCard(selected[0], cardPosition)
+    } else if (effect.selectCount == 2) {
+      const card1Position = selected[0].location
+      const card2Position = selected[1].location
+      await relocateCard(selected[0], card2Position)
+      await relocateCard(selected[1], card1Position)
     }
   },
 

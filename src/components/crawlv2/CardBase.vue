@@ -57,32 +57,33 @@
         v-if="effectButtons.length && !hasSelection"
         class="absolute bottom-1 left-1 z-20 flex flex-col items-start gap-px opacity-0 transition-opacity group-hover:opacity-100"
       >
-        <button
-          v-for="btn in effectButtons"
-          :key="btn.index"
-          class="rounded bg-amber-600/80 px-1.5 py-0.5 text-[8px] font-bold text-white hover:bg-amber-500"
-          :class="{ 'cursor-not-allowed opacity-50 hover:bg-amber-600/80': !btn.enabled }"
-          :disabled="!btn.enabled"
-          @mousedown.stop
-          @mouseup.stop
-          @click.stop="btn.enabled && emit('activate-effect', card, btn.index)"
-        >
-          {{ btn.name }}
-        </button>
+        <template v-for="btn in effectButtons" :key="btn.index">
+          <button
+            v-if="btn.enabled"
+            class="rounded bg-amber-600/80 px-1.5 py-0.5 text-[8px] font-bold text-white hover:bg-amber-500"
+            :class="{ 'cursor-not-allowed opacity-50 hover:bg-amber-600/80': !btn.enabled }"
+            @mousedown.stop
+            @mouseup.stop
+            @click.stop="btn.enabled && emit('activate-effect', card, btn.index)"
+          >
+            {{ btn.name }}
+          </button>
+        </template>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { type GameCard, type EffectDef } from '@/types/cards'
-import { getEffective } from '@/composables/crawlv2/BuffSystem'
-import { propOf, filterByTargets, filterByChecks, evaluateConditions } from '@/composables/crawlv2/CheckSystem'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+
 import CardBack from '@/assets/images/cards/cardback.png'
-import { EventBus, Event } from '@/composables/crawlv2/EventBus'
-import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
 import { getEffectiveUses } from '@/composables/crawlv2/buffs/AngerSystem'
+import { getEffective } from '@/composables/crawlv2/BuffSystem'
+import { evaluateConditions, filterByChecks, filterByTargets, propOf } from '@/composables/crawlv2/CheckSystem'
+import { Event, EventBus } from '@/composables/crawlv2/EventBus'
+import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
+import { type EffectDef, type GameCard } from '@/types/cards'
 
 const props = defineProps<{
   card: GameCard

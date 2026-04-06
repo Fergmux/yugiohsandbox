@@ -1,5 +1,6 @@
 import type { GameState } from '@/types/crawlv2'
 import { type Location } from '@/types/crawlv2'
+
 import { cards, type GameCard } from './cards'
 
 // 1: Chaos Mage
@@ -25,11 +26,11 @@ import { cards, type GameCard } from './cards'
 // 27: Magic shield
 
 // Mage
-export const defaultDeck1Ids: number[] = [1, 2, 3, 5, 6, 21, 25, 27]
+export const defaultDeck1Ids: number[] = [1, 2, 3, 5, 6, 16, 21, 25]
 // Dragon
-export const defaultDeck2Ids: number[] = [4, 7, 10, 11, 13, 19, 26, 27]
+export const defaultDeck2Ids: number[] = [7, 9, 10, 11, 13, 19, 26]
 // Warrior
-export const defaultDeckxIds: number[] = [4, 8, 9, 12, 14, 15, 20, 27]
+export const defaultDeckxIds: number[] = [4, 8, 12, 14, 15, 20, 27]
 
 export const convertToGameCard = (
   id: number,

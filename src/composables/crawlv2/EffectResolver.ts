@@ -1,12 +1,13 @@
-import type { GameCard, EffectDef } from '@/types/cards'
-import { Event, EventBus } from './EventBus'
+import type { EffectDef, GameCard } from '@/types/cards'
 import type { Location } from '@/types/crawlv2'
-import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
-import { effectHandlers, cleanupEffects, type HandlerUtils } from './EffectHandlers'
-import { evaluateConditions, evaluateChecks } from './CheckSystem'
-import { spendCard, drawCardForPlayer, shuffleDeck } from './CardMovement'
-import { getGameState } from './GameState'
+
 import { getEffectiveUses } from './buffs/AngerSystem'
+import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
+import { drawCardForPlayer, shuffleDeck, spendCard } from './CardMovement'
+import { evaluateChecks, evaluateConditions } from './CheckSystem'
+import { cleanupEffects, effectHandlers, type HandlerUtils } from './EffectHandlers'
+import { Event, EventBus } from './EventBus'
+import { getGameState } from './GameState'
 
 export type EffectResolverConfig = {
   selectCard: (card: GameCard | null) => void
@@ -119,6 +120,7 @@ export class EffectResolver {
         `[registerEffects] registering ${effect.effect} on ${effect.trigger} for ${card.name} (${card.gameId})`,
       )
       EventBus.on(effect.trigger as Event, card.gameId, async (_e, _sourceId, data, ctx) => {
+        debugger
         if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
 
         // Evaluate trigger card conditions against the card that caused the event.
