@@ -461,8 +461,9 @@ export const effectHandlers: Record<string, TriggerHandler> = {
   },
 
   damage: async (_ctx, card, effect) => {
+    if (card.owner === 'player1' && getGameState().turn === 1) return
     if (!effect.targets?.length) return
-
+  
     const validTargets = filterByTargets(effect.targets, card).filter(
       (t) => !(typeof t.buffs.evasive === 'number' && t.buffs.evasive > 0),
     )

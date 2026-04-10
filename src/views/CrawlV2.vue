@@ -90,6 +90,7 @@
         :card="getCard(location)"
         :type="location.type"
         :location="location"
+        :turn="gameState.turn"
         :current-player="gameState.currentPlayer"
         :my-player="myPlayer ?? undefined"
         :all-cards="gameState.cards"
@@ -486,6 +487,8 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
       break
     }
     case 'damage': {
+      if (card.owner === 'player1' && gameState.value.turn === 1) return
+
       // Check for opponent units
       const opponentUnits = filterByChecks(
         [[

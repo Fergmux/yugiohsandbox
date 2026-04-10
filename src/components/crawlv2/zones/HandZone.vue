@@ -3,6 +3,7 @@
     :name="name"
     :card="card"
     :location="location"
+    :turn="turn"
     :current-player="currentPlayer"
     :my-player="myPlayer"
     class="bg-gray-300/25"
@@ -19,6 +20,7 @@ defineProps<{
   name: string
   card?: GameCard | null
   location: Location
+  turn?: number
   currentPlayer?: 'player1' | 'player2'
   myPlayer?: 'player1' | 'player2'
 }>()

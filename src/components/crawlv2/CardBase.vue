@@ -90,6 +90,7 @@ import { type EffectDef, type GameCard } from '@/types/cards'
 
 const props = defineProps<{
   card: GameCard
+  turn?: number
   currentPlayer?: 'player1' | 'player2'
   myPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]
@@ -110,6 +111,7 @@ const revision = ref(0)
 const isEffectEnabled = (effect: EffectDef) => {
   const maxUses = getEffectiveUses(props.card, effect)
   if (maxUses !== undefined && (effect.activations ?? 0) >= maxUses) return false
+  if (effect.effect === 'damage' && props.card.owner === 'player1' && props.turn === 1) return false
   if (!evaluateConditions(effect.conditions, props.card)) return false
   if (!effect.targets?.length) return true
   let validTargets = filterByTargets(effect.targets, props.card)

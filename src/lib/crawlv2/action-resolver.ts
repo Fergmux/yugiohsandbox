@@ -29,9 +29,9 @@ function deductAP(gs: GameState, card: GameCard): void {
   else if (card.owner === 'player2') gs.player2AP -= card.cost
 }
 
-function addAP(gs: GameState, card: GameCard): void {
-  if (card.owner === 'player1') gs.player1AP += card.cost
-  else if (card.owner === 'player2') gs.player2AP += card.cost
+function addAP(gs: GameState, card: GameCard, amount = card.cost): void {
+  if (card.owner === 'player1') gs.player1AP += amount
+  else if (card.owner === 'player2') gs.player2AP += amount
 }
 
 function getPlayerAP(gs: GameState, player: Player): number {
@@ -280,6 +280,9 @@ function resolveAttack(
   player: Player,
 ): ActionResult {
   const gs = game.gameState
+  if (player === 'player1' && gs.turn === 1) {
+    return { success: false, error: 'Player 1 cannot attack on turn 1' }
+  }
   const source = findCard(gs, action.sourceGameId)
   const target = findCard(gs, action.targetGameId)
 
@@ -314,7 +317,7 @@ function resolveSacrifice(
   if (card.owner !== player) return { success: false, error: 'Not your card' }
   if (card.location.type !== 'unit') return { success: false, error: 'Card not on field' }
 
-  addAP(gs, card)
+  addAP(gs, card, 1)
   spendCardPure(card)
 
   return { success: true }

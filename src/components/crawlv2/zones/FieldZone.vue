@@ -4,6 +4,7 @@
     :name="name"
     :card="card"
     :location="location"
+    :turn="turn"
     :current-player="currentPlayer"
     :my-player="myPlayer"
     :all-cards="allCards"
@@ -29,6 +30,7 @@ const props = defineProps<{
   name: string | null
   card?: GameCard | null
   location: Location
+  turn?: number
   type: ZoneType
   currentPlayer?: 'player1' | 'player2'
   myPlayer?: 'player1' | 'player2'

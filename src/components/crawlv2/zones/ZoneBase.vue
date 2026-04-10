@@ -4,6 +4,7 @@
       <div v-if="rotate" class="relative w-full overflow-hidden" style="aspect-ratio: 3/2">
         <CardBase
           :card="card"
+          :turn="turn"
           :current-player="currentPlayer"
           :my-player="myPlayer"
           :all-cards="allCards"
@@ -15,6 +16,7 @@
       <CardBase
         v-else
         :card="card"
+        :turn="turn"
         :current-player="currentPlayer"
         :my-player="myPlayer"
         :all-cards="allCards"
@@ -69,6 +71,7 @@ const props = defineProps<{
   card?: GameCard | null
   location: Location
   rotate?: boolean
+  turn?: number
   currentPlayer?: 'player1' | 'player2'
   myPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]

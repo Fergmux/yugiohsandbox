@@ -45,8 +45,8 @@ export class EffectResolver {
       deductAP: (card) => this.deductAP(card),
       addAP: (card) => {
         const gs = getGameState()
-        if (card.owner === 'player1') gs.player1AP += card.cost
-        else if (card.owner === 'player2') gs.player2AP += card.cost
+        if (card.owner === 'player1') gs.player1AP += 1
+        else if (card.owner === 'player2') gs.player2AP += 1
       },
       registerEffects: (card) => this.registerEffects(card),
       registerOngoingEffects: (card) => this.registerOngoingEffects(card),

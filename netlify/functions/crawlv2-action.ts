@@ -162,9 +162,9 @@ function deductAP(gs: GameState, card: GameCard): void {
   else if (card.owner === 'player2') gs.player2AP -= card.cost
 }
 
-function addAP(gs: GameState, card: GameCard): void {
-  if (card.owner === 'player1') gs.player1AP += card.cost
-  else if (card.owner === 'player2') gs.player2AP += card.cost
+function addAP(gs: GameState, card: GameCard, amount = card.cost): void {
+  if (card.owner === 'player1') gs.player1AP += amount
+  else if (card.owner === 'player2') gs.player2AP += amount
 }
 
 function applyDamage(gs: GameState, player: Player, amount: number): void {
@@ -682,6 +682,9 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       return { success: true }
     }
     case 'attack': {
+      if (playerKey === 'player1' && gs.turn === 1) {
+        return { success: false, error: 'Player 1 cannot attack on turn 1' }
+      }
       const source = findCard(gs, action.sourceGameId)
       const target = findCard(gs, action.targetGameId)
       if (!source) return { success: false, error: 'Attacker not found' }
@@ -709,7 +712,7 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       if (card.owner !== playerKey) return { success: false, error: 'Not your card' }
       if (card.location.type !== 'unit') return { success: false, error: 'Card not on field' }
       if (action.cost !== undefined) card.cost = action.cost
-      addAP(gs, card)
+      addAP(gs, card, 1)
       spendCard(card)
       return { success: true }
     }
@@ -724,6 +727,9 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       return { success: true }
     }
     case 'direct_attack': {
+      if (playerKey === 'player1' && gs.turn === 1) {
+        return { success: false, error: 'Player 1 cannot attack on turn 1' }
+      }
       const source = findCard(gs, action.sourceGameId)
       if (!source) return { success: false, error: 'Attacker not found' }
       if (source.owner !== playerKey) return { success: false, error: 'Not your card' }
