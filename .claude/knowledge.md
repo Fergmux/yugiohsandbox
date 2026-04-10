@@ -36,6 +36,14 @@
 - `retain` buff can be applied to cards in the hand. At TURN_START, cards with `retain > 0` skip the "spend all hand cards" step. The buff decrements by 1 each turn it prevents a discard.
 - The `gain_ap` effect handler supports a `delay` option (number of owner turns to wait before granting AP). It registers a one-time TURN_START listener that self-cleans.
 
+## Damage Type Effectiveness
+- `src/composables/crawlv2/DamageTypes.ts` — Type effectiveness map, multiplier (1.5x), and helpers (`getTypeEffectiveAtk`, `isTypeEffective`, `getEffectiveDamageType`).
+- Types: cosmic, psychic, necrotic, fire, physical, magic. Each card has a `damage` field on the Card type.
+- Effectiveness: cosmic > necrotic/psychic/physical, psychic > necrotic/fire, necrotic > psychic/magic, fire > physical, physical > magic, magic > fire.
+- `resolveCombat` in EffectHandlers uses `getTypeEffectiveAtk` for both attacker and defender ATK calculations.
+- During attack target selection, `attackingCard` and `hoveredTarget` refs in `useTargetSelector` track hover state so CardBase can preview effective ATK with type advantage.
+- Damage type colors are defined in CardBase.vue: cosmic=purple, psychic=pink, necrotic=emerald, fire=orange, physical=yellow, magic=blue.
+
 ## Patterns
 - Default unit effects are spread into card definitions: `...defaultUnitEffects`.
 - New game mechanics are typically added as comparators in CheckSystem, then referenced declaratively in effect target/condition checks.

@@ -24,6 +24,8 @@ type PendingCardPick = {
 
 const pending = ref<PendingSelection | null>(null)
 const selectedTargets = ref<GameCard[]>([])
+const hoveredTarget = ref<GameCard | null>(null)
+const attackingCard = ref<GameCard | null>(null)
 
 const pendingZone = ref<PendingZoneSelection | null>(null)
 
@@ -63,6 +65,8 @@ export function useTargetSelector() {
     pending.value.resolve([...selectedTargets.value])
     pending.value = null
     selectedTargets.value = []
+    hoveredTarget.value = null
+    attackingCard.value = null
   }
 
   function cancelSelection() {
@@ -70,6 +74,8 @@ export function useTargetSelector() {
     pending.value.resolve([])
     pending.value = null
     selectedTargets.value = []
+    hoveredTarget.value = null
+    attackingCard.value = null
   }
 
   function selectZone(validZones: Location[], label?: string): Promise<Location | null> {
@@ -124,16 +130,28 @@ export function useTargetSelector() {
     pickedCards.value = []
   }
 
+  function setHoveredTarget(card: GameCard | null) {
+    hoveredTarget.value = card
+  }
+
+  function setAttackingCard(card: GameCard | null) {
+    attackingCard.value = card
+  }
+
   const hasSelection = computed(() => !!(pending.value || pendingZone.value || pendingCardPick.value))
 
   return {
     hasSelection,
     pending,
     selectedTargets,
+    hoveredTarget,
+    attackingCard,
     selectTargets,
     toggleTarget,
     confirmSelection,
     cancelSelection,
+    setHoveredTarget,
+    setAttackingCard,
     pendingZone,
     selectZone,
     pickZone,

@@ -10,9 +10,9 @@
       </p>
       <p
         class="card-text absolute bottom-[8%] left-[21%] text-xs font-bold"
-        :class="isBuffed('atk') ? 'text-green-400' : isDebuffed('atk') ? 'text-red-400' : 'text-white'"
+        :class="isAtkBoosted ? 'text-green-400' : isDebuffed('atk') ? 'text-red-400' : 'text-white'"
       >
-        {{ effective.atk }}
+        {{ displayedAtk }}
       </p>
       <p
         class="card-text absolute right-[21%] bottom-[8%] text-xs font-bold"
@@ -23,7 +23,7 @@
       <p class="card-text absolute top-[5%] right-[10%] text-sm font-bold text-white">{{ card.cost }}</p>
       <p
         class="card-text absolute top-[65%] left-[13%] text-[7px]"
-        :class="isBuffed('damage') ? 'text-green-400' : 'text-white'"
+        :class="isBuffed('damage') ? 'text-green-400' : damageTypeColor"
       >
         {{ card.race }}-{{ effective.damage }}
       </p>
@@ -89,6 +89,7 @@ import CardBack from '@/assets/images/cards/cardback.png'
 import { getEffectiveUses } from '@/composables/crawlv2/buffs/AngerSystem'
 import { getEffective } from '@/composables/crawlv2/BuffSystem'
 import { evaluateConditions, filterByChecks, filterByTargets, propOf } from '@/composables/crawlv2/CheckSystem'
+import { getTypeEffectiveAtk } from '@/composables/crawlv2/DamageTypes'
 import { Event, EventBus } from '@/composables/crawlv2/EventBus'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
 import { type EffectDef, type GameCard } from '@/types/cards'
@@ -99,7 +100,7 @@ const props = defineProps<{
   allCards?: GameCard[]
 }>()
 
-const { hasSelection } = useTargetSelector()
+const { hasSelection, hoveredTarget, attackingCard } = useTargetSelector()
 const emit = defineEmits<{
   (e: 'activate-effect', card: GameCard, effectIndex: number): void
 }>()
@@ -160,6 +161,41 @@ onUnmounted(() => {
 
 const cardImg = computed(() => (props.card.faceUp ? props.card.image : CardBack))
 const effective = computed(() => getEffective(props.card))
+
+/** ATK is boosted if buffed OR if type effectiveness is giving a bonus */
+const isAtkBoosted = computed(() => {
+  const base = props.card.atk
+  if (typeof base !== 'number') return false
+  const displayed = displayedAtk.value
+  return typeof displayed === 'number' && displayed > base
+})
+
+/** When this card is the attacker and a target is hovered, show type-effective ATK */
+const displayedAtk = computed(() => {
+  if (
+    attackingCard.value &&
+    attackingCard.value.gameId === props.card.gameId &&
+    hoveredTarget.value
+  ) {
+    return getTypeEffectiveAtk(props.card, hoveredTarget.value)
+  }
+  return effective.value.atk
+})
+
+const DAMAGE_TYPE_COLORS: Record<string, string> = {
+  cosmic: 'text-purple-400',
+  psychic: 'text-pink-400',
+  necrotic: 'text-emerald-400',
+  fire: 'text-orange-400',
+  physical: 'text-yellow-300',
+  magic: 'text-blue-400',
+}
+
+const damageTypeColor = computed(() => {
+  const dmgType = effective.value.damage ?? props.card.damage
+  if (!dmgType) return 'text-white'
+  return DAMAGE_TYPE_COLORS[dmgType] ?? 'text-white'
+})
 
 const isBuffed = (key: keyof GameCard) => {
   const base = props.card[key]

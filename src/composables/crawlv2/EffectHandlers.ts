@@ -2,6 +2,7 @@ import type { Check, EffectDef, GameCard } from '@/types/cards'
 import { fieldZones, type Location, locations, type ZoneType } from '@/types/crawlv2'
 
 import { getEffective } from './BuffSystem'
+import { getTypeEffectiveAtk } from './DamageTypes'
 import { moveToDead, moveToDeck, relocateCard, returnToHand, spendCard } from './CardMovement'
 import { getGameState } from './GameState'
 import { evaluateChecks, filterByChecks, filterByTargets } from './CheckSystem'
@@ -46,7 +47,7 @@ function getOpponent(card: GameCard) {
   return card.owner === 'player1' ? 'player2' : 'player1'
 }
 
-const { selectTargets, selectZone, selectCards } = useTargetSelector()
+const { selectTargets, selectZone, selectCards, setAttackingCard } = useTargetSelector()
 
 /**
  * Selects targets one at a time, filtering remaining candidates through
@@ -99,7 +100,7 @@ async function applyDamage(gameId: string, player: string | undefined, amount: n
 }
 
 export async function resolveCombat(source: GameCard, target: GameCard) {
-  const srcAtk = getEffective(source).atk ?? 0
+  const srcAtk = getTypeEffectiveAtk(source, target)
   if (!srcAtk) return
 
   if (target.defensePosition) {
@@ -115,7 +116,7 @@ export async function resolveCombat(source: GameCard, target: GameCard) {
       await applyDamage(source.gameId, source.owner, reflectDmg)
     }
   } else {
-    const tgtAtk = getEffective(target).atk ?? 0
+    const tgtAtk = getTypeEffectiveAtk(target, source)
     if (srcAtk > tgtAtk) {
       await destroyUnit(target, source)
       const dmg = srcAtk - tgtAtk
@@ -490,12 +491,14 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     }
     if (!validTargets.length) return
 
+    setAttackingCard(card)
     let targets
     if (card.debuffs.blind !== undefined && (card.debuffs.blind as number) > 0) {
       targets = [validTargets[Math.floor(Math.random() * validTargets.length)]]
     } else {
       targets = await selectTargets(validTargets, effect)
     }
+    setAttackingCard(null)
 
     if (!targets.length) return
 

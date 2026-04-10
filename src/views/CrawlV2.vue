@@ -68,6 +68,8 @@
         :current-player="gameState.currentPlayer"
         :all-cards="gameState.cards"
         @click="handleZoneClick(location)"
+        @mouseenter="handleZoneHover(location)"
+        @mouseleave="handleZoneHover(null)"
         @activate-effect="activateEffect"
       />
     </div>
@@ -90,8 +92,16 @@ import { registerEffectResolver } from '@/composables/crawlv2/EffectResolver'
 import { registerGameState } from '@/composables/crawlv2/GameState'
 
 const { ask } = useActivationPrompt()
-const { pending, selectedTargets, toggleTarget, cancelSelection, pendingZone, pickZone, cancelZoneSelection } =
-  useTargetSelector()
+const {
+  pending,
+  selectedTargets,
+  toggleTarget,
+  cancelSelection,
+  pendingZone,
+  pickZone,
+  cancelZoneSelection,
+  setHoveredTarget,
+} = useTargetSelector()
 const targetPending = computed(() => pending.value)
 
 const selectedCard = ref<GameCard | null>(null)
@@ -129,6 +139,19 @@ const handleZoneClick = (location: Location) => {
   if (pendingZone.value) {
     if (isValidSummonTarget(location)) pickZone(location)
     else cancelZoneSelection()
+  }
+}
+
+const handleZoneHover = (location: Location | null) => {
+  if (!pending.value || !location) {
+    setHoveredTarget(null)
+    return
+  }
+  const card = getCard(location)
+  if (card && pending.value.validTargets.some((t) => t.gameId === card.gameId)) {
+    setHoveredTarget(card)
+  } else {
+    setHoveredTarget(null)
   }
 }
 
