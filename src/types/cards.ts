@@ -1,13 +1,11 @@
 import cardImg from '@/assets/images/cards/card.png'
 import effectImg from '@/assets/images/cards/effect.png'
+import powerImg from '@/assets/images/cards/power.png'
 import trapImg from '@/assets/images/cards/trap.png'
 import type { Comparator } from '@/composables/crawlv2/CheckSystem'
 import { Event } from '@/composables/crawlv2/EventBus'
 
-import {
-  type Location,
-  type LocationKeys,
-} from './crawlv2'
+import { type Location, type LocationKeys } from './crawlv2'
 
 export type EffectTrigger = Event | 'manual'
 
@@ -108,6 +106,23 @@ export type GameCard = Card & {
 const setTrap: EffectDef = {
   name: 'Set',
   effect: 'set_trap',
+  trigger: 'manual',
+  triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+  conditions: [
+    {
+      test: 'has_property',
+      checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
+    },
+    {
+      test: 'has_energy',
+      checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
+    },
+  ],
+}
+
+const setPower: EffectDef = {
+  name: 'Set',
+  effect: 'set_power',
   trigger: 'manual',
   triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
   conditions: [
@@ -314,7 +329,7 @@ export const cards: Card[] = [
   // 3: Sports Mage
   {
     id: 3,
-    name: 'Sports Mage',
+    name: 'Da Mage',
     image: cardImg,
     atk: 4,
     def: 3,
@@ -329,7 +344,6 @@ export const cards: Card[] = [
       {
         name: 'Piercing',
         effect: 'buff',
-
         options: {
           buffs: [{ key: 'piercing', count: 1 }],
         },
@@ -511,7 +525,7 @@ export const cards: Card[] = [
     cost: 2,
     type: 'unit',
     race: 'warrior',
-    damage: 'physical',
+    damage: 'psychic',
     description: 'At the start of your turn, Adjacent warrior units gain 1x Empower / 1x Shield.',
     rarity: 'common',
     effects: [
@@ -575,7 +589,7 @@ export const cards: Card[] = [
     cost: 1,
     type: 'unit',
     race: 'dragon',
-    damage: 'fire',
+    damage: 'necrotic',
     description: "Once per turn, you can apply 1x Burn to an opponents unit in this unit's column",
     rarity: 'common',
     effects: [
@@ -1090,6 +1104,102 @@ export const cards: Card[] = [
               ],
             ],
           },
+        ],
+      },
+    ],
+  },
+  // 22: Sword of Legend
+  {
+    id: 22,
+    name: 'Sword of Legend',
+    image: powerImg,
+    cost: 1,
+    type: 'power',
+    description: 'Apply 8x Empower / 1x Angered to one Warrior unit on your field.',
+    effects: [
+      setPower,
+      {
+        eventName: Event.POWER_ACTIVATED,
+        name: 'Empower',
+        effect: 'buff',
+        trigger: Event.POWER_SET,
+        selectCount: 1,
+        triggerConditions: [[{ comparitor: 'itself' }]],
+        options: {
+          buffs: [
+            { key: 'empower', count: 8 },
+            { key: 'angered', count: 1 },
+          ],
+        },
+        targets: [
+          [
+            { comparitor: 'equals', key: 'location.type', value: 'unit' },
+            { comparitor: 'owner', value: 'player' },
+            { comparitor: 'equals', key: 'race', value: 'warrior' },
+          ],
+        ],
+      },
+    ],
+  },
+  // 23: Dragon's gaze
+  {
+    id: 23,
+    name: "Dragon's gaze",
+    image: powerImg,
+    cost: 1,
+    type: 'power',
+    description:
+      "At the start of your opponent's turn, If you control a Dragon unit, Apply 1x Blind to all of the units on their field.",
+    effects: [
+      setPower,
+      {
+        eventName: Event.POWER_ACTIVATED,
+        name: 'Blind',
+        effect: 'debuff',
+        trigger: Event.TURN_START,
+        triggerConditions: [[{ comparitor: 'current_player', value: 'opponent' }]],
+        conditions: [
+          {
+            test: 'has_card',
+            checks: [[{ comparitor: 'equals', key: 'race', value: 'dragon' }]],
+          },
+        ],
+        options: {
+          debuffs: [{ key: 'blind', count: 1 }],
+        },
+        targets: [
+          [
+            { comparitor: 'equals', key: 'location.type', value: 'unit' },
+            { comparitor: 'owner', value: 'opponent' },
+          ],
+        ],
+      },
+    ],
+  },
+  // 24: Carousel
+  {
+    id: 24,
+    name: 'Carousel',
+    image: powerImg,
+    cost: 1,
+    type: 'power',
+    description:
+      'At the start of your turn, switch the positions of two of your opponents units that are in the same column',
+    effects: [
+      setPower,
+      {
+        eventName: Event.POWER_ACTIVATED,
+        trigger: Event.TURN_START,
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+        effect: 'swap_positions',
+        optional: true,
+        selectCount: 2,
+        matchSelection: [[{ comparitor: 'location', value: 'column' }]],
+        targets: [
+          [
+            { comparitor: 'equals', key: 'location.type', value: 'unit' },
+            { comparitor: 'owner', value: 'opponent' },
+          ],
         ],
       },
     ],

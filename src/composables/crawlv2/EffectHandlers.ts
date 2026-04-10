@@ -366,6 +366,21 @@ export const effectHandlers: Record<string, TriggerHandler> = {
     utils.selectCard(null)
   },
 
+  set_power: async (_ctx, card, _effect, utils) => {
+    const validZones = locations.filter(
+      (loc) => loc.type === 'power' && loc.player === card.owner && !utils.getCard(loc),
+    )
+    const zone = await selectZone(validZones, card.name)
+    if (!zone) return
+    const { cancelled } = await EventBus.emit(Event.POWER_PLAYED, card.gameId, { card })
+    if (cancelled) return
+    utils.deductAP(card)
+    utils.registerEffects(card)
+    await relocateCard(card, zone)
+    await EventBus.emit(Event.POWER_SET, card.gameId, { card })
+    utils.selectCard(null)
+  },
+
   sacrifice: async (_ctx, card, _effect, utils) => {
     const { cancelled } = await EventBus.emit(Event.SACRIFICE_ATTEMPTED, card.gameId, { card })
     if (cancelled) return

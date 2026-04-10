@@ -38,23 +38,23 @@
 
       <!-- Buff / debuff badges -->
       <div v-if="card.faceUp" class="absolute top-[50%] left-[10%] flex flex-wrap gap-[2px]">
-        <div v-for="(value, key) in card.buffs" :key="'buff-' + key" class="group relative">
+        <div v-for="(value, key) in card.buffs" :key="'buff-' + key" class="group/badge relative">
           <span class="block rounded bg-green-600 px-[3px] py-px text-[5px] leading-tight font-bold text-white">
             {{ buffBadgeLabel(String(key)) }}<template v-if="typeof value === 'number'">×{{ value }}</template>
           </span>
           <span
-            class="pointer-events-none invisible absolute bottom-full left-0 z-50 mb-0.5 rounded bg-black/80 px-1.5 py-0.5 text-[7px] whitespace-nowrap text-white group-hover:visible"
+            class="pointer-events-none invisible absolute bottom-full left-0 z-50 mb-0.5 rounded bg-black/80 px-1.5 py-0.5 text-[7px] whitespace-nowrap text-white group-hover/badge:visible"
           >
             {{ buffDescription(String(key), value) }}
           </span>
         </div>
 
-        <div v-for="(value, key) in card.debuffs" :key="'debuff-' + key" class="group relative">
+        <div v-for="(value, key) in card.debuffs" :key="'debuff-' + key" class="group/badge relative">
           <span class="block rounded bg-red-600 px-[3px] py-px text-[5px] leading-tight font-bold text-white">
             {{ debuffBadgeLabel(String(key)) }}<template v-if="typeof value === 'number'">×{{ value }}</template>
           </span>
           <span
-            class="pointer-events-none invisible absolute bottom-full left-0 z-50 mb-0.5 rounded bg-black/80 px-1.5 py-0.5 text-[7px] whitespace-nowrap text-white group-hover:visible"
+            class="pointer-events-none invisible absolute bottom-full left-0 z-50 mb-0.5 rounded bg-black/80 px-1.5 py-0.5 text-[7px] whitespace-nowrap text-white group-hover/badge:visible"
           >
             {{ debuffDescription(String(key), value) }}
           </span>

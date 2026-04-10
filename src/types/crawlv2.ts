@@ -90,7 +90,7 @@ export const locations: Location[] = [
     index: 1,
     player: 'player1',
     name: 'Unit',
-    adjacent: ['unit12', 'unit15', 'unit16'],
+    adjacent: ['unit12', 'unit14', 'unit15'],
     neighbouring: ['unit12'],
     column: ['unit14', 'unit21', 'unit24', 'trap11', 'trap21'],
     behind: ['unit14'],

@@ -26,11 +26,11 @@ import { cards, type GameCard } from './cards'
 // 27: Magic shield
 
 // Mage
-export const defaultDeck1Ids: number[] = [1, 2, 3, 5, 6, 16, 21, 25]
+export const defaultDeck1Ids: number[] = [1, 2, 3, 5, 6, 16, 21, 24, 25]
 // Dragon
-export const defaultDeckxIds: number[] = [7, 9, 10, 11, 13, 17, 19, 26]
+export const defaultDeckxIds: number[] = [7, 9, 10, 11, 13, 17, 19, 23, 26]
 // Warrior
-export const defaultDeck2Ids: number[] = [4, 8, 12, 14, 15, 18, 20, 27]
+export const defaultDeck2Ids: number[] = [4, 8, 12, 14, 15, 18, 20, 22, 27]
 
 export const convertToGameCard = (
   id: number,

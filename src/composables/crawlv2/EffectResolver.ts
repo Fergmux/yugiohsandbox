@@ -4,7 +4,7 @@ import type { Location } from '@/types/crawlv2'
 import { getEffectiveUses } from './buffs/AngerSystem'
 import { clearBuffsFromSource, registerBuffReevaluation } from './BuffSystem'
 import { drawCardForPlayer, shuffleDeck, spendCard } from './CardMovement'
-import { evaluateChecks, evaluateConditions } from './CheckSystem'
+import { evaluateChecks, evaluateConditions, filterByTargets } from './CheckSystem'
 import { cleanupEffects, effectHandlers, type HandlerUtils } from './EffectHandlers'
 import { Event, EventBus } from './EventBus'
 import { getGameState } from './GameState'
@@ -114,11 +114,11 @@ export class EffectResolver {
     else if (card.owner === 'player2') gs.player2AP -= card.cost
   }
 
-  private async effectEnded(card: GameCard, effect: EffectDef) {
+  private async effectEnded(card: GameCard, effect: EffectDef, resolved = true) {
     if (effect.spentOnUse) {
       await spendCard(card)
     }
-    if (effect.uses !== undefined) {
+    if (effect.uses !== undefined && resolved) {
       effect.activations = (effect.activations ?? 0) + 1
     }
   }
@@ -155,6 +155,17 @@ export class EffectResolver {
         if (!evaluateConditions(effect.conditions, card, target, source, triggerEffect)) return
 
         if (effect.optional) {
+          if (effect.targets?.length) {
+            const validTargets = filterByTargets(effect.targets, card)
+            if (validTargets.length === 0) return
+            if (effect.selectCount !== undefined && validTargets.length < effect.selectCount) return
+            if (effect.matchSelection?.length && (effect.selectCount ?? 0) >= 2) {
+              const hasPair = validTargets.some((t1) =>
+                validTargets.some((t2) => t2.gameId !== t1.gameId && evaluateChecks(effect.matchSelection!, t1, t2)),
+              )
+              if (!hasPair) return
+            }
+          }
           const activate = await this.config.ask(card)
           if (!activate) return
         }
@@ -162,7 +173,7 @@ export class EffectResolver {
         if (effect.eventName) {
           const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, target, effect })
           if (cancelled) {
-            await this.effectEnded(card, effect)
+            await this.effectEnded(card, effect, false)
             return
           }
         }
@@ -183,7 +194,7 @@ export class EffectResolver {
 
         await handler(ctx, card, handlerEffect, this.handlerUtils)
 
-        await this.effectEnded(card, effect)
+        await this.effectEnded(card, effect, ctx.resolved)
 
         // Run chained follow-up effect if the parent resolved
         if (effect.then && ctx.resolved) {
@@ -236,7 +247,7 @@ export class EffectResolver {
     if (effect.eventName) {
       const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, effect })
       if (cancelled) {
-        await this.effectEnded(card, effect)
+        await this.effectEnded(card, effect, false)
         return
       }
     }
@@ -250,7 +261,7 @@ export class EffectResolver {
     }
     await handler(ctx, card, effect, this.handlerUtils)
 
-    await this.effectEnded(card, effect)
+    await this.effectEnded(card, effect, ctx.resolved)
 
     // Run chained follow-up effect if the parent resolved
     if (effect.then && ctx.resolved && !ctx.cancelled) {
