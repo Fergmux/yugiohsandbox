@@ -3,7 +3,8 @@ import { fieldZones, type Location, locations, type ZoneType } from '@/types/cra
 
 import { getEffective } from './BuffSystem'
 import { moveToDead, moveToDeck, relocateCard, returnToHand, spendCard } from './CardMovement'
-import { filterByChecks, filterByTargets } from './CheckSystem'
+import { getGameState } from './GameState'
+import { evaluateChecks, filterByChecks, filterByTargets } from './CheckSystem'
 import type { EventContext } from './EventBus'
 import { Event, EventBus } from './EventBus'
 import { useTargetSelector } from './useTargetSelector'
@@ -38,6 +39,7 @@ const buffEventMap: Record<string, Event> = {
   weak: Event.WEAK_APPLIED,
   cursed: Event.CURSED_APPLIED,
   blind: Event.BLIND_APPLIED,
+  retain: Event.RETAIN_APPLIED,
 }
 
 function getOpponent(card: GameCard) {
@@ -45,6 +47,38 @@ function getOpponent(card: GameCard) {
 }
 
 const { selectTargets, selectZone, selectCards } = useTargetSelector()
+
+/**
+ * Selects targets one at a time, filtering remaining candidates through
+ * `effect.matchSelection` checks after each pick (using the last selected
+ * card as the source). Falls back to normal bulk selection when no
+ * matchSelection is defined.
+ */
+async function selectTargetsSequentially(validTargets: GameCard[], effect: EffectDef): Promise<GameCard[]> {
+  if (!effect.matchSelection?.length || (effect.selectCount ?? 0) < 2) {
+    return selectTargets(validTargets, effect)
+  }
+
+  const selected: GameCard[] = []
+  const singleEffect: EffectDef = { ...effect, selectCount: 1 }
+
+  for (let i = 0; i < (effect.selectCount ?? 1); i++) {
+    let candidates = validTargets.filter((t) => !selected.some((s) => s.gameId === t.gameId))
+
+    if (i > 0) {
+      const prev = selected[i - 1]
+      candidates = candidates.filter((t) => evaluateChecks(effect.matchSelection!, prev, t))
+    }
+
+    if (!candidates.length) break
+
+    const pick = await selectTargets(candidates, singleEffect)
+    if (!pick.length) break
+    selected.push(pick[0])
+  }
+
+  return selected
+}
 
 async function destroyUnit(unit: GameCard, source: GameCard) {
   const { cancelled } = await EventBus.emit(Event.UNIT_DEFEATED, unit.gameId, { target: unit, source })
@@ -249,7 +283,7 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       ctx.resolved = false
       return
     }
-    const selected = await selectTargets(targets, effect)
+    const selected = await selectTargetsSequentially(targets, effect)
     if (!selected.length) {
       ctx.resolved = false
       return
@@ -260,6 +294,10 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       await relocateCard(card, targetPosition)
       await relocateCard(selected[0], cardPosition)
     } else if (effect.selectCount == 2) {
+      if (selected.length < 2) {
+        ctx.resolved = false
+        return
+      }
       const card1Position = selected[0].location
       const card2Position = selected[1].location
       await relocateCard(selected[0], card2Position)
@@ -376,6 +414,34 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       target.faceUp = !target.faceUp
     }
     utils.selectCard(null)
+  },
+
+  gain_ap: async (_ctx, card, effect) => {
+    const amount = (effect.options?.amount as number) ?? 0
+    if (!amount) return
+    const player = card.owner
+    if (!player) return
+
+    const delay = (effect.options?.delay as number) ?? 0
+    if (delay > 0) {
+      const listenerKey = `gain_ap:${card.gameId}:${Date.now()}`
+      let turnsRemaining = delay
+      EventBus.on(Event.TURN_START, listenerKey, (_e, _id, data) => {
+        const { currentPlayer } = data as { currentPlayer: string }
+        if (currentPlayer !== player) return
+        turnsRemaining--
+        if (turnsRemaining <= 0) {
+          const gs = getGameState()
+          if (player === 'player1') gs.player1AP += amount
+          else gs.player2AP += amount
+          EventBus.off(Event.TURN_START, listenerKey)
+        }
+      })
+    } else {
+      const gs = getGameState()
+      if (player === 'player1') gs.player1AP += amount
+      else gs.player2AP += amount
+    }
   },
 
   damage: async (_ctx, card, effect) => {

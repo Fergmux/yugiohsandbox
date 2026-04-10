@@ -5,28 +5,36 @@
     :class="{ 'rotate-90': card.defensePosition }"
   >
     <template v-if="card.faceUp">
-      <p class="absolute top-[6%] left-[12%] text-xs font-bold" :class="{ 'text-white': isTrapOrEffect }">
+      <p class="card-text absolute top-[6%] left-[12%] text-[6px] font-bold text-white">
         {{ card.name }}
       </p>
       <p
-        class="absolute bottom-[8%] left-[21%] text-xs font-bold"
+        class="card-text absolute bottom-[8%] left-[21%] text-xs font-bold"
         :class="isBuffed('atk') ? 'text-green-400' : isDebuffed('atk') ? 'text-red-400' : 'text-white'"
       >
         {{ effective.atk }}
       </p>
       <p
-        class="absolute right-[21%] bottom-[8%] text-xs font-bold"
+        class="card-text absolute right-[21%] bottom-[8%] text-xs font-bold"
         :class="isBuffed('def') ? 'text-green-400' : isDebuffed('def') ? 'text-red-400' : 'text-white'"
       >
         {{ effective.def }}
       </p>
-      <p class="absolute top-[5%] right-[10%] text-sm font-bold text-white">{{ card.cost }}</p>
-      <p class="absolute top-[65%] left-[13%] text-[7px]" :class="isBuffed('damage') ? 'text-green-400' : ''">
+      <p class="card-text absolute top-[5%] right-[10%] text-sm font-bold text-white">{{ card.cost }}</p>
+      <p
+        class="card-text absolute top-[65%] left-[13%] text-[7px]"
+        :class="isBuffed('damage') ? 'text-green-400' : 'text-white'"
+      >
         {{ card.race }}-{{ effective.damage }}
       </p>
-      <p class="absolute top-[72%] left-[13%] text-[7px]" :class="{ 'text-white': isTrapOrEffect }">
+
+      <!-- Description tooltip on hover -->
+      <div
+        v-if="card.description"
+        class="pointer-events-none invisible absolute -top-2 left-1/2 z-50 w-max max-w-[200px] -translate-x-1/2 -translate-y-full rounded bg-black/90 px-2 py-1.5 text-[9px] leading-tight font-normal text-white group-hover:visible"
+      >
         {{ card.description }}
-      </p>
+      </div>
 
       <!-- Buff / debuff badges -->
       <div v-if="card.faceUp" class="absolute top-[50%] left-[10%] flex flex-wrap gap-[2px]">
@@ -153,8 +161,6 @@ onUnmounted(() => {
 const cardImg = computed(() => (props.card.faceUp ? props.card.image : CardBack))
 const effective = computed(() => getEffective(props.card))
 
-const isTrapOrEffect = computed(() => ['trap', 'effect'].includes(props.card.type ?? ''))
-
 const isBuffed = (key: keyof GameCard) => {
   const base = props.card[key]
   const eff = effective.value[key]
@@ -206,3 +212,14 @@ const buffDescription = (key: string, value: string | number) =>
 const debuffDescription = (key: string, value: string | number) =>
   DEBUFF_DESCRIPTIONS[key]?.(value) ?? `${key}: ${value}`
 </script>
+
+<style scoped>
+.card-text {
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 0 4px #000;
+}
+</style>

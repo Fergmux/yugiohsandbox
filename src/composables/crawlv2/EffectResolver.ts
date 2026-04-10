@@ -79,15 +79,31 @@ export class EffectResolver {
       if (currentPlayer === 'player1') gs.player1AP = 2
       else gs.player2AP = 2
 
-      // Spend all hand cards
+      // Snapshot retained hand cards before any async spending
       const handCards = gs.cards.filter((c) => c.location.type === 'hand' && c.owner === currentPlayer)
+      const retainedIds = new Set(
+        handCards
+          .filter((c) => typeof c.buffs.retain === 'number' && c.buffs.retain > 0)
+          .map((c) => c.gameId),
+      )
+
+      // Spend non-retained hand cards
       for (const card of handCards) {
+        if (retainedIds.has(card.gameId)) continue
         await spendCard(card)
       }
 
       // Draw 4 cards
       for (let i = 0; i < 4; i++) {
         await drawCardForPlayer(currentPlayer)
+      }
+
+      // Consume retain buff after spending and drawing are complete
+      for (const card of gs.cards.filter((c) => retainedIds.has(c.gameId))) {
+        if (typeof card.buffs.retain === 'number') {
+          card.buffs.retain -= 1
+          if (card.buffs.retain <= 0) delete card.buffs.retain
+        }
       }
     })
   }
@@ -151,13 +167,34 @@ export class EffectResolver {
           }
         }
 
-        await handler(ctx, card, effect, this.handlerUtils)
+        // Resolve auto-target from event data, bypassing target selection prompt
+        let handlerEffect = effect
+        if (effect.autoTarget) {
+          const autoCard = effect.autoTarget === 'event_source' ? source : target
+          if (autoCard) {
+            handlerEffect = {
+              ...effect,
+              targets: [[{ comparitor: 'equals', key: 'gameId', value: autoCard.gameId }]],
+              optional: false,
+              selectCount: undefined,
+            }
+          }
+        }
+
+        await handler(ctx, card, handlerEffect, this.handlerUtils)
 
         await this.effectEnded(card, effect)
 
         // Run chained follow-up effect if the parent resolved
         if (effect.then && ctx.resolved) {
           await this.activateEffect(card, effect.then)
+        }
+
+        // Run independent sibling effects (each can be individually negated)
+        if (effect.and?.length) {
+          for (const sibling of effect.and) {
+            await this.activateEffect(card, sibling)
+          }
         }
       })
     }
@@ -218,6 +255,13 @@ export class EffectResolver {
     // Run chained follow-up effect if the parent resolved
     if (effect.then && ctx.resolved && !ctx.cancelled) {
       await this.activateEffect(card, effect.then)
+    }
+
+    // Run independent sibling effects (each can be individually negated)
+    if (effect.and?.length) {
+      for (const sibling of effect.and) {
+        await this.activateEffect(card, sibling)
+      }
     }
 
     await EventBus.emit(Event.UPDATED, card.gameId, { card })

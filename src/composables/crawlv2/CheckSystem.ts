@@ -13,6 +13,7 @@ export type Comparator =
   | 'owner'
   | 'current_player'
   | 'is_undefined'
+  | 'location_check'
 
 function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   if (!key) return undefined
@@ -87,6 +88,11 @@ function evaluateCheck(check: Check, source: GameCard, candidate: GameCard): boo
         : source.owner !== getGameState().currentPlayer
     case 'is_undefined':
       return getNestedValue(candidate, check.key) === undefined
+    case 'location_check': {
+      const ids = candidate.location[check.key as LocationKeys] ?? []
+      const hasCard = ids.some((id) => getGameState().cards.some((c) => c.location.id === id))
+      return check.value === 'occupied' ? hasCard : !hasCard
+    }
     default:
       return false
   }

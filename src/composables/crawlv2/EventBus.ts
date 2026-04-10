@@ -74,6 +74,7 @@ export enum Event {
   BLIND_APPLIED = 'blind_applied',
   CURSED_APPLIED = 'cursed_applied',
   ANGER_APPLIED = 'anger_applied',
+  RETAIN_APPLIED = 'retain_applied',
 }
 
 export const costedEvents = [Event.UNIT_PLAYED, Event.TRAP_PLAYED, Event.EFFECT_PLAYED, Event.POWER_PLAYED]

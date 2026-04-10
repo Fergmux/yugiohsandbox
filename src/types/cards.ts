@@ -4,7 +4,10 @@ import trapImg from '@/assets/images/cards/trap.png'
 import type { Comparator } from '@/composables/crawlv2/CheckSystem'
 import { Event } from '@/composables/crawlv2/EventBus'
 
-import { type Location } from './crawlv2'
+import {
+  type Location,
+  type LocationKeys,
+} from './crawlv2'
 
 export type EffectTrigger = Event | 'manual'
 
@@ -23,7 +26,7 @@ export type Condition = {
 export type Check = {
   combinator?: 'and' | 'or'
   comparitor: Comparator
-  key?: NestedKeyOf<GameCard> | NestedKeyOf<EffectDef>
+  key?: NestedKeyOf<GameCard> | NestedKeyOf<EffectDef> | LocationKeys
   value?: string | boolean | number
 }
 
@@ -66,8 +69,16 @@ export type EffectDef = {
    *  Uses the same Check[][] format as targets — OR of AND groups.
    *  The "source" for these checks is the listening card, and the "candidate" is the trigger card. */
   triggerConditions?: Check[][]
+  /** Additional target checks applied to subsequent selections, using the previously selected card as the source.
+   *  When present, multi-select effects (selectCount >= 2) will select one card at a time,
+   *  filtering remaining candidates through these checks after each pick. */
+  matchSelection?: Check[][]
   /** Follow-up effect that only runs if this effect resolved successfully (not negated/cancelled). */
   then?: EffectDef
+  /** Sibling effects that fire independently alongside this effect. Each can be individually negated. */
+  and?: EffectDef[]
+  /** Auto-resolve targets from event data instead of prompting for selection. */
+  autoTarget?: 'event_source' | 'event_target'
 }
 
 type Buff = {
@@ -81,6 +92,7 @@ type Buff = {
   anger?: number
   intangible?: number
   damage_type?: string
+  retain?: number
 }
 
 export type GameCard = Card & {
@@ -189,6 +201,7 @@ const attack: EffectDef = {
       { comparitor: 'equals', key: 'location.type', value: 'unit' },
       { comparitor: 'owner', value: 'opponent' },
       { comparitor: 'equals', key: 'type', value: 'unit' },
+      { comparitor: 'location_check', key: 'behind', value: 'empty' },
     ],
   ],
 }
@@ -840,6 +853,7 @@ export const cards: Card[] = [
           selectCount: 2,
           optional: true,
           spentOnUse: true,
+          matchSelection: [[{ comparitor: 'owner', value: 'player' }]],
           targets: [
             [
               { comparitor: 'equals', key: 'location.type', value: 'unit' },
@@ -847,6 +861,87 @@ export const cards: Card[] = [
             ],
           ],
         },
+      },
+    ],
+  },
+  // 17: Martydom
+  {
+    id: 17,
+    name: 'Martydom',
+    image: trapImg,
+    cost: 1,
+    type: 'trap',
+    description:
+      'When an opponent destroys a unit on your field, apply 2x Blinded to the attacking monster and inflict 2HP damage',
+    effects: [
+      setTrap,
+      {
+        eventName: Event.TRAP_ACTIVATED,
+        trigger: Event.UNIT_DEFEATED,
+        conditions: [
+          {
+            test: 'event_source',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'unit' }]],
+          },
+        ],
+        triggerConditions: [[{ comparitor: 'current_player', value: 'opponent' }]],
+        effect: 'debuff',
+        optional: true,
+        spentOnUse: true,
+        autoTarget: 'event_source',
+        options: {
+          debuffs: [{ key: 'blind', count: 2 }],
+        },
+        and: [
+          {
+            effect: 'direct_damage',
+            options: { amount: 2, target: 'opponent' },
+          },
+        ],
+      },
+    ],
+  },
+  // 18: Delayed gratification
+  {
+    id: 18,
+    name: 'Delayed gratification',
+    image: effectImg,
+    cost: 1,
+    type: 'effect',
+    description: 'Retain your current hand and at the start of your next turn gain +1 Action Point',
+    effects: [
+      {
+        eventName: Event.EFFECT_PLAYED,
+        name: 'Activate',
+        effect: 'buff',
+        trigger: 'manual',
+        spentOnUse: true,
+        triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
+        conditions: [
+          {
+            test: 'has_property',
+            checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
+          },
+          {
+            test: 'has_energy',
+            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
+          },
+        ],
+        targets: [
+          [
+            { comparitor: 'equals', key: 'location.type', value: 'hand' },
+            { comparitor: 'owner', value: 'player' },
+          ],
+        ],
+        options: {
+          buffs: [{ key: 'retain', count: 1 }],
+        },
+        and: [
+          {
+            effect: 'gain_ap',
+            options: { amount: 1, delay: 1 },
+          },
+        ],
       },
     ],
   },

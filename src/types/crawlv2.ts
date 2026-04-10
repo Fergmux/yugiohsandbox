@@ -6,7 +6,7 @@ export interface Card {
 }
 
 export type ZoneType = 'hand' | 'power' | 'unit' | 'leader' | 'trap' | 'empty' | 'deck' | 'spent' | 'dead'
-export type LocationKeys = 'adjacent' | 'neighbouring' | 'column'
+export type LocationKeys = 'adjacent' | 'neighbouring' | 'column' | 'behind' | 'inFront'
 export type Location = {
   id: string
   type: ZoneType
@@ -16,6 +16,8 @@ export type Location = {
   adjacent?: string[]
   neighbouring?: string[]
   column?: string[]
+  behind?: string[]
+  inFront?: string[]
 }
 
 export interface GameState {
@@ -91,6 +93,7 @@ export const locations: Location[] = [
     adjacent: ['unit12', 'unit15', 'unit16'],
     neighbouring: ['unit12'],
     column: ['unit14', 'unit21', 'unit24', 'trap11', 'trap21'],
+    behind: ['unit14'],
   },
   {
     id: 'unit12',
@@ -101,6 +104,7 @@ export const locations: Location[] = [
     adjacent: ['unit11', 'unit13', 'unit14', 'unit15', 'unit16'],
     neighbouring: ['unit11', 'unit13'],
     column: ['unit15', 'unit22', 'unit25', 'trap12', 'trap22'],
+    behind: ['unit15'],
   },
   {
     id: 'unit13',
@@ -111,6 +115,7 @@ export const locations: Location[] = [
     adjacent: ['unit12', 'unit15', 'unit16'],
     neighbouring: ['unit12'],
     column: ['unit16', 'unit23', 'unit26', 'trap13', 'trap23'],
+    behind: ['unit16'],
   },
   { id: 'power11', type: 'power', index: 1, player: 'player1', name: 'Power' },
   { id: 'power12', type: 'power', index: 2, player: 'player1', name: 'Power' },
@@ -128,6 +133,7 @@ export const locations: Location[] = [
     adjacent: ['unit11', 'unit12', 'unit15'],
     neighbouring: ['unit15'],
     column: ['unit11', 'unit21', 'unit24', 'trap11', 'trap21'],
+    inFront: ['unit11'],
   },
   {
     id: 'unit15',
@@ -138,6 +144,7 @@ export const locations: Location[] = [
     adjacent: ['unit11', 'unit12', 'unit13', 'unit14', 'unit16'],
     neighbouring: ['unit14', 'unit16'],
     column: ['unit12', 'unit22', 'unit25', 'trap12', 'trap22'],
+    inFront: ['unit12'],
   },
   {
     id: 'unit16',
@@ -148,6 +155,7 @@ export const locations: Location[] = [
     adjacent: ['unit12', 'unit13', 'unit15'],
     neighbouring: ['unit15'],
     column: ['unit13', 'unit23', 'unit26', 'trap13', 'trap23'],
+    inFront: ['unit13'],
   },
   { id: 'power13', type: 'power', index: 3, player: 'player1', name: 'Power' },
   { id: 'power14', type: 'power', index: 4, player: 'player1', name: 'Power' },
@@ -173,6 +181,7 @@ export const locations: Location[] = [
     adjacent: ['unit22', 'unit25', 'unit26'],
     neighbouring: ['unit22'],
     column: ['unit24', 'unit11', 'unit14', 'trap21', 'trap11'],
+    inFront: ['unit24'],
   },
   {
     id: 'unit22',
@@ -183,6 +192,7 @@ export const locations: Location[] = [
     adjacent: ['unit21', 'unit23', 'unit24', 'unit25', 'unit26'],
     neighbouring: ['unit21', 'unit23'],
     column: ['unit25', 'unit12', 'unit15', 'trap22', 'trap12'],
+    inFront: ['unit25'],
   },
   {
     id: 'unit23',
@@ -193,6 +203,7 @@ export const locations: Location[] = [
     adjacent: ['unit22', 'unit25', 'unit26'],
     neighbouring: ['unit22'],
     column: ['unit26', 'unit13', 'unit16', 'trap23', 'trap13'],
+    inFront: ['unit26'],
   },
   { id: 'spent2', type: 'spent', index: 1, player: 'player2', name: 'Spent' },
   { id: 'dead2', type: 'dead', index: 1, player: 'player2', name: 'Dead' },
@@ -209,6 +220,7 @@ export const locations: Location[] = [
     adjacent: ['unit21', 'unit22', 'unit25'],
     neighbouring: ['unit25'],
     column: ['unit21', 'unit14', 'unit11', 'trap21', 'trap11'],
+    behind: ['unit21'],
   },
   {
     id: 'unit25',
@@ -219,6 +231,7 @@ export const locations: Location[] = [
     adjacent: ['unit21', 'unit22', 'unit23', 'unit24', 'unit26'],
     neighbouring: ['unit24', 'unit26'],
     column: ['unit22', 'unit15', 'unit12', 'trap22', 'trap12'],
+    behind: ['unit22'],
   },
   {
     id: 'unit26',
@@ -229,6 +242,7 @@ export const locations: Location[] = [
     adjacent: ['unit22', 'unit23', 'unit25'],
     neighbouring: ['unit25'],
     column: ['unit23', 'unit16', 'unit13', 'trap23', 'trap13'],
+    behind: ['unit23'],
   },
   { id: 'deck2', type: 'deck', index: 1, player: 'player2', name: 'Deck' },
   { id: 'leader2', type: 'leader', index: 1, player: 'player2', name: 'Leader' },
@@ -263,7 +277,6 @@ export const locations: Location[] = [
     column: ['unit23', 'unit26', 'unit13', 'unit16'],
     neighbouring: ['trap22'],
   },
-  { id: 'trap23', type: 'trap', index: 3, player: 'player2', name: 'Trap' },
   { id: 'empty23', type: 'empty', index: 3, player: null, name: null },
   { id: 'empty24', type: 'empty', index: 4, player: null, name: null },
 
