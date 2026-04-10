@@ -4,6 +4,7 @@
     :card="card"
     :location="location"
     :current-player="currentPlayer"
+    :my-player="myPlayer"
     :all-cards="allCards"
     class="aspect-square bg-amber-500/75"
     @activate-effect="onActivateEffect"
@@ -21,6 +22,7 @@ defineProps<{
   card?: GameCard | null
   location: Location
   currentPlayer?: 'player1' | 'player2'
+  myPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]
 }>()
 const emit = defineEmits<{

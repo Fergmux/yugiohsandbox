@@ -4,6 +4,7 @@
     :card="card"
     :location="location"
     :current-player="currentPlayer"
+    :my-player="myPlayer"
     class="aspect-2/3 bg-blue-700/75"
     @sacrifice="emit('sacrifice', $event)"
   />
@@ -19,6 +20,7 @@ defineProps<{
   card?: GameCard | null
   location: Location
   currentPlayer?: 'player1' | 'player2'
+  myPlayer?: 'player1' | 'player2'
 }>()
 const emit = defineEmits<{
   (e: 'sacrifice', card: GameCard): void

@@ -1053,6 +1053,7 @@ export const cards: Card[] = [
             { comparitor: 'equals', key: 'location.type', value: 'unit' },
             { comparitor: 'owner', value: 'player' },
             { comparitor: 'equals', key: 'type', value: 'unit' },
+            { comparitor: 'equals', key: 'race', value: 'warrior' },
           ],
         ],
       },

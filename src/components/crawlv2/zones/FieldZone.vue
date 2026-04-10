@@ -5,6 +5,7 @@
     :card="card"
     :location="location"
     :current-player="currentPlayer"
+    :my-player="myPlayer"
     :all-cards="allCards"
     @activate-effect="onActivateEffect"
   />
@@ -30,6 +31,7 @@ const props = defineProps<{
   location: Location
   type: ZoneType
   currentPlayer?: 'player1' | 'player2'
+  myPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]
 }>()
 const emit = defineEmits<{

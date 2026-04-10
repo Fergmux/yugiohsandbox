@@ -18,6 +18,7 @@
     "types": ["node"],
     "esModuleInterop": true,
     "isolatedModules": true,
-    "target": "ES2024"
+    "target": "ES2024",
+    "skipLibCheck": true
   }
 }

@@ -502,12 +502,12 @@ export const effectHandlers: Record<string, TriggerHandler> = {
 
     if (!targets.length) return
 
-    targets.forEach(async (target) => {
+    for (const target of targets) {
       const { cancelled } = await EventBus.emit(Event.ATTACK_DECLARED, target.gameId, { target, source: card })
-      if (cancelled) return
+      if (cancelled) continue
       await EventBus.emit(Event.ATTACK_SUCCESSFUL, target.gameId, { target, source: card })
       await resolveCombat(card, target)
-    })
+    }
   },
 }
 

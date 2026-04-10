@@ -1,10 +1,11 @@
 <template>
-  <div class="bg-opacity-50 relative flex items-center justify-center rounded-md border-2 border-gray-400">
+  <div class="group/zone bg-opacity-50 relative flex items-center justify-center rounded-md border-2 border-gray-400">
     <template v-if="card">
       <div v-if="rotate" class="relative w-full overflow-hidden" style="aspect-ratio: 3/2">
         <CardBase
           :card="card"
           :current-player="currentPlayer"
+          :my-player="myPlayer"
           :all-cards="allCards"
           class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90"
           style="height: 150%; width: full"
@@ -15,9 +16,18 @@
         v-else
         :card="card"
         :current-player="currentPlayer"
+        :my-player="myPlayer"
         :all-cards="allCards"
         @activate-effect="onActivateEffect"
       />
+
+      <!-- Description tooltip: visible for own cards (including face-down), outside overflow-hidden -->
+      <div
+        v-if="card.description && showTooltip"
+        class="pointer-events-none invisible absolute -top-2 left-1/2 z-50 w-max max-w-[200px] -translate-x-1/2 -translate-y-full rounded bg-black/90 px-2 py-1.5 text-[9px] leading-tight font-normal text-white group-hover/zone:visible"
+      >
+        {{ card.description }}
+      </div>
 
       <div
         v-if="pending?.card.gameId === card.gameId"
@@ -46,17 +56,21 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import CardBase from '@/components/crawlv2/CardBase.vue'
 import { type GameCard } from '@/types/cards'
 import type { Location } from '@/types/crawlv2'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 
-defineProps<{
+const FIELD_ZONES = new Set(['hand', 'power', 'unit', 'trap'])
+
+const props = defineProps<{
   name: string
   card?: GameCard | null
   location: Location
   rotate?: boolean
   currentPlayer?: 'player1' | 'player2'
+  myPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]
 }>()
 const emit = defineEmits<{
@@ -64,6 +78,16 @@ const emit = defineEmits<{
 }>()
 
 const { pending, respond } = useActivationPrompt()
+
+const isOwnCard = computed(() => {
+  if (!props.card) return false
+  if (!props.myPlayer) return true
+  return props.card.owner === props.myPlayer || props.card.location?.player === props.myPlayer
+})
+
+const showTooltip = computed(() =>
+  isOwnCard.value && props.card && FIELD_ZONES.has(props.card.location?.type)
+)
 
 function onActivateEffect(card: GameCard, effectIndex: number) {
   emit('activate-effect', card, effectIndex)

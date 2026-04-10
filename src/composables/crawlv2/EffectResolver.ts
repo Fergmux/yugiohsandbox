@@ -82,9 +82,7 @@ export class EffectResolver {
       // Snapshot retained hand cards before any async spending
       const handCards = gs.cards.filter((c) => c.location.type === 'hand' && c.owner === currentPlayer)
       const retainedIds = new Set(
-        handCards
-          .filter((c) => typeof c.buffs.retain === 'number' && c.buffs.retain > 0)
-          .map((c) => c.gameId),
+        handCards.filter((c) => typeof c.buffs.retain === 'number' && c.buffs.retain > 0).map((c) => c.gameId),
       )
 
       // Spend non-retained hand cards
@@ -136,7 +134,6 @@ export class EffectResolver {
         `[registerEffects] registering ${effect.effect} on ${effect.trigger} for ${card.name} (${card.gameId})`,
       )
       EventBus.on(effect.trigger as Event, card.gameId, async (_e, _sourceId, data, ctx) => {
-        debugger
         if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
 
         // Evaluate trigger card conditions against the card that caused the event.
@@ -236,7 +233,6 @@ export class EffectResolver {
   // ─── Manual Effect Activation ────────────────────────────────────────────────
 
   async activateEffect(card: GameCard, effect: EffectDef | undefined) {
-    debugger
     if (!effect) return
     const maxUses = getEffectiveUses(card, effect)
     if (maxUses !== undefined && (effect.activations ?? 0) >= maxUses) return

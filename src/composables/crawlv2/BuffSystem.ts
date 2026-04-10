@@ -1,6 +1,5 @@
 import type { GameCard } from '@/types/cards'
 import { Event, EventBus } from './EventBus'
-import { propOf } from './CheckSystem'
 import { getGameState } from './GameState'
 import { registerBurnSystem } from './debuffs/BurnSystem'
 import { registerBlindSystem } from './debuffs/BlindSystem'
@@ -14,58 +13,15 @@ import { registerCursedSystem } from './debuffs/CursedSystem'
 import { registerAngerSystem } from './buffs/AngerSystem'
 import { registerWeakSystem } from './debuffs/WeakSystem'
 
+// Re-export pure functions from shared lib
+export { getEffective, BUFF_STAT_MAP, propOf } from '@/lib/crawlv2/buff-system'
+
 // Add events here as new mechanics require buff re-evaluation.
 export const BUFF_REEVALUATE_EVENTS = [
   Event.CARD_MOVED,
   Event.UNIT_DEFEATED,
   Event.UNIT_SUMMONED,
 ] as const satisfies readonly Event[]
-
-/**
- * Maps named buff/debuff keys to the card stat they modify per stack.
- * Add new buff → stat relationships here as more buffs are introduced.
- */
-export const BUFF_STAT_MAP: Partial<Record<string, keyof GameCard>> = {
-  empower: 'atk',
-  shield: 'def',
-  weak: 'atk',
-  expose: 'def',
-}
-
-export function getEffective(card: GameCard): GameCard {
-  if (!Object.keys(card.buffs).length && !Object.keys(card.debuffs).length) return card
-
-  const effective = { ...card } as Record<string, unknown>
-
-  const apply = (mods: GameCard['buffs'], sign: 1 | -1) => {
-    for (const [key, value] of Object.entries(mods)) {
-      const stripped = propOf(key)
-
-      // Named buff → stat translation (e.g. empower → atk)
-      const mappedStat = BUFF_STAT_MAP[stripped] as string | undefined
-      if (mappedStat && typeof value === 'number') {
-        const base = effective[mappedStat]
-        if (typeof base === 'number') {
-          effective[mappedStat] = base + sign * value
-        }
-        continue
-      }
-
-      // Direct key → property mapping
-      const base = effective[stripped]
-      if (typeof base === 'number' && typeof value === 'number') {
-        effective[stripped] = base + sign * value
-      } else if (sign === 1) {
-        effective[stripped] = value
-      }
-    }
-  }
-
-  apply(card.buffs, 1)
-  apply(card.debuffs, -1)
-
-  return effective as GameCard
-}
 
 export function clearBuffsFromSource(sourceId: string) {
   const prefix = `${sourceId}:`
@@ -104,13 +60,6 @@ export function registerBuffReevaluation(sourceCard: GameCard, reapply: () => vo
   }
 }
 
-/**
- * Registers all buff/debuff systems (burn, cleanse) with the provided card getter.
- * Call once during app setup — subsequent calls are safe because EventBus.on
- * appends to the listener array for the same (event, key) pair.
- *
- * @param getCards - A function that returns the current game cards array
- */
 export function registerBuffSystems() {
   registerBurnSystem()
   registerCleanseSystem()

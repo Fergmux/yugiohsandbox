@@ -44,6 +44,21 @@
 - During attack target selection, `attackingCard` and `hoveredTarget` refs in `useTargetSelector` track hover state so CardBase can preview effective ATK with type advantage.
 - Damage type colors are defined in CardBase.vue: cosmic=purple, psychic=pink, necrotic=emerald, fire=orange, physical=yellow, magic=blue.
 
+## Multiplayer Architecture
+- **Firestore collection:** `crawlv2_games/{gameId}` — Authoritative game state. Status: lobby → active → finished.
+- **Types:** `src/types/crawlv2-multiplayer.ts` — CrawlV2Game, GameAction, PendingReaction, PlayerInfo, DeckSelection.
+- **Event enum:** `src/types/events.ts` — Shared Event enum extracted from EventBus. EventBus re-exports it.
+- **Shared pure game logic:** `src/lib/crawlv2/` — buff-system, check-system, card-movement, damage-types, action-resolver. All take GameState as param (no Vue deps, no singleton). Composables are thin wrappers injecting getGameState().
+- **Netlify functions:** `create-crawlv2`, `join-crawlv2`, `get-crawlv2-by-code`, `crawlv2-action`. The action function is self-contained (duplicates minimal types/logic to avoid tsconfig cross-project issues with nodenext moduleResolution).
+- **Server-side buff/debuff rules:** The server `applyEffect` must replicate buff/debuff interaction rules (cursed blocks buffs, cleanse blocks debuffs, cursed clears all buffs on application) since the client-side EventBus system isn't available server-side. Any new buff/debuff interaction added to a client-side System must also be added to the server's `applyEffect` in `crawlv2-action.ts`.
+- **Lobby flow:** Create game → 4-digit code → opponent joins → both select decks → ready up → server initializes GameState → status='active'.
+- **Action model:** Client sends GameAction with actionId (UUID) to crawlv2-action. Server validates in Firestore transaction, applies, increments _version. Both clients subscribe via onSnapshot.
+- **Reaction windows:** PendingReaction on game doc pauses attack resolution. Defending player responds with `react` action. Server resolves trap + original attack.
+- **Idempotency:** processedActions[] ring buffer (last 50 actionIds) on game doc.
+- **Turn enforcement:** Server checks callerUid → playerKey → currentPlayer. React actions allowed from respondingPlayer only.
+- **Card visibility:** Phase 1 uses client-side filtering (not yet implemented). Full state in Firestore.
+- **tsconfig:** Node tsconfig (netlify functions) uses skipLibCheck. Lib files use relative imports with .js extensions. App tsconfig handles @/ alias.
+
 ## Patterns
 - Default unit effects are spread into card definitions: `...defaultUnitEffects`.
 - New game mechanics are typically added as comparators in CheckSystem, then referenced declaratively in effect target/condition checks.

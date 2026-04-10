@@ -4,7 +4,7 @@
     class="group relative flex aspect-2/3 h-full items-center justify-center rounded-md border-2 border-gray-300 bg-contain bg-center bg-no-repeat text-xl font-bold text-black"
     :class="{ 'rotate-90': card.defensePosition }"
   >
-    <template v-if="card.faceUp">
+    <template v-if="showAsFaceUp">
       <p class="card-text absolute top-[6%] left-[12%] text-[6px] font-bold text-white">
         {{ card.name }}
       </p>
@@ -28,16 +28,8 @@
         {{ card.race }}-{{ effective.damage }}
       </p>
 
-      <!-- Description tooltip on hover -->
-      <div
-        v-if="card.description"
-        class="pointer-events-none invisible absolute -top-2 left-1/2 z-50 w-max max-w-[200px] -translate-x-1/2 -translate-y-full rounded bg-black/90 px-2 py-1.5 text-[9px] leading-tight font-normal text-white group-hover:visible"
-      >
-        {{ card.description }}
-      </div>
-
       <!-- Buff / debuff badges -->
-      <div v-if="card.faceUp" class="absolute top-[50%] left-[10%] flex flex-wrap gap-[2px]">
+      <div class="absolute top-[50%] left-[10%] flex flex-wrap gap-[2px]">
         <div v-for="(value, key) in card.buffs" :key="'buff-' + key" class="group/badge relative">
           <span class="block rounded bg-green-600 px-[3px] py-px text-[5px] leading-tight font-bold text-white">
             {{ buffBadgeLabel(String(key)) }}<template v-if="typeof value === 'number'">×{{ value }}</template>
@@ -62,7 +54,7 @@
       </div>
 
       <div
-        v-if="effectButtons.length && !hasSelection"
+        v-if="effectButtons.length && !hasSelection && !activationPending"
         class="absolute bottom-1 left-1 z-20 flex flex-col items-start gap-px opacity-0 transition-opacity group-hover:opacity-100"
       >
         <template v-for="btn in effectButtons" :key="btn.index">
@@ -79,6 +71,7 @@
         </template>
       </div>
     </template>
+
   </div>
 </template>
 
@@ -92,15 +85,18 @@ import { evaluateConditions, filterByChecks, filterByTargets, propOf } from '@/c
 import { getTypeEffectiveAtk } from '@/composables/crawlv2/DamageTypes'
 import { Event, EventBus } from '@/composables/crawlv2/EventBus'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
+import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 import { type EffectDef, type GameCard } from '@/types/cards'
 
 const props = defineProps<{
   card: GameCard
   currentPlayer?: 'player1' | 'player2'
+  myPlayer?: 'player1' | 'player2'
   allCards?: GameCard[]
 }>()
 
 const { hasSelection, hoveredTarget, attackingCard } = useTargetSelector()
+const { pending: activationPending } = useActivationPrompt()
 const emit = defineEmits<{
   (e: 'activate-effect', card: GameCard, effectIndex: number): void
 }>()
@@ -136,7 +132,9 @@ const isEffectEnabled = (effect: EffectDef) => {
 const effectButtons = computed(() => {
   // Read revision so EventBus-triggered bumps cause re-evaluation
   void revision.value
-  if (props.card.owner !== props.currentPlayer) return []
+  // Only show buttons on YOUR cards, and only when it's your turn
+  if (props.myPlayer && props.card.owner !== props.myPlayer) return []
+  if (props.myPlayer && props.currentPlayer !== props.myPlayer) return []
   return (props.card.effects ?? [])
     .map((effect, index) => {
       if (effect.trigger !== 'manual') return null
@@ -159,7 +157,15 @@ onUnmounted(() => {
   EventBus.off(Event.CARD_SPENT, revisionKey)
 })
 
-const cardImg = computed(() => (props.card.faceUp ? props.card.image : CardBack))
+const isOwnCard = computed(() => {
+  if (!props.myPlayer) return true // local play — everything is yours
+  return props.card.owner === props.myPlayer || props.card.location?.player === props.myPlayer
+})
+const isOpponentHand = computed(() =>
+  props.myPlayer && !isOwnCard.value && props.card.location?.type === 'hand'
+)
+const showAsFaceUp = computed(() => isOpponentHand.value ? false : props.card.faceUp)
+const cardImg = computed(() => (showAsFaceUp.value ? props.card.image : CardBack))
 const effective = computed(() => getEffective(props.card))
 
 /** ATK is boosted if buffed OR if type effectiveness is giving a bonus */
