@@ -48,6 +48,7 @@ interface GameCard {
   defensePosition?: boolean
   effectActivations?: Record<number, number>
   trapTriggers?: string[]
+  trapReactionRules?: { trigger: string; requiresUndefinedSelectCount?: boolean }[]
 }
 
 interface Location {
@@ -72,6 +73,9 @@ interface PendingReaction {
   type: string
   respondingPlayer: Player
   triggerAction: GameAction
+  triggerEvent?: string
+  eventSourceGameId?: string
+  eventTargetGameId?: string
   eligibleCards: string[]
   timeout: number
 }
@@ -101,7 +105,15 @@ type GameAction =
       damage?: string
       actionId: string
     }
-  | { type: 'set_trap'; cardGameId: string; zoneId: string; cost?: number; trapTriggers?: string[]; actionId: string }
+  | {
+      type: 'set_trap'
+      cardGameId: string
+      zoneId: string
+      cost?: number
+      trapTriggers?: string[]
+      trapReactionRules?: { trigger: string; requiresUndefinedSelectCount?: boolean }[]
+      actionId: string
+    }
   | {
       type: 'set_power'
       cardGameId: string
@@ -126,6 +138,7 @@ type GameAction =
       cardGameId: string
       effectIndex: number
       targets?: string[]
+      selectCount?: number
       effectType: string
       effectOptions?: Record<string, unknown>
       spentOnUse?: boolean
@@ -146,6 +159,10 @@ type GameAction =
       activate: boolean
       cardGameId?: string
       trapEffectType?: string
+      trapEffectOptions?: Record<string, unknown>
+      trapTargets?: string[]
+      trapThenEffect?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }
+      trapAndEffects?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }[]
       targets?: string[]
       actionId: string
     }
@@ -348,6 +365,33 @@ function trackActivation(card: GameCard, effectIndex?: number, maxUses?: number)
   if (maxUses !== undefined && count >= maxUses) return 'Effect uses exhausted'
   card.effectActivations[effectIndex] = count + 1
   return null
+}
+
+function resolveActivatedEffectAction(
+  gs: GameState,
+  action: Extract<GameAction, { type: 'activate_effect' }>,
+): ActionResult {
+  const card = findCard(gs, action.cardGameId)
+  if (!card) return { success: false, error: 'Card not found' }
+  if (!action.effectType) return { success: false, error: 'Effect type is required' }
+
+  const activationCount = card.effectActivations?.[action.effectIndex] ?? 0
+  if (action.maxUses !== undefined && activationCount >= action.maxUses) {
+    return { success: false, error: 'Effect uses exhausted' }
+  }
+
+  if (!card.effectActivations) card.effectActivations = {}
+  card.effectActivations[action.effectIndex] = activationCount + 1
+
+  const targets = (action.targets ?? []).map((id) => findCard(gs, id)).filter(Boolean) as GameCard[]
+  const clientEffect: EffectDef = {
+    effect: action.effectType ?? '',
+    ...(action.effectOptions ? { options: action.effectOptions } : {}),
+  } as EffectDef
+  applyEffect(gs, card, clientEffect, targets)
+
+  if (action.spentOnUse) spendCard(card)
+  return { success: true }
 }
 
 function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: GameCard[]): void {
@@ -602,26 +646,103 @@ function initializeGameState(p1Ids: number[], p2Ids: number[]): GameState {
 
 // ─── Reaction checking ──────────────────────────────────────────────────────
 
-function checkForAttackReactions(game: CrawlV2Game, sourceId: string, targetId: string): PendingReaction | null {
-  const defender = getOpponent(game.gameState.currentPlayer)
-  const gs = game.gameState
-
-  const eligible = gs.cards.filter((card) => {
-    if (card.owner !== defender) return false
-    if (card.location.type !== 'trap' || card.faceUp) return false
-    return (card.trapTriggers ?? []).includes('attack_declared')
-  })
-
-  if (eligible.length === 0) return null
-
+function createTrapReaction(
+  eligible: GameCard[],
+  respondingPlayer: Player,
+  triggerAction: Extract<GameAction, { type: 'attack' }>,
+  triggerEvent: string,
+  eventSourceGameId: string,
+  eventTargetGameId?: string,
+): PendingReaction {
   return {
     id: `react_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     type: 'trap_activation',
-    respondingPlayer: defender,
-    triggerAction: { type: 'attack', sourceGameId: sourceId, targetGameId: targetId, actionId: '' },
+    respondingPlayer,
+    triggerAction,
+    triggerEvent,
+    eventSourceGameId,
+    eventTargetGameId,
     eligibleCards: eligible.map((c) => c.gameId),
     timeout: Date.now() + 30000,
   }
+}
+
+function getEligibleTrapReactions(
+  game: CrawlV2Game,
+  player: Player,
+  triggerEvent: string,
+  triggerAction?: GameAction,
+): GameCard[] {
+  return game.gameState.cards.filter((card) => {
+    if (card.owner !== player) return false
+    if (card.location.type !== 'trap' || card.faceUp) return false
+    const matchingRules = card.trapReactionRules?.filter((rule) => rule.trigger === triggerEvent) ?? []
+    if (matchingRules.length > 0) {
+      return matchingRules.some((rule) => {
+        if (!rule.requiresUndefinedSelectCount) return true
+        return triggerAction?.type === 'activate_effect' && triggerAction.selectCount === undefined
+      })
+    }
+    return (card.trapTriggers ?? []).includes(triggerEvent)
+  })
+}
+
+function checkForAttackReactions(
+  game: CrawlV2Game,
+  sourceId: string,
+  targetId: string,
+  triggerAction: Extract<GameAction, { type: 'attack' }>,
+): PendingReaction | null {
+  const defender = getOpponent(game.gameState.currentPlayer)
+  const eligible = getEligibleTrapReactions(game, defender, 'attack_declared', triggerAction)
+  if (eligible.length === 0) return null
+
+  return createTrapReaction(eligible, defender, triggerAction, 'attack_declared', sourceId, targetId)
+}
+
+function checkForUnitDefeatedReactions(
+  game: CrawlV2Game,
+  source: GameCard,
+  target: GameCard,
+  triggerAction: Extract<GameAction, { type: 'attack' }>,
+): PendingReaction | null {
+  const defeatEvents: { respondingPlayer: Player; eventSource: GameCard; eventTarget: GameCard }[] = []
+  const inactivePlayer = getOpponent(game.gameState.currentPlayer)
+
+  if (target.location.type === 'spent' && target.owner === inactivePlayer) {
+    defeatEvents.push({ respondingPlayer: target.owner, eventSource: source, eventTarget: target })
+  }
+  if (source.location.type === 'spent' && source.owner === inactivePlayer) {
+    defeatEvents.push({ respondingPlayer: source.owner, eventSource: target, eventTarget: source })
+  }
+
+  for (const defeat of defeatEvents) {
+    const eligible = getEligibleTrapReactions(game, defeat.respondingPlayer, 'unit_defeated', triggerAction)
+    if (eligible.length > 0) {
+      return createTrapReaction(
+        eligible,
+        defeat.respondingPlayer,
+        triggerAction,
+        'unit_defeated',
+        defeat.eventSource.gameId,
+        defeat.eventTarget.gameId,
+      )
+    }
+  }
+
+  return null
+}
+
+function checkForEffectPlayedReactions(
+  game: CrawlV2Game,
+  sourceGameId: string,
+  triggerAction: Extract<GameAction, { type: 'activate_effect' }>,
+): PendingReaction | null {
+  const defender = getOpponent(game.gameState.currentPlayer)
+  const eligible = getEligibleTrapReactions(game, defender, 'effect_played', triggerAction)
+  if (eligible.length === 0) return null
+
+  return createTrapReaction(eligible, defender, triggerAction, 'effect_played', sourceGameId)
 }
 
 // ─── Action handlers ────────────────────────────────────────────────────────
@@ -665,10 +786,13 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
 
     if (!action.activate) {
       game.pendingReaction = null
-      if (pending.triggerAction.type === 'attack') {
+      if (pending.triggerEvent === 'attack_declared' && pending.triggerAction.type === 'attack') {
         const src = findCard(gs, pending.triggerAction.sourceGameId)
         const tgt = findCard(gs, pending.triggerAction.targetGameId)
         if (src && tgt) resolveCombat(gs, src, tgt)
+      }
+      if (pending.triggerEvent === 'effect_played' && pending.triggerAction.type === 'activate_effect') {
+        return resolveActivatedEffectAction(gs, pending.triggerAction)
       }
       return { success: true }
     }
@@ -683,10 +807,61 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       const isNegate = action.trapEffectType === 'negate_attack' || action.trapEffectType === 'negate_effect'
       spendCard(trap)
 
-      if (!isNegate && pending.triggerAction.type === 'attack') {
+      if (action.trapEffectType && !isNegate) {
+        const trapTargets = (action.trapTargets ?? []).map((id) => findCard(gs, id)).filter(Boolean) as GameCard[]
+        applyEffect(
+          gs,
+          trap,
+          {
+            effect: action.trapEffectType,
+            ...(action.trapEffectOptions ? { options: action.trapEffectOptions } : {}),
+          },
+          trapTargets,
+        )
+        for (const sibling of action.trapAndEffects ?? []) {
+          const siblingTargets = (sibling.targets ?? []).map((id) => findCard(gs, id)).filter(Boolean) as GameCard[]
+          applyEffect(
+            gs,
+            trap,
+            {
+              effect: sibling.effectType,
+              ...(sibling.effectOptions ? { options: sibling.effectOptions } : {}),
+            },
+            siblingTargets,
+          )
+        }
+      }
+
+      if (action.trapThenEffect) {
+        const thenTargets = (action.trapThenEffect.targets ?? [])
+          .map((id) => findCard(gs, id))
+          .filter(Boolean) as GameCard[]
+        applyEffect(
+          gs,
+          trap,
+          {
+            effect: action.trapThenEffect.effectType,
+            ...(action.trapThenEffect.effectOptions ? { options: action.trapThenEffect.effectOptions } : {}),
+          },
+          thenTargets,
+        )
+      }
+
+      if (pending.triggerEvent === 'attack_declared' && !isNegate && pending.triggerAction.type === 'attack') {
         const src = findCard(gs, pending.triggerAction.sourceGameId)
         const tgt = findCard(gs, pending.triggerAction.targetGameId)
         if (src && tgt) resolveCombat(gs, src, tgt)
+      }
+      if (pending.triggerEvent === 'effect_played' && pending.triggerAction.type === 'activate_effect') {
+        if (isNegate) {
+          const sourceCard = findCard(gs, pending.triggerAction.cardGameId)
+          if (sourceCard && pending.triggerAction.spentOnUse) {
+            spendCard(sourceCard)
+          }
+        } else {
+          game.pendingReaction = null
+          return resolveActivatedEffectAction(gs, pending.triggerAction)
+        }
       }
     }
 
@@ -734,6 +909,7 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       if (gs.cards.some((c) => c.location.id === action.zoneId)) return { success: false, error: 'Zone occupied' }
       card.cost = cost
       if (action.trapTriggers?.length) card.trapTriggers = action.trapTriggers
+      if (action.trapReactionRules?.length) card.trapReactionRules = action.trapReactionRules
       deductAP(gs, card)
       card.location = { id: zone.id, type: zone.type, index: 0, player: zone.player, name: 'Trap' }
       card.faceUp = false
@@ -780,13 +956,17 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       if (!target) return { success: false, error: 'Invalid target' }
       const resolvedAction = { ...action, targetGameId: target.gameId }
 
-      const reaction = checkForAttackReactions(game, action.sourceGameId, target.gameId)
+      const reaction = checkForAttackReactions(game, action.sourceGameId, target.gameId, resolvedAction)
       if (reaction) {
         reaction.triggerAction = resolvedAction
         game.pendingReaction = reaction
         return { success: true }
       }
       resolveCombat(gs, source, target)
+      const postCombatReaction = checkForUnitDefeatedReactions(game, source, target, resolvedAction)
+      if (postCombatReaction) {
+        game.pendingReaction = postCombatReaction
+      }
       return { success: true }
     }
     case 'sacrifice': {
@@ -833,24 +1013,13 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       if (!card) return { success: false, error: 'Card not found' }
       if (card.owner !== playerKey) return { success: false, error: 'Not your card' }
 
-      // Track activations in a card-level map (server cards may lack full effect defs)
-      if (!card.effectActivations) card.effectActivations = {}
-      const activationCount = card.effectActivations[action.effectIndex] ?? 0
-      if (action.maxUses !== undefined && activationCount >= action.maxUses) {
-        return { success: false, error: 'Effect uses exhausted' }
+      const reaction = checkForEffectPlayedReactions(game, action.cardGameId, action)
+      if (reaction) {
+        game.pendingReaction = reaction
+        return { success: true }
       }
-      card.effectActivations[action.effectIndex] = activationCount + 1
 
-      // Apply effect using client-provided type/options
-      const targets = (action.targets ?? []).map((id) => findCard(gs, id)).filter(Boolean) as GameCard[]
-      const clientEffect: EffectDef = {
-        effect: action.effectType,
-        ...(action.effectOptions ? { options: action.effectOptions } : {}),
-      } as EffectDef
-      applyEffect(gs, card, clientEffect, targets)
-
-      if (action.spentOnUse) spendCard(card)
-      return { success: true }
+      return resolveActivatedEffectAction(gs, action)
     }
     case 'update_card_buffs': {
       for (const upd of action.updates) {

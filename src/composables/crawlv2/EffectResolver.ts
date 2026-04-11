@@ -12,6 +12,7 @@ import { getGameState } from './GameState'
 export type EffectResolverConfig = {
   selectCard: (card: GameCard | null) => void
   ask: (card: GameCard) => Promise<boolean>
+  multiplayer?: boolean
 }
 
 // Module-level singleton registry
@@ -65,6 +66,8 @@ export class EffectResolver {
         gs.player2HP = Math.max(0, gs.player2HP - amount)
       }
     })
+
+    if (this.config.multiplayer) return
 
     EventBus.on(Event.GAME_START, 'game:init', async (_e, _id, _data) => {
       shuffleDeck('player1')

@@ -12,11 +12,19 @@ export interface DeckSelection {
   ready: boolean
 }
 
+export interface TrapReactionRule {
+  trigger: string
+  requiresUndefinedSelectCount?: boolean
+}
+
 export interface PendingReaction {
   id: string
   type: 'trap_activation' | 'effect_activation'
   respondingPlayer: Player
   triggerAction: GameAction
+  triggerEvent?: string
+  eventSourceGameId?: string
+  eventTargetGameId?: string
   eligibleCards: string[]
   timeout: number
 }
@@ -48,7 +56,14 @@ export type GameAction =
   | { type: 'select_deck'; cardIds: number[]; actionId: string }
   | { type: 'ready_up'; actionId: string }
   | { type: 'summon_unit'; cardGameId: string; zoneId: string; actionId: string }
-  | { type: 'set_trap'; cardGameId: string; zoneId: string; trapTriggers?: string[]; actionId: string }
+  | {
+      type: 'set_trap'
+      cardGameId: string
+      zoneId: string
+      trapTriggers?: string[]
+      trapReactionRules?: TrapReactionRule[]
+      actionId: string
+    }
   | { type: 'set_power'; cardGameId: string; zoneId: string; actionId: string }
   | { type: 'attack'; sourceGameId: string; targetGameId: string; effectIndex?: number; actionId: string }
   | {
@@ -56,6 +71,11 @@ export type GameAction =
       cardGameId: string
       effectIndex: number
       targets?: string[]
+      selectCount?: number
+      effectType?: string
+      effectOptions?: Record<string, unknown>
+      spentOnUse?: boolean
+      maxUses?: number
       actionId: string
     }
   | { type: 'sacrifice'; cardGameId: string; actionId: string }
@@ -67,6 +87,10 @@ export type GameAction =
       activate: boolean
       cardGameId?: string
       trapEffectType?: string
+      trapEffectOptions?: Record<string, unknown>
+      trapTargets?: string[]
+      trapThenEffect?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }
+      trapAndEffects?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }[]
       targets?: string[]
       actionId: string
     }

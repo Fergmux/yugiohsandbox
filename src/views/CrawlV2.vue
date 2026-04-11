@@ -18,7 +18,7 @@
           <span class="font-bold">{{ gameState.currentPlayer === 'player1' ? playerNames.player1 : playerNames.player2 }}'s turn</span>
         </div>
         <button
-          v-if="isMyTurn && !waitingForReaction"
+          v-if="isMyTurn && !waitingForReaction && !activationPending"
           @click="endTurn"
           :disabled="actionLoading"
           class="rounded bg-emerald-700 px-3 py-1 text-sm font-bold text-white hover:bg-emerald-600 active:bg-emerald-800 disabled:opacity-50"
@@ -109,11 +109,11 @@ import CardPickerModal from '@/components/crawlv2/CardPickerModal.vue'
 import CrawlV2Lobby from '@/components/crawlv2/CrawlV2Lobby.vue'
 import { fieldZones, locations, type Location, type GameState } from '@/types/crawlv2'
 import playspaceImg from '@/assets/images/playspace.png'
-import { type GameCard, cards as cardDatabase } from '@/types/cards'
+import { type EffectDef, type GameCard, cards as cardDatabase } from '@/types/cards'
 import { computed, nextTick, ref, type Ref } from 'vue'
 import { doc, onSnapshot, type Unsubscribe } from 'firebase/firestore'
 import { db } from '@/firebase/client'
-import { filterByChecks, filterByTargets } from '@/composables/crawlv2/CheckSystem'
+import { evaluateChecks, evaluateConditions, filterByChecks, filterByTargets } from '@/composables/crawlv2/CheckSystem'
 import { EventBus, Event } from '@/composables/crawlv2/EventBus'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
@@ -121,8 +121,9 @@ import { registerBuffSystems } from '@/composables/crawlv2/BuffSystem'
 import { defaultGameState } from '@/types/defaultGameState'
 import { registerEffectResolver } from '@/composables/crawlv2/EffectResolver'
 import { registerGameState } from '@/composables/crawlv2/GameState'
+import { cleanupEffects } from '@/composables/crawlv2/EffectHandlers'
 import { authFetch } from '@/lib/authFetch'
-import type { CrawlV2Game, Player } from '@/types/crawlv2-multiplayer'
+import type { CrawlV2Game, PendingReaction, Player } from '@/types/crawlv2-multiplayer'
 import { v4 as uuid } from 'uuid'
 
 // ─── Card hydration ─────────────────────────────────────────────────────────
@@ -172,11 +173,18 @@ const playerNames = computed(() => ({
   player2: multiplayerGame.value?.players.player2?.username ?? 'Player 2',
 }))
 
+function getTurnKey(gs: GameState): string {
+  return `${gs.turn}:${gs.currentPlayer}`
+}
+
 function onGameStarted(game: CrawlV2Game, gId: string, player: Player) {
   multiplayerGame.value = game
   multiplayerGameId.value = gId
   myPlayer.value = player
   phase.value = 'game'
+  fieldCardIds.clear()
+  registeredEffectCardIds.clear()
+  handledReactionId = null
 
   // Set up game state from server, hydrating cards with full data
   const gs = JSON.parse(JSON.stringify(game.gameState)) as GameState
@@ -191,7 +199,10 @@ function onGameStarted(game: CrawlV2Game, gId: string, player: Player) {
       selectedCard.value = card
     },
     ask,
+    multiplayer: true,
   })
+
+  lastTurnKey = getTurnKey(gameState.value)
 
   // Subscribe to realtime updates
   subscribeToGame(gId)
@@ -202,7 +213,55 @@ function onGameStarted(game: CrawlV2Game, gId: string, player: Player) {
 }
 
 const fieldCardIds = new Set<string>()
+const registeredEffectCardIds = new Set<string>()
 let handledReactionId: string | null = null
+let lastTurnKey: string | null = null
+
+function rebuildMultiplayerEffectRegistrations(cards: GameCard[]) {
+  if (!effectResolver || !myPlayer.value) return
+
+  const myFieldCards = cards.filter((card) => fieldZones.includes(card.location.type) && card.owner === myPlayer.value)
+  const nextRegisteredIds = new Set(myFieldCards.map((card) => card.gameId))
+  const idsToCleanup = new Set([...registeredEffectCardIds, ...nextRegisteredIds])
+
+  for (const gameId of idsToCleanup) {
+    const card = cards.find((candidate) => candidate.gameId === gameId)
+    if (card) cleanupEffects(card)
+  }
+
+  for (const card of myFieldCards) {
+    effectResolver.registerEffects(card)
+  }
+
+  registeredEffectCardIds.clear()
+  for (const gameId of nextRegisteredIds) {
+    registeredEffectCardIds.add(gameId)
+  }
+}
+
+async function processMultiplayerTurnStart(gs: GameState) {
+  if (!myPlayer.value || !effectResolver) return
+
+  if (gs.currentPlayer === myPlayer.value) {
+    await EventBus.emit(Event.TURN_START, `turn:${getTurnKey(gs)}`, {
+      currentPlayer: gs.currentPlayer,
+    })
+    syncCardBuffs()
+    return
+  }
+
+  const myFieldCards = gs.cards.filter((card) => fieldZones.includes(card.location.type) && card.owner === myPlayer.value)
+  for (const card of myFieldCards) {
+    for (const effect of card.effects ?? []) {
+      if (effect.trigger !== Event.TURN_START) continue
+      if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) continue
+      if (effect.triggerConditions?.length && !evaluateChecks(effect.triggerConditions, card, card)) continue
+      if (!evaluateConditions(effect.conditions, card)) continue
+      await effectResolver.activateEffect(card, effect)
+    }
+  }
+  syncCardBuffs()
+}
 
 function subscribeToGame(gId: string) {
   unsubscribeGame?.()
@@ -251,6 +310,9 @@ function subscribeToGame(gId: string) {
       gameState.value.player2HP = serverGs.player2HP
       gameState.value.player1AP = serverGs.player1AP
       gameState.value.player2AP = serverGs.player2AP
+      const turnChanged = getTurnKey(serverGs) !== lastTurnKey
+
+      rebuildMultiplayerEffectRegistrations(hydrated)
 
       // Register effects and fire events for newly placed cards.
       // Only process triggered effects for our own cards — the owner's client
@@ -268,9 +330,26 @@ function subscribeToGame(gId: string) {
           nextTick(async () => {
             const activate = await ask(trapCard)
             let trapEffectType: string | undefined
+            let trapEffectOptions: Record<string, unknown> | undefined
+            let trapTargets: string[] | undefined
+            let trapThenEffect:
+              | { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }
+              | undefined
+            let trapAndEffects:
+              | { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }[]
+              | undefined
             if (activate) {
-              const triggerEffect = trapCard.effects?.find((e) => e.trigger !== 'manual')
-              trapEffectType = triggerEffect?.effect
+              const triggerEffect =
+                trapCard.effects?.find((e) => e.trigger === pendingReaction.triggerEvent) ??
+                trapCard.effects?.find((e) => e.trigger !== 'manual')
+              if (triggerEffect) {
+                const serialized = serializeReactionEffect(triggerEffect, trapCard, pendingReaction)
+                trapEffectType = serialized.trapEffectType
+                trapEffectOptions = serialized.trapEffectOptions
+                trapTargets = serialized.trapTargets
+                trapThenEffect = serialized.trapThenEffect
+                trapAndEffects = serialized.trapAndEffects
+              }
             }
             await sendAction({
               type: 'react',
@@ -278,6 +357,10 @@ function subscribeToGame(gId: string) {
               activate,
               cardGameId: activate ? trapCardId : undefined,
               trapEffectType,
+              trapEffectOptions,
+              trapTargets,
+              trapThenEffect,
+              trapAndEffects,
             })
           })
         }
@@ -285,9 +368,6 @@ function subscribeToGame(gId: string) {
 
       if (effectResolver && newFieldCards.length) {
         const myCards = newFieldCards.filter((c) => c.owner === myPlayer.value)
-        for (const card of myCards) {
-          effectResolver.registerEffects(card)
-        }
         if (myCards.length) {
           const cardsToEmit = [...myCards]
           nextTick(async () => {
@@ -308,6 +388,17 @@ function subscribeToGame(gId: string) {
             }
           })
         }
+      }
+
+      if (turnChanged) {
+        lastTurnKey = getTurnKey(serverGs)
+        nextTick(async () => {
+          try {
+            await processMultiplayerTurnStart(gameState.value)
+          } catch (err) {
+            console.error('[CrawlV2] Error processing turn start effects:', err)
+          }
+        })
       }
     }
   })
@@ -349,7 +440,7 @@ async function sendAction(action: Record<string, unknown>) {
 
 // ─── Composables ────────────────────────────────────────────────────────────
 
-const { ask } = useActivationPrompt()
+const { ask, pending: activationPending } = useActivationPrompt()
 const {
   pending,
   selectedTargets,
@@ -437,6 +528,41 @@ function resolveEffectOptions(options: Record<string, unknown>, card: GameCard):
   return resolved
 }
 
+function resolveReactionTargets(effect: EffectDef, card: GameCard, reaction: PendingReaction): string[] | undefined {
+  if (effect.autoTarget === 'event_source' && reaction.eventSourceGameId) {
+    return [reaction.eventSourceGameId]
+  }
+  if (effect.autoTarget === 'event_target' && reaction.eventTargetGameId) {
+    return [reaction.eventTargetGameId]
+  }
+  if (effect.targets?.length && effect.selectCount === undefined) {
+    return filterByTargets(effect.targets, card).map((target) => target.gameId)
+  }
+  return undefined
+}
+
+function serializeReactionEffect(effect: EffectDef, card: GameCard, reaction: PendingReaction) {
+  return {
+    trapEffectType: effect.effect,
+    trapEffectOptions: effect.options ? resolveEffectOptions(effect.options as Record<string, unknown>, card) : undefined,
+    trapTargets: resolveReactionTargets(effect, card, reaction),
+    trapThenEffect: effect.then
+      ? {
+          effectType: effect.then.effect,
+          effectOptions: effect.then.options
+            ? resolveEffectOptions(effect.then.options as Record<string, unknown>, card)
+            : undefined,
+          targets: resolveReactionTargets(effect.then, card, reaction),
+        }
+      : undefined,
+    trapAndEffects: effect.and?.map((sibling) => ({
+      effectType: sibling.effect,
+      effectOptions: sibling.options ? resolveEffectOptions(sibling.options as Record<string, unknown>, card) : undefined,
+      targets: resolveReactionTargets(sibling, card, reaction),
+    })),
+  }
+}
+
 function isBlinded(card: GameCard): boolean {
   return typeof card.debuffs.blind === 'number' && card.debuffs.blind > 0
 }
@@ -497,7 +623,26 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
       const trapTriggers = (card.effects ?? [])
         .filter((e) => e.trigger !== 'manual')
         .map((e) => e.trigger as string)
-      await sendAction({ type: 'set_trap', cardGameId: card.gameId, zoneId: zone.id, cost: card.cost, trapTriggers })
+      const trapReactionRules = (card.effects ?? [])
+        .filter((e) => e.trigger !== 'manual')
+        .map((e) => ({
+          trigger: e.trigger as string,
+          requiresUndefinedSelectCount: e.conditions?.some(
+            (condition) =>
+              condition.test === 'trigger_effect' &&
+              condition.checks?.some((group) =>
+                group.some((check) => check.comparitor === 'is_undefined' && check.key === 'selectCount'),
+              ),
+          ),
+        }))
+      await sendAction({
+        type: 'set_trap',
+        cardGameId: card.gameId,
+        zoneId: zone.id,
+        cost: card.cost,
+        trapTriggers,
+        trapReactionRules,
+      })
       break
     }
     case 'set_power': {
@@ -574,6 +719,7 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
         cardGameId: card.gameId,
         effectIndex,
         targets: targetGameIds,
+        selectCount: effect.selectCount,
         effectType: effect.effect,
         effectOptions: resolvedOptions,
         spentOnUse: !!effect.spentOnUse,

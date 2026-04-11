@@ -71,7 +71,6 @@
         </template>
       </div>
     </template>
-
   </div>
 </template>
 
@@ -163,10 +162,8 @@ const isOwnCard = computed(() => {
   if (!props.myPlayer) return true // local play — everything is yours
   return props.card.owner === props.myPlayer || props.card.location?.player === props.myPlayer
 })
-const isOpponentHand = computed(() =>
-  props.myPlayer && !isOwnCard.value && props.card.location?.type === 'hand'
-)
-const showAsFaceUp = computed(() => isOpponentHand.value ? false : props.card.faceUp)
+const isOpponentHand = computed(() => props.myPlayer && !isOwnCard.value && props.card.location?.type === 'hand')
+const showAsFaceUp = computed(() => (isOpponentHand.value ? false : props.card.faceUp))
 const cardImg = computed(() => (showAsFaceUp.value ? props.card.image : CardBack))
 const effective = computed(() => getEffective(props.card))
 
@@ -180,22 +177,18 @@ const isAtkBoosted = computed(() => {
 
 /** When this card is the attacker and a target is hovered, show type-effective ATK */
 const displayedAtk = computed(() => {
-  if (
-    attackingCard.value &&
-    attackingCard.value.gameId === props.card.gameId &&
-    hoveredTarget.value
-  ) {
+  if (attackingCard.value && attackingCard.value.gameId === props.card.gameId && hoveredTarget.value) {
     return getTypeEffectiveAtk(props.card, hoveredTarget.value)
   }
   return effective.value.atk
 })
 
 const DAMAGE_TYPE_COLORS: Record<string, string> = {
-  cosmic: 'text-purple-400',
+  cosmic: 'text-amber-400',
   psychic: 'text-pink-400',
-  necrotic: 'text-emerald-400',
-  fire: 'text-orange-400',
-  physical: 'text-yellow-300',
+  necrotic: 'text-violet-500',
+  fire: 'text-red-400',
+  physical: 'text-neutral-300',
   magic: 'text-blue-400',
 }
 

@@ -525,4 +525,5 @@ export const cleanupEffects = (card: GameCard) => {
       EventBus.off(effect.resetOnEvent, `reset:${card.gameId}:${effect.effect}`)
     }
   }
+  EventBus.off(Event.CARD_LEFT_FIELD, `cleanup:${card.gameId}`)
 }
