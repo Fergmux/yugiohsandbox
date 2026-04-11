@@ -10,7 +10,7 @@ export const TYPE_EFFECTIVENESS: Record<string, string[]> = {
   magic: ['fire'],
 }
 
-export const TYPE_MULTIPLIER = 1.5
+export const TYPE_MULTIPLIER = 1.25
 
 export function getEffectiveDamageType(card: GameCard): string | undefined {
   const effective = getEffective(card)

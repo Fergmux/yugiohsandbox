@@ -50,7 +50,7 @@ export type GameAction =
   | { type: 'summon_unit'; cardGameId: string; zoneId: string; actionId: string }
   | { type: 'set_trap'; cardGameId: string; zoneId: string; trapTriggers?: string[]; actionId: string }
   | { type: 'set_power'; cardGameId: string; zoneId: string; actionId: string }
-  | { type: 'attack'; sourceGameId: string; targetGameId: string; actionId: string }
+  | { type: 'attack'; sourceGameId: string; targetGameId: string; effectIndex?: number; actionId: string }
   | {
       type: 'activate_effect'
       cardGameId: string

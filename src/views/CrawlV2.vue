@@ -427,13 +427,37 @@ function resolveEffectOptions(options: Record<string, unknown>, card: GameCard):
     resolved[listKey] = list.map((entry: Record<string, unknown>) => {
       if (entry.countChecks) {
         const count = filterByChecks(entry.countChecks as Parameters<typeof filterByChecks>[0], card).length
-        const { countChecks: _, ...rest } = entry
+        const rest = { ...entry }
+        delete rest.countChecks
         return { ...rest, count }
       }
       return entry
     })
   }
   return resolved
+}
+
+function isBlinded(card: GameCard): boolean {
+  return typeof card.debuffs.blind === 'number' && card.debuffs.blind > 0
+}
+
+function pickRandomTarget(validTargets: GameCard[]): GameCard {
+  return validTargets[Math.floor(Math.random() * validTargets.length)]
+}
+
+async function selectAttackTargets(card: GameCard, effectIndex: number, validTargets: GameCard[]) {
+  const effect = card.effects?.[effectIndex]
+  if (!effect) return []
+
+  setAttackingCard(card)
+  try {
+    if (isBlinded(card)) {
+      return [pickRandomTarget(validTargets)]
+    }
+    return await selectTargets(validTargets, effect)
+  } finally {
+    setAttackingCard(null)
+  }
 }
 
 const activateEffect = async (card: GameCard, effectIndex: number) => {
@@ -507,9 +531,7 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
         (t) => !(typeof t.buffs.evasive === 'number' && t.buffs.evasive > 0),
       )
       if (!validTargets.length) return
-      setAttackingCard(card)
-      const targets = await selectTargets(validTargets, effect)
-      setAttackingCard(null)
+      const targets = await selectAttackTargets(card, effectIndex, validTargets)
       if (!targets.length) return
       await sendAction({
         type: 'attack',

@@ -91,17 +91,64 @@ interface CrawlV2Game {
 type GameAction =
   | { type: 'select_deck'; cardIds: number[]; actionId: string }
   | { type: 'ready_up'; actionId: string }
-  | { type: 'summon_unit'; cardGameId: string; zoneId: string; cost?: number; atk?: number; def?: number; damage?: string; actionId: string }
+  | {
+      type: 'summon_unit'
+      cardGameId: string
+      zoneId: string
+      cost?: number
+      atk?: number
+      def?: number
+      damage?: string
+      actionId: string
+    }
   | { type: 'set_trap'; cardGameId: string; zoneId: string; cost?: number; trapTriggers?: string[]; actionId: string }
-  | { type: 'set_power'; cardGameId: string; zoneId: string; cost?: number; atk?: number; def?: number; damage?: string; actionId: string }
-  | { type: 'attack'; sourceGameId: string; targetGameId: string; effectIndex?: number; maxUses?: number; actionId: string }
+  | {
+      type: 'set_power'
+      cardGameId: string
+      zoneId: string
+      cost?: number
+      atk?: number
+      def?: number
+      damage?: string
+      actionId: string
+    }
+  | {
+      type: 'attack'
+      sourceGameId: string
+      targetGameId: string
+      effectIndex?: number
+      maxUses?: number
+      actionId: string
+    }
   | { type: 'direct_attack'; sourceGameId: string; effectIndex?: number; maxUses?: number; actionId: string }
-  | { type: 'activate_effect'; cardGameId: string; effectIndex: number; targets?: string[]; effectType: string; effectOptions?: Record<string, unknown>; spentOnUse?: boolean; maxUses?: number; actionId: string }
+  | {
+      type: 'activate_effect'
+      cardGameId: string
+      effectIndex: number
+      targets?: string[]
+      effectType: string
+      effectOptions?: Record<string, unknown>
+      spentOnUse?: boolean
+      maxUses?: number
+      actionId: string
+    }
   | { type: 'sacrifice'; cardGameId: string; cost?: number; actionId: string }
   | { type: 'swap_stance'; cardGameId: string; effectIndex?: number; maxUses?: number; actionId: string }
   | { type: 'end_turn'; actionId: string }
-  | { type: 'update_card_buffs'; updates: { gameId: string; buffs: Record<string, string | number>; debuffs: Record<string, string | number> }[]; actionId: string }
-  | { type: 'react'; reactionId: string; activate: boolean; cardGameId?: string; trapEffectType?: string; targets?: string[]; actionId: string }
+  | {
+      type: 'update_card_buffs'
+      updates: { gameId: string; buffs: Record<string, string | number>; debuffs: Record<string, string | number> }[]
+      actionId: string
+    }
+  | {
+      type: 'react'
+      reactionId: string
+      activate: boolean
+      cardGameId?: string
+      trapEffectType?: string
+      targets?: string[]
+      actionId: string
+    }
 
 // ─── Minimal game logic for server-side validation/resolution ────────────────
 
@@ -147,6 +194,38 @@ const BOARD_LOCATIONS: { id: string; type: string; player: Player | null }[] = [
 
 function getOpponent(player: Player): Player {
   return player === 'player1' ? 'player2' : 'player1'
+}
+
+const ATTACK_TARGET_BEHIND_ZONES: Partial<Record<string, string>> = {
+  unit11: 'unit14',
+  unit12: 'unit15',
+  unit13: 'unit16',
+  unit24: 'unit21',
+  unit25: 'unit22',
+  unit26: 'unit23',
+}
+
+function isBlinded(card: GameCard): boolean {
+  return typeof card.debuffs.blind === 'number' && card.debuffs.blind > 0
+}
+
+function isEvasive(card: GameCard): boolean {
+  return typeof card.buffs.evasive === 'number' && card.buffs.evasive > 0
+}
+
+function getValidAttackTargets(gs: GameState, player: Player): GameCard[] {
+  return gs.cards.filter((card) => {
+    if (card.owner !== getOpponent(player)) return false
+    if (card.location.type !== 'unit') return false
+    if (isEvasive(card)) return false
+
+    const behindZoneId = ATTACK_TARGET_BEHIND_ZONES[card.location.id]
+    return !behindZoneId || !gs.cards.some((candidate) => candidate.location.id === behindZoneId)
+  })
+}
+
+function pickRandomTarget(validTargets: GameCard[]): GameCard {
+  return validTargets[Math.floor(Math.random() * validTargets.length)]
 }
 
 function findCard(gs: GameState, gameId: string): GameCard | undefined {
@@ -222,7 +301,7 @@ function getTypeEffectiveAtk(source: GameCard, target: GameCard): number {
   const srcType = source.damage
   const tgtType = target.damage
   if (srcType && tgtType && TYPE_EFFECTIVENESS[srcType]?.includes(tgtType)) {
-    return Math.floor(atk * 1.5)
+    return Math.floor(atk * 1.25)
   }
   return atk
 }
@@ -318,9 +397,7 @@ function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: 
       const amount = (options?.amount as number) ?? 0
       if (!amount) break
       const dmgTarget = options?.target as string | undefined
-      const player = dmgTarget === 'opponent'
-        ? (card.owner === 'player1' ? 'player2' : 'player1')
-        : card.owner
+      const player = dmgTarget === 'opponent' ? (card.owner === 'player1' ? 'player2' : 'player1') : card.owner
       if (player) applyDamage(gs, player, amount)
       break
     }
@@ -686,20 +763,26 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
         return { success: false, error: 'Player 1 cannot attack on turn 1' }
       }
       const source = findCard(gs, action.sourceGameId)
-      const target = findCard(gs, action.targetGameId)
       if (!source) return { success: false, error: 'Attacker not found' }
-      if (!target) return { success: false, error: 'Target not found' }
       if (source.owner !== playerKey) return { success: false, error: 'Not your card' }
-      if (target.owner === playerKey) return { success: false, error: 'Cannot attack your own card' }
       if (source.location.type !== 'unit') return { success: false, error: 'Attacker not on field' }
-      if (target.location.type !== 'unit') return { success: false, error: 'Target not on field' }
       if (source.defensePosition) return { success: false, error: 'Cannot attack in defense' }
       const atkErr = trackActivation(source, action.effectIndex, action.maxUses)
       if (atkErr) return { success: false, error: atkErr }
 
-      const reaction = checkForAttackReactions(game, action.sourceGameId, action.targetGameId)
+      const validTargets = getValidAttackTargets(gs, playerKey)
+      if (!validTargets.length) return { success: false, error: 'No valid attack targets' }
+
+      const target = isBlinded(source)
+        ? pickRandomTarget(validTargets)
+        : validTargets.find((card) => card.gameId === action.targetGameId)
+
+      if (!target) return { success: false, error: 'Invalid target' }
+      const resolvedAction = { ...action, targetGameId: target.gameId }
+
+      const reaction = checkForAttackReactions(game, action.sourceGameId, target.gameId)
       if (reaction) {
-        reaction.triggerAction = action
+        reaction.triggerAction = resolvedAction
         game.pendingReaction = reaction
         return { success: true }
       }
@@ -839,8 +922,13 @@ const handler = async (event: { body: string; headers: Record<string, string> })
       if (game.processedActions.length > 50) game.processedActions.shift()
 
       if (game.status === 'active') {
-        if (game.gameState.player1HP <= 0) { game.status = 'finished'; game.winner = 'player2' }
-        else if (game.gameState.player2HP <= 0) { game.status = 'finished'; game.winner = 'player1' }
+        if (game.gameState.player1HP <= 0) {
+          game.status = 'finished'
+          game.winner = 'player2'
+        } else if (game.gameState.player2HP <= 0) {
+          game.status = 'finished'
+          game.winner = 'player1'
+        }
       }
 
       game._version = (game._version ?? 0) + 1

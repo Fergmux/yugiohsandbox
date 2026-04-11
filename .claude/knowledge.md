@@ -37,7 +37,7 @@
 - The `gain_ap` effect handler supports a `delay` option (number of owner turns to wait before granting AP). It registers a one-time TURN_START listener that self-cleans.
 
 ## Damage Type Effectiveness
-- `src/composables/crawlv2/DamageTypes.ts` — Type effectiveness map, multiplier (1.5x), and helpers (`getTypeEffectiveAtk`, `isTypeEffective`, `getEffectiveDamageType`).
+- `src/composables/crawlv2/DamageTypes.ts` — Type effectiveness map, multiplier (1.25x), and helpers (`getTypeEffectiveAtk`, `isTypeEffective`, `getEffectiveDamageType`).
 - Types: cosmic, psychic, necrotic, fire, physical, magic. Each card has a `damage` field on the Card type.
 - Effectiveness: cosmic > necrotic/psychic/physical, psychic > necrotic/fire, necrotic > psychic/magic, fire > physical, physical > magic, magic > fire.
 - `resolveCombat` in EffectHandlers uses `getTypeEffectiveAtk` for both attacker and defender ATK calculations.

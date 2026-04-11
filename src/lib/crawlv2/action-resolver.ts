@@ -20,6 +20,42 @@ function getOpponent(player: Player): Player {
   return player === 'player1' ? 'player2' : 'player1'
 }
 
+function isBlinded(card: GameCard): boolean {
+  return typeof card.debuffs.blind === 'number' && card.debuffs.blind > 0
+}
+
+function isEvasive(card: GameCard): boolean {
+  return typeof card.buffs.evasive === 'number' && card.buffs.evasive > 0
+}
+
+function getFallbackAttackTargets(gs: GameState, source: GameCard): GameCard[] {
+  return gs.cards.filter((card) => {
+    if (card.owner !== getOpponent(source.owner!)) return false
+    if (card.location.type !== 'unit') return false
+    if (isEvasive(card)) return false
+
+    const behind = card.location.behind ?? []
+    return !behind.some((id) => gs.cards.some((candidate) => candidate.location.id === id))
+  })
+}
+
+function getValidAttackTargets(gs: GameState, source: GameCard, effectIndex?: number): GameCard[] {
+  const attackEffect =
+    effectIndex !== undefined
+      ? source.effects?.[effectIndex]
+      : source.effects?.find((effect) => effect.trigger === 'manual' && effect.effect === 'damage')
+
+  if (!attackEffect?.targets?.length) {
+    return getFallbackAttackTargets(gs, source)
+  }
+
+  return filterByTargets(attackEffect.targets, source, gs).filter((card) => !isEvasive(card))
+}
+
+function pickRandomTarget(validTargets: GameCard[]): GameCard {
+  return validTargets[Math.floor(Math.random() * validTargets.length)]
+}
+
 function findCard(gs: GameState, gameId: string): GameCard | undefined {
   return gs.cards.find((c) => c.gameId === gameId)
 }
@@ -284,20 +320,26 @@ function resolveAttack(
     return { success: false, error: 'Player 1 cannot attack on turn 1' }
   }
   const source = findCard(gs, action.sourceGameId)
-  const target = findCard(gs, action.targetGameId)
 
   if (!source) return { success: false, error: 'Attacker not found' }
-  if (!target) return { success: false, error: 'Target not found' }
   if (source.owner !== player) return { success: false, error: 'Not your card' }
-  if (target.owner === player) return { success: false, error: 'Cannot attack your own card' }
   if (source.location.type !== 'unit') return { success: false, error: 'Attacker not on field' }
-  if (target.location.type !== 'unit') return { success: false, error: 'Target not on field' }
   if (source.defensePosition) return { success: false, error: 'Cannot attack in defense position' }
+
+  const validTargets = getValidAttackTargets(gs, source, action.effectIndex)
+  if (!validTargets.length) return { success: false, error: 'No valid attack targets' }
+
+  const target = isBlinded(source)
+    ? pickRandomTarget(validTargets)
+    : validTargets.find((card) => card.gameId === action.targetGameId)
+
+  if (!target) return { success: false, error: 'Invalid target' }
+  const resolvedAction = { ...action, targetGameId: target.gameId }
 
   // Check for trap reactions before resolving combat
   const reaction = checkForAttackReactions(game, source, target)
   if (reaction) {
-    reaction.triggerAction = action
+    reaction.triggerAction = resolvedAction
     game.pendingReaction = reaction
     return { success: true, pendingReaction: reaction }
   }
