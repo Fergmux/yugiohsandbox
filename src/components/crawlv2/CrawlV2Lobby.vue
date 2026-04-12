@@ -168,8 +168,8 @@ function subscribe(id: string) {
     if (!data) return
     game.value = data
 
-    // If game just transitioned to active, emit event
-    if (data.status === 'active' && myPlayer.value) {
+    // Enter the board for any in-progress or finished game so the end-state UI can render.
+    if (data.status !== 'lobby' && myPlayer.value) {
       emit('game-started', data, id, myPlayer.value)
     }
   })

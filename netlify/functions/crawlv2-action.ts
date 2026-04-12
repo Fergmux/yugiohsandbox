@@ -26,6 +26,14 @@ interface GameState {
   player2HP: number
   player1AP: number
   player2AP: number
+  pendingTurnEffects?: PendingTurnEffect[]
+}
+
+interface PendingTurnEffect {
+  player: Player
+  effectType: 'gain_ap'
+  amount: number
+  turnsRemaining: number
 }
 
 interface GameCard {
@@ -78,6 +86,12 @@ interface PendingReaction {
   eventTargetGameId?: string
   eligibleCards: string[]
   timeout: number
+}
+
+interface SerializedEffectAction {
+  effectType: string
+  effectOptions?: Record<string, unknown>
+  targets?: string[]
 }
 
 interface CrawlV2Game {
@@ -141,6 +155,8 @@ type GameAction =
       selectCount?: number
       effectType: string
       effectOptions?: Record<string, unknown>
+      thenEffect?: SerializedEffectAction
+      andEffects?: SerializedEffectAction[]
       spentOnUse?: boolean
       maxUses?: number
       actionId: string
@@ -150,7 +166,18 @@ type GameAction =
   | { type: 'end_turn'; actionId: string }
   | {
       type: 'update_card_buffs'
-      updates: { gameId: string; buffs: Record<string, string | number>; debuffs: Record<string, string | number> }[]
+      updates: {
+        gameId: string
+        buffs: Record<string, string | number>
+        debuffs: Record<string, string | number>
+        location?: Location
+        faceUp?: boolean
+        defensePosition?: boolean
+      }[]
+      player1HP?: number
+      player2HP?: number
+      player1AP?: number
+      player2AP?: number
       actionId: string
     }
   | {
@@ -161,8 +188,8 @@ type GameAction =
       trapEffectType?: string
       trapEffectOptions?: Record<string, unknown>
       trapTargets?: string[]
-      trapThenEffect?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }
-      trapAndEffects?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }[]
+      trapThenEffect?: SerializedEffectAction
+      trapAndEffects?: SerializedEffectAction[]
       targets?: string[]
       actionId: string
     }
@@ -258,6 +285,13 @@ function deductAP(gs: GameState, card: GameCard): void {
   else if (card.owner === 'player2') gs.player2AP -= card.cost
 }
 
+function chargeHandActivationAP(gs: GameState, card: GameCard, spentOnUse?: boolean): string | null {
+  if (!spentOnUse || card.location.type !== 'hand' || !card.owner) return null
+  if (getPlayerAP(gs, card.owner) < card.cost) return 'Not enough AP'
+  deductAP(gs, card)
+  return null
+}
+
 function addAP(gs: GameState, card: GameCard, amount = card.cost): void {
   if (card.owner === 'player1') gs.player1AP += amount
   else if (card.owner === 'player2') gs.player2AP += amount
@@ -295,6 +329,16 @@ function getEffectiveAtk(card: GameCard): number {
   return atk
 }
 
+function getEffectiveDamageType(card: GameCard): string | undefined {
+  let damageType = card.damage
+  for (const [key, val] of Object.entries(card.buffs)) {
+    if (normalizeStatusKey(key) === 'damage' && typeof val === 'string') {
+      damageType = val
+    }
+  }
+  return damageType
+}
+
 function getEffectiveDef(card: GameCard): number {
   let def = card.def ?? 0
   for (const [key, val] of Object.entries(card.buffs)) {
@@ -315,12 +359,32 @@ const TYPE_EFFECTIVENESS: Record<string, string[]> = {
 
 function getTypeEffectiveAtk(source: GameCard, target: GameCard): number {
   const atk = getEffectiveAtk(source)
-  const srcType = source.damage
-  const tgtType = target.damage
+  const srcType = getEffectiveDamageType(source)
+  const tgtType = getEffectiveDamageType(target)
   if (srcType && tgtType && TYPE_EFFECTIVENESS[srcType]?.includes(tgtType)) {
     return Math.floor(atk * 1.25)
   }
   return atk
+}
+
+function shouldPreventBattleSpend(card: GameCard, opposingCard: GameCard): boolean {
+  if (typeof card.buffs.eternal === 'number' && card.buffs.eternal > 0) {
+    card.buffs.eternal -= 1
+    if (card.buffs.eternal <= 0) delete card.buffs.eternal
+    return true
+  }
+
+  if (card.id === 14 && getEffectiveAtk(opposingCard) > 15) {
+    return true
+  }
+
+  return false
+}
+
+function spendFromBattle(card: GameCard, opposingCard: GameCard): boolean {
+  if (shouldPreventBattleSpend(card, opposingCard)) return false
+  spendCard(card)
+  return true
 }
 
 function resolveCombat(gs: GameState, source: GameCard, target: GameCard): void {
@@ -335,7 +399,7 @@ function resolveCombat(gs: GameState, source: GameCard, target: GameCard): void 
   if (target.defensePosition) {
     const tgtDef = getEffectiveDef(target)
     if (srcAtk >= tgtDef) {
-      spendCard(target)
+      spendFromBattle(target, source)
       if (source.buffs.piercing && typeof source.buffs.piercing === 'number') {
         const piercing = srcAtk - tgtDef
         if (piercing > 0 && target.owner) applyDamage(gs, target.owner, piercing)
@@ -346,14 +410,14 @@ function resolveCombat(gs: GameState, source: GameCard, target: GameCard): void 
   } else {
     const tgtAtk = getTypeEffectiveAtk(target, source)
     if (srcAtk > tgtAtk) {
-      spendCard(target)
+      spendFromBattle(target, source)
       if (target.owner) applyDamage(gs, target.owner, srcAtk - tgtAtk)
     } else if (tgtAtk > srcAtk) {
-      spendCard(source)
+      spendFromBattle(source, target)
       if (source.owner) applyDamage(gs, source.owner, tgtAtk - srcAtk)
     } else {
-      spendCard(source)
-      spendCard(target)
+      spendFromBattle(source, target)
+      spendFromBattle(target, source)
     }
   }
 }
@@ -375,6 +439,9 @@ function resolveActivatedEffectAction(
   if (!card) return { success: false, error: 'Card not found' }
   if (!action.effectType) return { success: false, error: 'Effect type is required' }
 
+  const chargeError = chargeHandActivationAP(gs, card, action.spentOnUse)
+  if (chargeError) return { success: false, error: chargeError }
+
   const activationCount = card.effectActivations?.[action.effectIndex] ?? 0
   if (action.maxUses !== undefined && activationCount >= action.maxUses) {
     return { success: false, error: 'Effect uses exhausted' }
@@ -389,6 +456,30 @@ function resolveActivatedEffectAction(
     ...(action.effectOptions ? { options: action.effectOptions } : {}),
   } as EffectDef
   applyEffect(gs, card, clientEffect, targets)
+  for (const sibling of action.andEffects ?? []) {
+    const siblingTargets = (sibling.targets ?? []).map((id) => findCard(gs, id)).filter(Boolean) as GameCard[]
+    applyEffect(
+      gs,
+      card,
+      {
+        effect: sibling.effectType,
+        ...(sibling.effectOptions ? { options: sibling.effectOptions } : {}),
+      } as EffectDef,
+      siblingTargets,
+    )
+  }
+  if (action.thenEffect) {
+    const thenTargets = (action.thenEffect.targets ?? []).map((id) => findCard(gs, id)).filter(Boolean) as GameCard[]
+    applyEffect(
+      gs,
+      card,
+      {
+        effect: action.thenEffect.effectType,
+        ...(action.thenEffect.effectOptions ? { options: action.thenEffect.effectOptions } : {}),
+      } as EffectDef,
+      thenTargets,
+    )
+  }
 
   if (action.spentOnUse) spendCard(card)
   return { success: true }
@@ -403,15 +494,17 @@ function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: 
       const buffs = (options?.buffs ?? []) as { key?: string; count?: number }[]
       for (const { key, count } of buffs) {
         if (!key || !count) continue
+        const statusKey = normalizeStatusKey(key)
         for (const target of targets) {
           // Cursed blocks buff application and consumes a stack
-          if (typeof target.debuffs.cursed === 'number' && target.debuffs.cursed > 0) {
-            target.debuffs.cursed -= 1
-            if (target.debuffs.cursed <= 0) delete target.debuffs.cursed
+          if (consumeStatusStack(target.debuffs, 'cursed')) {
             continue
           }
-          const current = (target.buffs[key] as number) || 0
-          target.buffs[key] = current + count
+          const current = (target.buffs[statusKey] as number) || 0
+          target.buffs[statusKey] = current + count
+          if (statusKey === 'cleanse') {
+            target.debuffs = {}
+          }
         }
       }
       break
@@ -420,6 +513,7 @@ function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: 
       const debuffs = (options?.debuffs ?? []) as { key?: string; count?: number }[]
       for (const { key, count } of debuffs) {
         if (!key || !count) continue
+        const statusKey = normalizeStatusKey(key)
         for (const target of targets) {
           // Cleanse blocks debuff application and consumes a stack
           if (typeof target.buffs.cleanse === 'number' && target.buffs.cleanse > 0) {
@@ -427,11 +521,13 @@ function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: 
             if (target.buffs.cleanse <= 0) delete target.buffs.cleanse
             continue
           }
-          const current = (target.debuffs[key] as number) || 0
-          target.debuffs[key] = current + count
-          // Cursed clears all buffs on application
-          if (key === 'cursed') {
+          const current = (target.debuffs[statusKey] as number) || 0
+          target.debuffs[statusKey] = current + count
+          if (statusKey === 'cursed') {
             target.buffs = {}
+            target.debuffs = Object.fromEntries(
+              Object.entries(target.debuffs).filter(([existingKey]) => normalizeStatusKey(existingKey) === 'cursed'),
+            )
           }
         }
       }
@@ -505,8 +601,20 @@ function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: 
     case 'gain_ap': {
       const amount = (options?.amount as number) ?? 0
       if (!amount || !card.owner) break
-      if (card.owner === 'player1') gs.player1AP += amount
-      else gs.player2AP += amount
+      const delay = (options?.delay as number) ?? 0
+      if (delay > 0) {
+        if (!gs.pendingTurnEffects) gs.pendingTurnEffects = []
+        gs.pendingTurnEffects.push({
+          player: card.owner,
+          effectType: 'gain_ap',
+          amount,
+          turnsRemaining: delay,
+        })
+      } else if (card.owner === 'player1') {
+        gs.player1AP += amount
+      } else {
+        gs.player2AP += amount
+      }
       break
     }
     case 'damage_type': {
@@ -519,6 +627,30 @@ function applyEffect(gs: GameState, card: GameCard, effect: EffectDef, targets: 
     // negate handlers are only relevant in event contexts (traps), skip here
     default:
       break
+  }
+}
+
+/**
+ * Process self-targeting triggered effects when a unit is summoned.
+ * This ensures on-summon buffs/debuffs (e.g., Lone Warrior's cursed) are applied
+ * server-side immediately, preventing race conditions with client-side sync.
+ */
+function processSummonEffects(gs: GameState, card: GameCard): void {
+  for (const effect of card.effects ?? []) {
+    if (effect.trigger !== 'unit_summoned') continue
+
+    // Check if triggerConditions include 'itself'
+    const triggerConditions = effect.triggerConditions as { comparitor: string }[][] | undefined
+    const matchesSelf = (triggerConditions ?? []).some((group) => group.some((check) => check.comparitor === 'itself'))
+    if (!matchesSelf) continue
+
+    // Resolve targets — for self-targeting effects, the card targets itself
+    const targetGroups = effect.targets as { comparitor: string }[][] | undefined
+    const targetsSelf = (targetGroups ?? []).some((group) => group.some((check) => check.comparitor === 'itself'))
+
+    if (targetsSelf) {
+      applyEffect(gs, card, effect, [card])
+    }
   }
 }
 
@@ -556,26 +688,119 @@ function drawCardForPlayer(gs: GameState, player: Player): void {
   card.location = { id: handSlot.id, type: 'hand', index: 0, player, name: 'Hand' }
 }
 
+const TURN_START_BUFF_KEYS = new Set(['anger', 'cleanse', 'empower', 'eternal', 'evasive', 'piercing', 'shield'])
+const TURN_END_DEBUFF_KEYS = new Set(['blind', 'burn', 'cursed', 'weak'])
+
+function propOfStatus(key: string): string {
+  return key.split(':').slice(1).join(':') || key
+}
+
+function normalizeStatusKey(key: string): string {
+  const normalized = propOfStatus(key)
+  if (normalized === 'angered') return 'anger'
+  if (normalized === 'damage_type') return 'damage'
+  return normalized
+}
+
+function hasCursedDebuff(record: Record<string, string | number>): boolean {
+  return Object.entries(record).some(
+    ([key, value]) => normalizeStatusKey(key) === 'cursed' && typeof value === 'number' && value > 0,
+  )
+}
+
+function consumeStatusStack(record: Record<string, string | number>, status: string): boolean {
+  for (const [key, value] of Object.entries(record)) {
+    if (normalizeStatusKey(key) !== status) continue
+    if (typeof value !== 'number' || value <= 0) continue
+
+    const nextValue = value - 1
+    if (nextValue > 0) record[key] = nextValue
+    else delete record[key]
+    return true
+  }
+
+  return false
+}
+
+function sanitizeSyncedStatuses(
+  buffs: Record<string, string | number>,
+  debuffs: Record<string, string | number>,
+): { buffs: Record<string, string | number>; debuffs: Record<string, string | number> } {
+  if (!hasCursedDebuff(debuffs)) return { buffs, debuffs }
+  return {
+    buffs: {},
+    debuffs: Object.fromEntries(
+      Object.entries(debuffs).filter(
+        ([key, value]) => normalizeStatusKey(key) === 'cursed' && typeof value === 'number' && value > 0,
+      ),
+    ),
+  }
+}
+
+function decrementTimedStatuses(
+  gs: GameState,
+  player: Player,
+  collection: 'buffs' | 'debuffs',
+  timedKeys: Set<string>,
+): void {
+  for (const card of gs.cards) {
+    if (card.owner !== player) continue
+
+    for (const [key, value] of Object.entries(card[collection])) {
+      if (typeof value !== 'number') continue
+      if (!timedKeys.has(propOfStatus(key))) continue
+
+      const nextValue = value - 1
+      if (nextValue > 0) card[collection][key] = nextValue
+      else delete card[collection][key]
+    }
+  }
+}
+
+function resolvePendingTurnEffects(gs: GameState, player: Player): void {
+  if (!gs.pendingTurnEffects?.length) return
+
+  const remaining: PendingTurnEffect[] = []
+  for (const effect of gs.pendingTurnEffects) {
+    if (effect.player !== player) {
+      remaining.push(effect)
+      continue
+    }
+
+    const turnsRemaining = effect.turnsRemaining - 1
+    if (turnsRemaining > 0) {
+      remaining.push({ ...effect, turnsRemaining })
+      continue
+    }
+
+    if (effect.effectType === 'gain_ap') {
+      if (player === 'player1') gs.player1AP += effect.amount
+      else gs.player2AP += effect.amount
+    }
+  }
+
+  gs.pendingTurnEffects = remaining
+}
+
 function applyEndTurn(gs: GameState): void {
-  const next = getOpponent(gs.currentPlayer)
-  if (gs.currentPlayer === 'player2') gs.turn++
+  const endingPlayer = gs.currentPlayer
+  decrementTimedStatuses(gs, endingPlayer, 'debuffs', TURN_END_DEBUFF_KEYS)
+
+  const next = getOpponent(endingPlayer)
+  if (endingPlayer === 'player2') gs.turn++
   gs.currentPlayer = next
 
   if (next === 'player1') gs.player1AP = 2
   else gs.player2AP = 2
+
+  resolvePendingTurnEffects(gs, next)
 
   // Reset effect activations for all cards (attack 1/turn, stance 1/turn, etc.)
   for (const card of gs.cards) {
     if (card.effectActivations) card.effectActivations = {}
   }
 
-  // Decrement burn on the new player's units
-  for (const card of gs.cards) {
-    if (card.owner !== next) continue
-    if (typeof card.debuffs.burn !== 'number') continue
-    card.debuffs.burn -= 1
-    if (card.debuffs.burn <= 0) delete card.debuffs.burn
-  }
+  decrementTimedStatuses(gs, next, 'buffs', TURN_START_BUFF_KEYS)
 
   // Spend hand cards (except retained)
   const handCards = gs.cards.filter((c) => c.location.type === 'hand' && c.owner === next)
@@ -649,7 +874,7 @@ function initializeGameState(p1Ids: number[], p2Ids: number[]): GameState {
 function createTrapReaction(
   eligible: GameCard[],
   respondingPlayer: Player,
-  triggerAction: Extract<GameAction, { type: 'attack' }>,
+  triggerAction: Extract<GameAction, { type: 'attack' | 'activate_effect' }>,
   triggerEvent: string,
   eventSourceGameId: string,
   eventTargetGameId?: string,
@@ -784,16 +1009,16 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
     if (pending.id !== action.reactionId) return { success: false, error: 'Stale reaction' }
     if (pending.respondingPlayer !== playerKey) return { success: false, error: 'Not your reaction window' }
 
-    if (!action.activate) {
-      game.pendingReaction = null
-      if (pending.triggerEvent === 'attack_declared' && pending.triggerAction.type === 'attack') {
-        const src = findCard(gs, pending.triggerAction.sourceGameId)
-        const tgt = findCard(gs, pending.triggerAction.targetGameId)
-        if (src && tgt) resolveCombat(gs, src, tgt)
-      }
-      if (pending.triggerEvent === 'effect_played' && pending.triggerAction.type === 'activate_effect') {
-        return resolveActivatedEffectAction(gs, pending.triggerAction)
-      }
+      if (!action.activate) {
+        game.pendingReaction = null
+        if (pending.triggerEvent === 'attack_declared' && pending.triggerAction.type === 'attack') {
+          const src = findCard(gs, pending.triggerAction.sourceGameId)
+          const tgt = findCard(gs, pending.triggerAction.targetGameId)
+          if (src && tgt) resolveCombat(gs, src, tgt)
+        }
+        if (pending.triggerEvent === 'effect_played' && pending.triggerAction.type === 'activate_effect') {
+          return resolveActivatedEffectAction(gs, pending.triggerAction)
+        }
       return { success: true }
     }
 
@@ -856,6 +1081,8 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
         if (isNegate) {
           const sourceCard = findCard(gs, pending.triggerAction.cardGameId)
           if (sourceCard && pending.triggerAction.spentOnUse) {
+            const chargeError = chargeHandActivationAP(gs, sourceCard, pending.triggerAction.spentOnUse)
+            if (chargeError) return { success: false, error: chargeError }
             spendCard(sourceCard)
           }
         } else {
@@ -866,6 +1093,24 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
     }
 
     game.pendingReaction = null
+    return { success: true }
+  }
+
+  if (action.type === 'update_card_buffs') {
+    for (const upd of action.updates) {
+      const card = findCard(gs, upd.gameId)
+      if (!card) continue
+      const sanitized = sanitizeSyncedStatuses(upd.buffs, upd.debuffs)
+      card.buffs = sanitized.buffs
+      card.debuffs = sanitized.debuffs
+      if (upd.location) card.location = { ...upd.location }
+      if (upd.faceUp !== undefined) card.faceUp = upd.faceUp
+      if (upd.defensePosition !== undefined) card.defensePosition = upd.defensePosition
+    }
+    if (action.player1HP !== undefined) gs.player1HP = action.player1HP
+    if (action.player2HP !== undefined) gs.player2HP = action.player2HP
+    if (action.player1AP !== undefined) gs.player1AP = action.player1AP
+    if (action.player2AP !== undefined) gs.player2AP = action.player2AP
     return { success: true }
   }
 
@@ -895,6 +1140,7 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       deductAP(gs, card)
       card.location = { id: zone.id, type: zone.type, index: 0, player: zone.player, name: 'Unit' }
       card.faceUp = true
+      processSummonEffects(gs, card)
       return { success: true }
     }
     case 'set_trap': {
@@ -1020,15 +1266,6 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       }
 
       return resolveActivatedEffectAction(gs, action)
-    }
-    case 'update_card_buffs': {
-      for (const upd of action.updates) {
-        const card = findCard(gs, upd.gameId)
-        if (!card) continue
-        card.buffs = upd.buffs
-        card.debuffs = upd.debuffs
-      }
-      return { success: true }
     }
     default:
       return { success: false, error: 'Unknown action type' }

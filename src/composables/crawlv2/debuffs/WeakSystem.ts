@@ -2,8 +2,9 @@ import { Event, EventBus } from '../EventBus'
 import { getGameState } from '../GameState'
 
 export function registerWeakSystem() {
-  EventBus.on(Event.TURN_START, 'weak_system', (_e, _id, data, _ctx) => {
-    const { currentPlayer } = data as { currentPlayer: string }
+  EventBus.on(Event.TURN_END, 'weak_system', (_e, _id, data, _ctx) => {
+    const { currentPlayer, decrementDebuffs = true } = data as { currentPlayer: string; decrementDebuffs?: boolean }
+    if (!decrementDebuffs) return
     const { cards } = getGameState()
     for (const card of cards) {
       if (card.owner !== currentPlayer) continue

@@ -1,4 +1,4 @@
-import type { GameState } from './crawlv2.js'
+import type { GameState, Location } from './crawlv2.js'
 
 export type Player = 'player1' | 'player2'
 
@@ -15,6 +15,12 @@ export interface DeckSelection {
 export interface TrapReactionRule {
   trigger: string
   requiresUndefinedSelectCount?: boolean
+}
+
+export interface SerializedEffectAction {
+  effectType: string
+  effectOptions?: Record<string, unknown>
+  targets?: string[]
 }
 
 export interface PendingReaction {
@@ -74,6 +80,8 @@ export type GameAction =
       selectCount?: number
       effectType?: string
       effectOptions?: Record<string, unknown>
+      thenEffect?: SerializedEffectAction
+      andEffects?: SerializedEffectAction[]
       spentOnUse?: boolean
       maxUses?: number
       actionId: string
@@ -82,6 +90,22 @@ export type GameAction =
   | { type: 'swap_stance'; cardGameId: string; actionId: string }
   | { type: 'end_turn'; actionId: string }
   | {
+      type: 'update_card_buffs'
+      updates: {
+        gameId: string
+        buffs: Record<string, string | number>
+        debuffs: Record<string, string | number>
+        location?: Location
+        faceUp?: boolean
+        defensePosition?: boolean
+      }[]
+      player1HP?: number
+      player2HP?: number
+      player1AP?: number
+      player2AP?: number
+      actionId: string
+    }
+  | {
       type: 'react'
       reactionId: string
       activate: boolean
@@ -89,8 +113,8 @@ export type GameAction =
       trapEffectType?: string
       trapEffectOptions?: Record<string, unknown>
       trapTargets?: string[]
-      trapThenEffect?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }
-      trapAndEffects?: { effectType: string; effectOptions?: Record<string, unknown>; targets?: string[] }[]
+      trapThenEffect?: SerializedEffectAction
+      trapAndEffects?: SerializedEffectAction[]
       targets?: string[]
       actionId: string
     }

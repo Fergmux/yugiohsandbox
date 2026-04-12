@@ -23,7 +23,8 @@ export function registerCleanseSystem() {
   })
 
   EventBus.on(Event.TURN_START, 'cleanse_system', (_e, _id, data, _ctx) => {
-    const { currentPlayer } = data as { currentPlayer: string }
+    const { currentPlayer, decrementBuffs = true } = data as { currentPlayer: string; decrementBuffs?: boolean }
+    if (!decrementBuffs) return
     const { cards } = getGameState()
     for (const card of cards) {
       if (card.owner !== currentPlayer) continue

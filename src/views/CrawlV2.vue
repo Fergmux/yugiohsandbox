@@ -123,7 +123,7 @@ import { registerEffectResolver } from '@/composables/crawlv2/EffectResolver'
 import { registerGameState } from '@/composables/crawlv2/GameState'
 import { cleanupEffects } from '@/composables/crawlv2/EffectHandlers'
 import { authFetch } from '@/lib/authFetch'
-import type { CrawlV2Game, PendingReaction, Player } from '@/types/crawlv2-multiplayer'
+import type { CrawlV2Game, PendingReaction, Player, SerializedEffectAction } from '@/types/crawlv2-multiplayer'
 import { v4 as uuid } from 'uuid'
 
 // ─── Card hydration ─────────────────────────────────────────────────────────
@@ -166,7 +166,13 @@ let unsubscribeGame: Unsubscribe | null = null
 
 const isMyTurn = computed(() => gameState.value.currentPlayer === myPlayer.value)
 const waitingForReaction = computed(() => !!multiplayerGame.value?.pendingReaction)
-const gameOver = computed(() => multiplayerGame.value?.winner ?? null)
+const gameOver = computed<Player | null>(() => {
+  if (multiplayerGame.value?.winner) return multiplayerGame.value.winner
+  if (multiplayerGame.value?.status !== 'finished') return null
+  if (gameState.value.player1HP <= 0) return 'player2'
+  if (gameState.value.player2HP <= 0) return 'player1'
+  return null
+})
 
 const playerNames = computed(() => ({
   player1: multiplayerGame.value?.players.player1?.username ?? 'Player 1',
@@ -239,13 +245,80 @@ function rebuildMultiplayerEffectRegistrations(cards: GameCard[]) {
   }
 }
 
+function syncGameStateFromServer(game: CrawlV2Game) {
+  const serverGs = game.gameState
+  const hydrated = hydrateCards(serverGs.cards as GameCard[])
+
+  for (const card of hydrated) {
+    const serverCard = (serverGs.cards as Record<string, unknown>[]).find(
+      (candidate) => (candidate as unknown as GameCard).gameId === card.gameId,
+    ) as Record<string, unknown> | undefined
+    const activations = serverCard?.effectActivations as Record<number, number> | undefined
+    if (activations && card.effects) {
+      for (const [idx, count] of Object.entries(activations)) {
+        const effect = card.effects[Number(idx)]
+        if (effect) effect.activations = count
+      }
+    }
+  }
+
+  gameState.value.cards = hydrated
+  gameState.value.turn = serverGs.turn
+  gameState.value.currentPlayer = serverGs.currentPlayer
+  gameState.value.player1HP = serverGs.player1HP
+  gameState.value.player2HP = serverGs.player2HP
+  gameState.value.player1AP = serverGs.player1AP
+  gameState.value.player2AP = serverGs.player2AP
+
+  return { serverGs, hydrated }
+}
+
+function isSourceDerivedStatusKey(key: string) {
+  return key.includes(':')
+}
+
+function mergeSourceDerivedState(
+  serverRecord: Record<string, string | number> | undefined,
+  localRecord: Record<string, string | number> | undefined,
+) {
+  return Object.fromEntries([
+    ...Object.entries(serverRecord ?? {}).filter(([key]) => !isSourceDerivedStatusKey(key)),
+    ...Object.entries(localRecord ?? {}).filter(([key]) => isSourceDerivedStatusKey(key)),
+  ])
+}
+
+function shouldMirrorTurnStartEffect(effect: EffectDef) {
+  return effect.trigger === Event.TURN_START && !effect.optional && effect.selectCount === undefined
+}
+
+async function applyMirroredTurnStartEffects(gs: GameState) {
+  if (!myPlayer.value || !effectResolver) return
+
+  const mirroredCards = gs.cards.filter(
+    (card) => fieldZones.includes(card.location.type) && card.owner && card.owner !== myPlayer.value,
+  )
+
+  for (const card of mirroredCards) {
+    for (const effect of card.effects ?? []) {
+      if (!shouldMirrorTurnStartEffect(effect)) continue
+      if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) continue
+      if (effect.triggerConditions?.length && !evaluateChecks(effect.triggerConditions, card, card)) continue
+      if (!evaluateConditions(effect.conditions, card)) continue
+      await effectResolver.activateEffect(card, effect)
+    }
+  }
+}
+
 async function processMultiplayerTurnStart(gs: GameState) {
   if (!myPlayer.value || !effectResolver) return
 
   if (gs.currentPlayer === myPlayer.value) {
     await EventBus.emit(Event.TURN_START, `turn:${getTurnKey(gs)}`, {
       currentPlayer: gs.currentPlayer,
+      decrementBuffs: false,
+      decrementDebuffs: false,
     })
+    await applyMirroredTurnStartEffects(gs)
     syncCardBuffs()
     return
   }
@@ -260,6 +333,7 @@ async function processMultiplayerTurnStart(gs: GameState) {
       await effectResolver.activateEffect(card, effect)
     }
   }
+  await applyMirroredTurnStartEffects(gs)
   syncCardBuffs()
 }
 
@@ -270,23 +344,11 @@ function subscribeToGame(gId: string) {
     if (!data) return
     multiplayerGame.value = data
 
+    if (data.status === 'lobby') return
+
+    const { serverGs, hydrated } = syncGameStateFromServer(data)
+
     if (data.status === 'active') {
-      // Update local game state from server snapshot, hydrating cards
-      const serverGs = data.gameState
-      const hydrated = hydrateCards(serverGs.cards as GameCard[])
-      // Sync server-tracked activation counts back to client-side effects
-      for (const card of hydrated) {
-        const serverCard = (serverGs.cards as Record<string, unknown>[]).find(
-          (sc) => (sc as unknown as GameCard).gameId === card.gameId,
-        ) as Record<string, unknown> | undefined
-        const activations = serverCard?.effectActivations as Record<number, number> | undefined
-        if (activations && card.effects) {
-          for (const [idx, count] of Object.entries(activations)) {
-            const effect = card.effects[Number(idx)]
-            if (effect) effect.activations = count
-          }
-        }
-      }
 
       // Detect newly field-placed cards before updating state
       const fieldTypes = new Set(['unit', 'power', 'trap'])
@@ -302,17 +364,10 @@ function subscribeToGame(gId: string) {
       for (const card of hydrated) {
         if (fieldTypes.has(card.location.type)) fieldCardIds.add(card.gameId)
       }
-
-      gameState.value.cards = hydrated
-      gameState.value.turn = serverGs.turn
-      gameState.value.currentPlayer = serverGs.currentPlayer
-      gameState.value.player1HP = serverGs.player1HP
-      gameState.value.player2HP = serverGs.player2HP
-      gameState.value.player1AP = serverGs.player1AP
-      gameState.value.player2AP = serverGs.player2AP
       const turnChanged = getTurnKey(serverGs) !== lastTurnKey
 
       rebuildMultiplayerEffectRegistrations(hydrated)
+      syncCardBuffs(true, { sourceDerivedOnly: true })
 
       // Register effects and fire events for newly placed cards.
       // Only process triggered effects for our own cards — the owner's client
@@ -404,20 +459,98 @@ function subscribeToGame(gId: string) {
   })
 }
 
-function syncCardBuffs() {
-  const updates: { gameId: string; buffs: Record<string, string | number>; debuffs: Record<string, string | number> }[] = []
-  for (const card of gameState.value.cards) {
-    if (Object.keys(card.buffs).length > 0 || Object.keys(card.debuffs).length > 0) {
-      updates.push({ gameId: card.gameId, buffs: { ...card.buffs }, debuffs: { ...card.debuffs } })
-    }
-  }
-  if (updates.length) {
-    sendAction({ type: 'update_card_buffs', updates })
+function normalizeSyncLocation(location: Location | undefined) {
+  if (!location) return undefined
+  return {
+    id: location.id,
+    type: location.type,
+    player: location.player,
   }
 }
 
-async function sendAction(action: Record<string, unknown>) {
-  actionLoading.value = true
+function serializeLocationForSync(location: Location | undefined) {
+  if (!location) return undefined
+  return {
+    id: location.id,
+    type: location.type,
+    index: location.index,
+    player: location.player,
+    name: location.name,
+  }
+}
+
+function normalizeStateRecord(record: Record<string, string | number> | undefined) {
+  return Object.fromEntries(Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+}
+
+function syncCardBuffs(silent = true, options?: { sourceDerivedOnly?: boolean }) {
+  const serverGs = multiplayerGame.value?.gameState
+  if (!serverGs) return
+
+  const updates: {
+    gameId: string
+    buffs: Record<string, string | number>
+    debuffs: Record<string, string | number>
+    location?: Location
+    faceUp?: boolean
+    defensePosition?: boolean
+  }[] = []
+
+  for (const card of gameState.value.cards) {
+    const serverCard = (serverGs.cards as GameCard[]).find((candidate) => candidate.gameId === card.gameId)
+    if (!serverCard) continue
+
+    const nextBuffs = options?.sourceDerivedOnly
+      ? mergeSourceDerivedState(serverCard.buffs, card.buffs)
+      : { ...card.buffs }
+    const nextDebuffs = options?.sourceDerivedOnly
+      ? mergeSourceDerivedState(serverCard.debuffs, card.debuffs)
+      : { ...card.debuffs }
+
+    const buffsChanged =
+      JSON.stringify(normalizeStateRecord(nextBuffs)) !== JSON.stringify(normalizeStateRecord(serverCard.buffs))
+    const debuffsChanged =
+      JSON.stringify(normalizeStateRecord(nextDebuffs)) !== JSON.stringify(normalizeStateRecord(serverCard.debuffs))
+    const locationChanged = options?.sourceDerivedOnly
+      ? false
+      : JSON.stringify(normalizeSyncLocation(card.location)) !== JSON.stringify(normalizeSyncLocation(serverCard.location))
+    const faceUpChanged = options?.sourceDerivedOnly ? false : card.faceUp !== serverCard.faceUp
+    const defenseChanged = options?.sourceDerivedOnly ? false : !!card.defensePosition !== !!serverCard.defensePosition
+
+    if (!buffsChanged && !debuffsChanged && !locationChanged && !faceUpChanged && !defenseChanged) continue
+
+    updates.push({
+      gameId: card.gameId,
+      buffs: nextBuffs,
+      debuffs: nextDebuffs,
+      ...(locationChanged ? { location: serializeLocationForSync(card.location) as Location } : {}),
+      ...(faceUpChanged ? { faceUp: card.faceUp } : {}),
+      ...(defenseChanged ? { defensePosition: !!card.defensePosition } : {}),
+    })
+  }
+
+  const player1HPChanged = !options?.sourceDerivedOnly && gameState.value.player1HP !== serverGs.player1HP
+  const player2HPChanged = !options?.sourceDerivedOnly && gameState.value.player2HP !== serverGs.player2HP
+  const player1APChanged = !options?.sourceDerivedOnly && gameState.value.player1AP !== serverGs.player1AP
+  const player2APChanged = !options?.sourceDerivedOnly && gameState.value.player2AP !== serverGs.player2AP
+
+  if (!updates.length && !player1HPChanged && !player2HPChanged && !player1APChanged && !player2APChanged) return
+
+  sendAction(
+    {
+      type: 'update_card_buffs',
+      updates,
+      ...(player1HPChanged ? { player1HP: gameState.value.player1HP } : {}),
+      ...(player2HPChanged ? { player2HP: gameState.value.player2HP } : {}),
+      ...(player1APChanged ? { player1AP: gameState.value.player1AP } : {}),
+      ...(player2APChanged ? { player2AP: gameState.value.player2AP } : {}),
+    },
+    { silent },
+  )
+}
+
+async function sendAction(action: Record<string, unknown>, options?: { silent?: boolean }) {
+  if (!options?.silent) actionLoading.value = true
   try {
     const res = await authFetch('/.netlify/functions/crawlv2-action', {
       method: 'POST',
@@ -433,7 +566,7 @@ async function sendAction(action: Record<string, unknown>) {
   } catch (err) {
     console.error('Action error:', err)
   } finally {
-    actionLoading.value = false
+    if (!options?.silent) actionLoading.value = false
   }
 }
 
@@ -539,6 +672,19 @@ function resolveReactionTargets(effect: EffectDef, card: GameCard, reaction: Pen
     return filterByTargets(effect.targets, card).map((target) => target.gameId)
   }
   return undefined
+}
+
+function serializeFollowUpEffect(
+  effect: EffectDef | undefined,
+  card: GameCard,
+  targets?: string[],
+): SerializedEffectAction | undefined {
+  if (!effect) return undefined
+  return {
+    effectType: effect.effect,
+    effectOptions: effect.options ? resolveEffectOptions(effect.options as Record<string, unknown>, card) : undefined,
+    targets,
+  }
 }
 
 function serializeReactionEffect(effect: EffectDef, card: GameCard, reaction: PendingReaction) {
@@ -722,6 +868,8 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
         selectCount: effect.selectCount,
         effectType: effect.effect,
         effectOptions: resolvedOptions,
+        thenEffect: serializeFollowUpEffect(effect.then, card),
+        andEffects: effect.and?.map((sibling) => serializeFollowUpEffect(sibling, card)!),
         spentOnUse: !!effect.spentOnUse,
         maxUses: effect.uses,
       })

@@ -14,7 +14,7 @@ import { registerAngerSystem } from './buffs/AngerSystem'
 import { registerWeakSystem } from './debuffs/WeakSystem'
 
 // Re-export pure functions from shared lib
-export { getEffective, BUFF_STAT_MAP, propOf } from '@/lib/crawlv2/buff-system'
+export { getEffective, BUFF_STAT_MAP, normalizeStatusKey, propOf } from '@/lib/crawlv2/buff-system'
 
 // Add events here as new mechanics require buff re-evaluation.
 export const BUFF_REEVALUATE_EVENTS = [
@@ -43,6 +43,8 @@ export function registerBuffReevaluation(sourceCard: GameCard, reapply: () => vo
       EventBus.off(event, listenerKey)
     }
   }
+
+  unregister()
 
   for (const event of BUFF_REEVALUATE_EVENTS) {
     EventBus.on(event, listenerKey, (_e, targetId, _data, _ctx) => {

@@ -1,7 +1,7 @@
 import type { Check, EffectDef, GameCard } from '@/types/cards'
 import { fieldZones, type Location, locations, type ZoneType } from '@/types/crawlv2'
 
-import { getEffective } from './BuffSystem'
+import { getEffective, normalizeStatusKey } from './BuffSystem'
 import { getTypeEffectiveAtk } from './DamageTypes'
 import { moveToDead, moveToDeck, relocateCard, returnToHand, spendCard } from './CardMovement'
 import { getGameState } from './GameState'
@@ -171,13 +171,14 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       }[]) {
         const value = countChecks ? filterByChecks(countChecks, card).length : count
         if (!key || !value) continue
+        const statusKey = normalizeStatusKey(key)
         for (const target of selected) {
           const { cancelled } = await EventBus.emit(Event.DEBUFF_ATTEMPTED, target.gameId, { card, target })
           if (cancelled) continue
-          const current = target.debuffs[key] || 0
+          const current = target.debuffs[statusKey] || 0
           if (typeof current !== 'number' || typeof value !== 'number') continue
-          target.debuffs[key] = current + value
-          const appliedEvent = buffEventMap[key]
+          target.debuffs[statusKey] = current + value
+          const appliedEvent = buffEventMap[statusKey]
           if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
         }
       }
@@ -210,16 +211,17 @@ export const effectHandlers: Record<string, TriggerHandler> = {
       }[]) {
         const value = countChecks ? filterByChecks(countChecks, card).length : count
         if (!key || !value) continue
+        const statusKey = normalizeStatusKey(key)
 
         for (const target of targets) {
           const { cancelled } = await EventBus.emit(Event.BUFF_ATTEMPTED, target.gameId, { card, target })
           if (cancelled) continue
-          const current = target.buffs[key] || 0
+          const current = target.buffs[statusKey] || 0
           if (typeof current !== 'number' || typeof value !== 'number') continue
 
-          target.buffs[key] = current + value
+          target.buffs[statusKey] = current + value
 
-          const appliedEvent = buffEventMap[key]
+          const appliedEvent = buffEventMap[statusKey]
           if (appliedEvent) await EventBus.emit(appliedEvent, target.gameId, { card: target, source: card })
         }
       }
@@ -317,8 +319,10 @@ export const effectHandlers: Record<string, TriggerHandler> = {
   damage_type: (_ctx, card, effect) => {
     if (!effect.targets?.length) return
     const targets = filterByTargets(effect.targets, card)
+    const statusKey = effect.ongoing ? `${card.gameId}:damage` : 'damage'
     for (const t of targets) {
-      t.buffs['damage'] = (effect.options?.damageType as string) ?? ''
+      t.buffs[statusKey] = (effect.options?.damageType as string) ?? ''
+      void EventBus.emit(Event.DAMAGE_TYPE_APPLIED, t.gameId, { card: t, source: card })
     }
   },
 

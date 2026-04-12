@@ -1,4 +1,4 @@
-import type { GameCard } from './cards'
+import type { GameCard } from './cards.js'
 
 export interface Card {
   name: string
@@ -20,6 +20,13 @@ export type Location = {
   inFront?: string[]
 }
 
+export interface PendingTurnEffect {
+  player: 'player1' | 'player2'
+  effectType: 'gain_ap'
+  amount: number
+  turnsRemaining: number
+}
+
 export interface GameState {
   cards: GameCard[]
   turn: number
@@ -28,6 +35,7 @@ export interface GameState {
   player2HP: number
   player1AP: number
   player2AP: number
+  pendingTurnEffects?: PendingTurnEffect[]
 }
 
 export const indexableZones = ['hand', 'power', 'unit', 'trap']

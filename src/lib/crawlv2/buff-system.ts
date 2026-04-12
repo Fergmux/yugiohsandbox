@@ -14,6 +14,13 @@ export const BUFF_STAT_MAP: Partial<Record<string, keyof GameCard>> = {
 /** Strip source-card prefix from buff/debuff keys (e.g. "4:damage" -> "damage") */
 export const propOf = (key: string) => key.split(':').slice(1).join(':') || key
 
+const STATUS_KEY_ALIASES: Record<string, string> = {
+  angered: 'anger',
+  damage_type: 'damage',
+}
+
+export const normalizeStatusKey = (key: string) => STATUS_KEY_ALIASES[propOf(key)] ?? propOf(key)
+
 export function getEffective(card: GameCard): GameCard {
   if (!Object.keys(card.buffs).length && !Object.keys(card.debuffs).length) return card
 
@@ -21,7 +28,7 @@ export function getEffective(card: GameCard): GameCard {
 
   const apply = (mods: GameCard['buffs'], sign: 1 | -1) => {
     for (const [key, value] of Object.entries(mods)) {
-      const stripped = propOf(key)
+      const stripped = normalizeStatusKey(key)
 
       const mappedStat = BUFF_STAT_MAP[stripped] as string | undefined
       if (mappedStat && typeof value === 'number') {

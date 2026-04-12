@@ -551,8 +551,8 @@ export const cards: Card[] = [
     id: 9,
     name: 'Blue Crystal Dragon',
     image: cardImg,
-    atk: 19,
-    def: 15,
+    atk: 12,
+    def: 12,
     cost: 2,
     type: 'unit',
     race: 'dragon',
@@ -822,7 +822,6 @@ export const cards: Card[] = [
           [
             { comparitor: 'equals', key: 'type', value: 'trap' },
             { comparitor: 'equals', key: 'location.type', value: 'trap' },
-            { comparitor: 'owner', value: 'opponent' },
             { comparitor: 'equals', key: 'faceUp', value: false },
           ],
         ],
@@ -964,7 +963,7 @@ export const cards: Card[] = [
     id: 19,
     name: 'Swoop from above',
     image: effectImg,
-    cost: 0,
+    cost: 1,
     type: 'effect',
     description: 'If you control a Dragon unit, destroy a traps and if you do inflict 2HP damage.',
     effects: [
@@ -1017,7 +1016,7 @@ export const cards: Card[] = [
     id: 20,
     name: 'Huddle Up',
     image: effectImg,
-    cost: 0,
+    cost: 1,
     type: 'effect',
     description: 'Apply 1x Shield to your Warrior units for each Warrior unit on your field.',
     effects: [
@@ -1046,6 +1045,10 @@ export const cards: Card[] = [
             test: 'has_property',
             checks: [[{ comparitor: 'equals', key: 'location.type', value: 'hand' }]],
           },
+          {
+            test: 'has_energy',
+            checks: [[{ comparitor: 'more_than', key: 'cost' }], [{ comparitor: 'equals', key: 'cost' }]],
+          },
         ],
         triggerConditions: [[{ comparitor: 'current_player', value: 'player' }]],
         targets: [
@@ -1064,7 +1067,7 @@ export const cards: Card[] = [
     id: 21,
     name: 'Book of Arcane',
     image: effectImg,
-    cost: 0,
+    cost: 1,
     type: 'effect',
     description: 'If you control a Mage unit, you can add one spent unit to your hand.',
     effects: [
@@ -1116,7 +1119,7 @@ export const cards: Card[] = [
     image: powerImg,
     cost: 1,
     type: 'power',
-    description: 'Apply 8x Empower / 1x Angered to one Warrior unit on your field.',
+    description: 'Apply 8x Empower / 1x Anger to one Warrior unit on your field.',
     effects: [
       setPower,
       {
@@ -1129,7 +1132,7 @@ export const cards: Card[] = [
         options: {
           buffs: [
             { key: 'empower', count: 8 },
-            { key: 'angered', count: 1 },
+            { key: 'anger', count: 1 },
           ],
         },
         targets: [
@@ -1162,7 +1165,13 @@ export const cards: Card[] = [
         conditions: [
           {
             test: 'has_card',
-            checks: [[{ comparitor: 'equals', key: 'race', value: 'dragon' }]],
+            checks: [
+              [
+                { comparitor: 'equals', key: 'race', value: 'dragon' },
+                { comparitor: 'equals', key: 'location.type', value: 'unit' },
+                { comparitor: 'owner', value: 'player' },
+              ],
+            ],
           },
         ],
         options: {
@@ -1210,7 +1219,7 @@ export const cards: Card[] = [
     id: 25,
     name: 'Spell Breaker - Unit',
     image: trapImg,
-    cost: 0,
+    cost: 1,
     type: 'trap',
     description: "When an opponent plays an Effect that doesn't select a unit, negate the acitviation",
     effects: [
@@ -1240,7 +1249,7 @@ export const cards: Card[] = [
     id: 26,
     name: 'Spell Breaker',
     image: trapImg,
-    cost: 0,
+    cost: 1,
     type: 'trap',
     description:
       'When an opponent plays an Effect negate the acitviation and if you do, apply 2x Cursed to All units in this column.',

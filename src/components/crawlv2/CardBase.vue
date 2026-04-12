@@ -211,11 +211,15 @@ const isDebuffed = (key: keyof GameCard) => {
 }
 
 const BUFF_LABELS: Record<string, string> = {
+  damage: 'TYPE',
+  piercing: 'PIERCE',
   shield: 'SHIELD',
   cleanse: 'CLEANSE',
   empower: 'EMPOWER',
   evasive: 'EVASIVE',
   eternal: 'ETERNAL',
+  anger: 'ANGER',
+  retain: 'RETAIN',
 }
 const DEBUFF_LABELS: Record<string, string> = {
   burn: 'BURN',
@@ -226,12 +230,16 @@ const DEBUFF_LABELS: Record<string, string> = {
 
 const BUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   damage: (v) => `Damage type changed to ${v}`,
+  shield: (v) => `Shield x${v}: +${v} DEF`,
   cleanse: (v) => `Cleanse ×${v}: prevents debuffs`,
   atk: (v) => `+${v} ATK`,
   def: (v) => `+${v} DEF`,
   empower: (v) => `Empower ×${v}: +${v} ATK`,
   evasive: (v) => `Evasive ×${v}: untargetable by attacks`,
   eternal: (v) => `Eternal ×${v}: cannot be destroyed by battle`,
+  piercing: (v) => `Piercing x${v}: excess damage hits life points through defense`,
+  anger: (v) => `Anger x${v}: +${v} extra attack use this turn`,
+  retain: (v) => `Retain x${v}: stays in hand through the next draw step`,
 }
 
 const DEBUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
@@ -241,13 +249,13 @@ const DEBUFF_DESCRIPTIONS: Record<string, (v: string | number) => string> = {
   blind: (v) => `Blind ×${v}: Cannot pick targets for attacks`,
 }
 
-const buffBadgeLabel = (key: string) => BUFF_LABELS[propOf(key)]
-const debuffBadgeLabel = (key: string) => DEBUFF_LABELS[key]
+const buffBadgeLabel = (key: string) => BUFF_LABELS[propOf(key)] ?? propOf(key).toUpperCase()
+const debuffBadgeLabel = (key: string) => DEBUFF_LABELS[propOf(key)] ?? propOf(key).toUpperCase()
 
 const buffDescription = (key: string, value: string | number) =>
   BUFF_DESCRIPTIONS[propOf(key)]?.(value) ?? `${propOf(key)}: ${value}`
 const debuffDescription = (key: string, value: string | number) =>
-  DEBUFF_DESCRIPTIONS[key]?.(value) ?? `${key}: ${value}`
+  DEBUFF_DESCRIPTIONS[propOf(key)]?.(value) ?? `${propOf(key)}: ${value}`
 </script>
 
 <style scoped>

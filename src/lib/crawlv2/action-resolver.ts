@@ -4,7 +4,7 @@ import { locations } from '../../types/crawlv2.js'
 import { convertToGameCard } from '../../types/defaultGameState.js'
 import type { CrawlV2Game, GameAction, PendingReaction, Player } from '../../types/crawlv2-multiplayer.js'
 import { evaluateConditions, filterByTargets } from './check-system.js'
-import { getEffective } from './buff-system.js'
+import { getEffective, normalizeStatusKey } from './buff-system.js'
 import { getTypeEffectiveAtk } from './damage-types.js'
 import { drawCardForPlayerPure, shuffleDeckPure, spendCardPure } from './card-movement.js'
 import { v4 as uuid } from 'uuid'
@@ -65,6 +65,13 @@ function deductAP(gs: GameState, card: GameCard): void {
   else if (card.owner === 'player2') gs.player2AP -= card.cost
 }
 
+function chargeHandActivationAP(gs: GameState, card: GameCard, spentOnUse?: boolean): string | null {
+  if (!spentOnUse || card.location.type !== 'hand' || !card.owner) return null
+  if (getPlayerAP(gs, card.owner) < card.cost) return 'Not enough AP'
+  deductAP(gs, card)
+  return null
+}
+
 function addAP(gs: GameState, card: GameCard, amount = card.cost): void {
   if (card.owner === 'player1') gs.player1AP += amount
   else if (card.owner === 'player2') gs.player2AP += amount
@@ -77,6 +84,27 @@ function getPlayerAP(gs: GameState, player: Player): number {
 function applyDamageToPlayer(gs: GameState, player: Player, amount: number): void {
   if (player === 'player1') gs.player1HP -= amount
   else gs.player2HP -= amount
+}
+
+function hasCursedDebuff(record: Record<string, string | number>): boolean {
+  return Object.entries(record).some(
+    ([key, value]) => normalizeStatusKey(key) === 'cursed' && typeof value === 'number' && value > 0,
+  )
+}
+
+function sanitizeSyncedStatuses(
+  buffs: Record<string, string | number>,
+  debuffs: Record<string, string | number>,
+): { buffs: Record<string, string | number>; debuffs: Record<string, string | number> } {
+  if (!hasCursedDebuff(debuffs)) return { buffs, debuffs }
+  return {
+    buffs: {},
+    debuffs: Object.fromEntries(
+      Object.entries(debuffs).filter(
+        ([key, value]) => normalizeStatusKey(key) === 'cursed' && typeof value === 'number' && value > 0,
+      ),
+    ),
+  }
 }
 
 /**
@@ -129,7 +157,7 @@ function resolveCombat(gs: GameState, source: GameCard, target: GameCard): void 
     const tgtDef = getEffective(target).def ?? 0
     if (srcAtk >= tgtDef) {
       // Destroy defender
-      spendCardPure(target)
+      spendFromBattle(target, source)
       if (source.buffs.piercing && typeof source.buffs.piercing === 'number') {
         const piercing = srcAtk - tgtDef
         if (piercing > 0 && target.owner) {
@@ -146,21 +174,41 @@ function resolveCombat(gs: GameState, source: GameCard, target: GameCard): void 
   } else {
     const tgtAtk = getTypeEffectiveAtk(target, source)
     if (srcAtk > tgtAtk) {
-      spendCardPure(target)
+      spendFromBattle(target, source)
       if (target.owner) {
         applyDamageToPlayer(gs, target.owner, srcAtk - tgtAtk)
       }
     } else if (tgtAtk > srcAtk) {
-      spendCardPure(source)
+      spendFromBattle(source, target)
       if (source.owner) {
         applyDamageToPlayer(gs, source.owner, tgtAtk - srcAtk)
       }
     } else {
       // Both destroyed on tie
-      spendCardPure(source)
-      spendCardPure(target)
+      spendFromBattle(source, target)
+      spendFromBattle(target, source)
     }
   }
+}
+
+function shouldPreventBattleSpend(card: GameCard, opposingCard: GameCard): boolean {
+  if (typeof card.buffs.eternal === 'number' && card.buffs.eternal > 0) {
+    card.buffs.eternal -= 1
+    if (card.buffs.eternal <= 0) delete card.buffs.eternal
+    return true
+  }
+
+  if (card.id === 14 && (getEffective(opposingCard).atk ?? 0) > 15) {
+    return true
+  }
+
+  return false
+}
+
+function spendFromBattle(card: GameCard, opposingCard: GameCard): boolean {
+  if (shouldPreventBattleSpend(card, opposingCard)) return false
+  spendCardPure(card)
+  return true
 }
 
 /**
@@ -176,6 +224,22 @@ function applyEndTurn(gs: GameState): void {
   // Grant AP
   if (next === 'player1') gs.player1AP = 2
   else gs.player2AP = 2
+
+  if (gs.pendingTurnEffects?.length) {
+    gs.pendingTurnEffects = gs.pendingTurnEffects.flatMap((effect) => {
+      if (effect.player !== next) return [effect]
+
+      const turnsRemaining = effect.turnsRemaining - 1
+      if (turnsRemaining > 0) return [{ ...effect, turnsRemaining }]
+
+      if (effect.effectType === 'gain_ap') {
+        if (next === 'player1') gs.player1AP += effect.amount
+        else gs.player2AP += effect.amount
+      }
+
+      return []
+    })
+  }
 
   // Spend hand cards (except retained)
   const handCards = gs.cards.filter((c) => c.location.type === 'hand' && c.owner === next)
@@ -204,6 +268,24 @@ export function resolveAction(game: CrawlV2Game, action: GameAction, callerPlaye
   // Handle react action separately (can come from non-active player)
   if (action.type === 'react') {
     return resolveReaction(game, action)
+  }
+
+  if (action.type === 'update_card_buffs') {
+    for (const upd of action.updates) {
+      const card = findCard(gs, upd.gameId)
+      if (!card) continue
+      const sanitized = sanitizeSyncedStatuses(upd.buffs, upd.debuffs)
+      card.buffs = sanitized.buffs
+      card.debuffs = sanitized.debuffs
+      if (upd.location) card.location = { ...upd.location }
+      if (upd.faceUp !== undefined) card.faceUp = upd.faceUp
+      if (upd.defensePosition !== undefined) card.defensePosition = upd.defensePosition
+    }
+    if (action.player1HP !== undefined) gs.player1HP = action.player1HP
+    if (action.player2HP !== undefined) gs.player2HP = action.player2HP
+    if (action.player1AP !== undefined) gs.player1AP = action.player1AP
+    if (action.player2AP !== undefined) gs.player2AP = action.player2AP
+    return { success: true }
   }
 
   // All other actions require being the active player
@@ -413,6 +495,9 @@ function resolveActivateEffect(
       }
     }
   }
+
+  const chargeError = chargeHandActivationAP(gs, card, effect.spentOnUse)
+  if (chargeError) return { success: false, error: chargeError }
 
   // Track activation
   if (effect.activations === undefined) effect.activations = 0

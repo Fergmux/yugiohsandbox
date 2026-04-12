@@ -115,6 +115,15 @@ export class EffectResolver {
     else if (card.owner === 'player2') gs.player2AP -= card.cost
   }
 
+  private chargeHandActivationAP(card: GameCard, effect: EffectDef): boolean {
+    if (!effect.spentOnUse || card.location.type !== 'hand' || !card.owner) return true
+    const gs = getGameState()
+    const currentAP = card.owner === 'player1' ? gs.player1AP : gs.player2AP
+    if (currentAP < card.cost) return false
+    this.deductAP(card)
+    return true
+  }
+
   private async effectEnded(card: GameCard, effect: EffectDef, resolved = true) {
     if (effect.spentOnUse) {
       await spendCard(card)
@@ -210,6 +219,10 @@ export class EffectResolver {
       })
     }
 
+    if (card.location.type === 'unit') {
+      this.registerOngoingEffects(card)
+    }
+
     // Register reset listeners for effects with uses
     for (const effect of card.effects ?? []) {
       if (effect.resetOnEvent) {
@@ -242,6 +255,7 @@ export class EffectResolver {
 
     const handler = effectHandlers[effect.effect]
     if (!handler) return
+    if (!this.chargeHandActivationAP(card, effect)) return
 
     if (effect.eventName) {
       const { cancelled } = await EventBus.emit(effect.eventName, card.gameId, { card, effect })
@@ -301,14 +315,18 @@ export class EffectResolver {
   private registerOngoingEffects(card: GameCard) {
     if (!(card.effects ?? []).some((e) => e.ongoing)) return
 
+    const reapply = () => {
+      clearBuffsFromSource(card.gameId)
+      if (card.location.type === 'unit') this.reapplyOngoingEffects(card)
+    }
+
     registerBuffReevaluation(
       card,
-      () => {
-        clearBuffsFromSource(card.gameId)
-        if (card.location.type === 'unit') this.reapplyOngoingEffects(card)
-      },
+      reapply,
       () => clearBuffsFromSource(card.gameId),
     )
+
+    reapply()
   }
 }
 
