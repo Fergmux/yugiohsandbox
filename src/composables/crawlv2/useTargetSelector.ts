@@ -55,7 +55,7 @@ export function useTargetSelector() {
     if (pending.value && selectedTargets.value.length >= pending.value.maxTargets) return
     selectedTargets.value.push(card)
     // Auto-confirm when max targets reached
-    if (pending.value && !pending.value.optional && selectedTargets.value.length >= pending.value.maxTargets) {
+    if (pending.value && selectedTargets.value.length >= pending.value.maxTargets) {
       confirmSelection()
     }
   }
