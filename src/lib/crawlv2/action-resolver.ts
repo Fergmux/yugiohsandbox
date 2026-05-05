@@ -7,6 +7,7 @@ import { evaluateConditions, filterByTargets } from './check-system.js'
 import { getEffective, normalizeStatusKey } from './buff-system.js'
 import { getTypeEffectiveAtk } from './damage-types.js'
 import { drawCardForPlayerPure, shuffleDeckPure, spendCardPure } from './card-movement.js'
+import { getEffectiveUses } from './effect-uses.js'
 import { v4 as uuid } from 'uuid'
 import { Event } from '../../types/events.js'
 
@@ -475,7 +476,7 @@ function resolveActivateEffect(
   if (!effect) return { success: false, error: 'Effect not found' }
   if (effect.trigger !== 'manual') return { success: false, error: 'Effect is not manually activated' }
 
-  const maxUses = effect.uses
+  const maxUses = getEffectiveUses(card, effect)
   if (maxUses !== undefined && (effect.activations ?? 0) >= maxUses) {
     return { success: false, error: 'Effect uses exhausted' }
   }

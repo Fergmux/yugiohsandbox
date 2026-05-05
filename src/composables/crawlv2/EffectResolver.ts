@@ -136,7 +136,7 @@ export class EffectResolver {
   // ─── Effect Registration ─────────────────────────────────────────────────────
 
   registerEffects(card: GameCard) {
-    for (const effect of card.effects ?? []) {
+    for (const [effectIndex, effect] of (card.effects ?? []).entries()) {
       if (effect.trigger === 'manual') continue
 
       const handler = effectHandlers[effect.effect]
@@ -146,6 +146,15 @@ export class EffectResolver {
         `[registerEffects] registering ${effect.effect} on ${effect.trigger} for ${card.name} (${card.gameId})`,
       )
       EventBus.on(effect.trigger as Event, card.gameId, async (_e, _sourceId, data, ctx) => {
+        const { skipEffectIndexes } = data as { skipEffectIndexes?: number[] }
+        if (
+          this.config.multiplayer &&
+          effect.trigger === Event.UNIT_SUMMONED &&
+          skipEffectIndexes?.includes(effectIndex)
+        ) {
+          return
+        }
+
         if (effect.uses !== undefined && (effect.activations ?? 0) >= effect.uses) return
 
         // Evaluate trigger card conditions against the card that caused the event.

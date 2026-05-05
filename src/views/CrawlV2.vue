@@ -18,7 +18,7 @@
           <span class="font-bold">{{ gameState.currentPlayer === 'player1' ? playerNames.player1 : playerNames.player2 }}'s turn</span>
         </div>
         <button
-          v-if="isMyTurn && !waitingForReaction && !activationPending"
+          v-if="isMyTurn && !waitingForReaction && !activationPending && !syncingLocalState"
           @click="endTurn"
           :disabled="actionLoading"
           class="rounded bg-emerald-700 px-3 py-1 text-sm font-bold text-white hover:bg-emerald-600 active:bg-emerald-800 disabled:opacity-50"
@@ -49,6 +49,14 @@
       class="absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded bg-amber-400 px-4 py-1.5 text-sm font-bold text-black shadow-lg"
     >
       Select a target ({{ selectedTargets.length }}/{{ targetPending.maxTargets }})
+      <button
+        v-if="targetPending.optional"
+        @click="confirmSelection()"
+        :disabled="selectedTargets.length < targetPending.maxTargets"
+        class="ml-3 text-emerald-800 hover:text-emerald-950 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Confirm
+      </button>
       <button v-if="targetPending.optional" @click="cancelSelection()" class="ml-3 text-red-700 hover:text-red-900">
         Cancel
       </button>
@@ -117,13 +125,19 @@ import { evaluateChecks, evaluateConditions, filterByChecks, filterByTargets } f
 import { EventBus, Event } from '@/composables/crawlv2/EventBus'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 import { useTargetSelector } from '@/composables/crawlv2/useTargetSelector'
-import { registerBuffSystems } from '@/composables/crawlv2/BuffSystem'
+import { clearBuffsFromSource, registerBuffSystems } from '@/composables/crawlv2/BuffSystem'
 import { defaultGameState } from '@/types/defaultGameState'
 import { registerEffectResolver } from '@/composables/crawlv2/EffectResolver'
 import { registerGameState } from '@/composables/crawlv2/GameState'
 import { cleanupEffects } from '@/composables/crawlv2/EffectHandlers'
 import { authFetch } from '@/lib/authFetch'
-import type { CrawlV2Game, PendingReaction, Player, SerializedEffectAction } from '@/types/crawlv2-multiplayer'
+import type {
+  CrawlV2Game,
+  PendingReaction,
+  Player,
+  SerializedEffectAction,
+  SerializedSummonEffect,
+} from '@/types/crawlv2-multiplayer'
 import { v4 as uuid } from 'uuid'
 
 // ─── Card hydration ─────────────────────────────────────────────────────────
@@ -191,6 +205,7 @@ function onGameStarted(game: CrawlV2Game, gId: string, player: Player) {
   fieldCardIds.clear()
   registeredEffectCardIds.clear()
   handledReactionId = null
+  pendingStatusSyncBatches.value = []
 
   // Set up game state from server, hydrating cards with full data
   const gs = JSON.parse(JSON.stringify(game.gameState)) as GameState
@@ -223,8 +238,37 @@ const registeredEffectCardIds = new Set<string>()
 let handledReactionId: string | null = null
 let lastTurnKey: string | null = null
 
+type StatusSyncUpdate = {
+  gameId: string
+  buffs: Record<string, string | number>
+  debuffs: Record<string, string | number>
+  location?: Location
+  faceUp?: boolean
+  defensePosition?: boolean
+}
+
+type PendingStatusSyncBatch = {
+  updates: StatusSyncUpdate[]
+  player1HP?: number
+  player2HP?: number
+  player1AP?: number
+  player2AP?: number
+  serverVersion: number | null
+}
+
+const pendingStatusSyncBatches = ref<PendingStatusSyncBatch[]>([])
+const syncingLocalState = computed(() => pendingStatusSyncBatches.value.length > 0)
+
 function rebuildMultiplayerEffectRegistrations(cards: GameCard[]) {
   if (!effectResolver || !myPlayer.value) return
+
+  // In multiplayer, snapshot hydration does not emit the field-leave / movement
+  // events that normally clear source-derived ongoing state. Clear anything that
+  // originated from our cards, then let current field sources re-apply.
+  for (const card of cards) {
+    if (card.owner !== myPlayer.value) continue
+    clearBuffsFromSource(card.gameId)
+  }
 
   const myFieldCards = cards.filter((card) => fieldZones.includes(card.location.type) && card.owner === myPlayer.value)
   const nextRegisteredIds = new Set(myFieldCards.map((card) => card.gameId))
@@ -247,7 +291,10 @@ function rebuildMultiplayerEffectRegistrations(cards: GameCard[]) {
 
 function syncGameStateFromServer(game: CrawlV2Game) {
   const serverGs = game.gameState
-  const hydrated = hydrateCards(serverGs.cards as GameCard[])
+  pruneAcknowledgedStatusSyncBatches(game._version ?? 0)
+
+  const syncedBase = buildPendingStatusSyncBase(serverGs)
+  const hydrated = hydrateCards(syncedBase.cards as GameCard[])
 
   for (const card of hydrated) {
     const serverCard = (serverGs.cards as Record<string, unknown>[]).find(
@@ -263,12 +310,12 @@ function syncGameStateFromServer(game: CrawlV2Game) {
   }
 
   gameState.value.cards = hydrated
-  gameState.value.turn = serverGs.turn
-  gameState.value.currentPlayer = serverGs.currentPlayer
-  gameState.value.player1HP = serverGs.player1HP
-  gameState.value.player2HP = serverGs.player2HP
-  gameState.value.player1AP = serverGs.player1AP
-  gameState.value.player2AP = serverGs.player2AP
+  gameState.value.turn = syncedBase.turn
+  gameState.value.currentPlayer = syncedBase.currentPlayer
+  gameState.value.player1HP = syncedBase.player1HP
+  gameState.value.player2HP = syncedBase.player2HP
+  gameState.value.player1AP = syncedBase.player1AP
+  gameState.value.player2AP = syncedBase.player2AP
 
   return { serverGs, hydrated }
 }
@@ -287,8 +334,81 @@ function mergeSourceDerivedState(
   ])
 }
 
+function applyPendingStatusSyncBatch(gs: GameState, batch: PendingStatusSyncBatch) {
+  for (const update of batch.updates) {
+    const card = gs.cards.find((candidate) => candidate.gameId === update.gameId)
+    if (!card) continue
+
+    card.buffs = { ...update.buffs }
+    card.debuffs = { ...update.debuffs }
+
+    if (update.location) {
+      const fullLocation = locations.find((location) => location.id === update.location?.id)
+      card.location = fullLocation ? { ...fullLocation } : { ...update.location }
+    }
+    if (update.faceUp !== undefined) card.faceUp = update.faceUp
+    if (update.defensePosition !== undefined) card.defensePosition = update.defensePosition
+  }
+
+  if (batch.player1HP !== undefined) gs.player1HP = batch.player1HP
+  if (batch.player2HP !== undefined) gs.player2HP = batch.player2HP
+  if (batch.player1AP !== undefined) gs.player1AP = batch.player1AP
+  if (batch.player2AP !== undefined) gs.player2AP = batch.player2AP
+}
+
+function pruneAcknowledgedStatusSyncBatches(snapshotVersion: number) {
+  pendingStatusSyncBatches.value = pendingStatusSyncBatches.value.filter(
+    (batch) => batch.serverVersion === null || batch.serverVersion > snapshotVersion,
+  )
+}
+
+function buildPendingStatusSyncBase(serverGs: GameState) {
+  const base = JSON.parse(JSON.stringify(serverGs)) as GameState
+  for (const batch of pendingStatusSyncBatches.value) {
+    applyPendingStatusSyncBatch(base, batch)
+  }
+  return base
+}
+
 function shouldMirrorTurnStartEffect(effect: EffectDef) {
   return effect.trigger === Event.TURN_START && !effect.optional && effect.selectCount === undefined
+}
+
+function isServerResolvedSummonEffect(effect: EffectDef) {
+  if (effect.trigger !== Event.UNIT_SUMMONED) return false
+  if (effect.optional || effect.selectCount !== undefined) return false
+  if (effect.conditions?.length || effect.then || effect.and?.length) return false
+  if (effect.autoTarget || effect.matchSelection?.length) return false
+
+  const isSelfTrigger =
+    effect.triggerConditions?.length === 1 &&
+    effect.triggerConditions[0]?.length === 1 &&
+    effect.triggerConditions[0][0]?.comparitor === 'itself'
+
+  const targetsSelfOnly =
+    effect.targets?.length === 1 && effect.targets[0]?.length === 1 && effect.targets[0][0]?.comparitor === 'itself'
+
+  return !!isSelfTrigger && !!targetsSelfOnly
+}
+
+function getServerResolvedSummonEffects(card: GameCard): SerializedSummonEffect[] | undefined {
+  const effects = (card.effects ?? [])
+    .map((effect, effectIndex) => ({ effect, effectIndex }))
+    .filter(({ effect }) => isServerResolvedSummonEffect(effect))
+    .map(({ effect, effectIndex }) => ({
+      effectIndex,
+      effectType: effect.effect,
+      effectOptions: effect.options ? resolveEffectOptions(effect.options as Record<string, unknown>, card) : undefined,
+    }))
+
+  return effects.length ? effects : undefined
+}
+
+function getServerResolvedSummonEffectIndexes(card: GameCard) {
+  return (card.effects ?? [])
+    .map((effect, effectIndex) => ({ effect, effectIndex }))
+    .filter(({ effect }) => isServerResolvedSummonEffect(effect))
+    .map(({ effectIndex }) => effectIndex)
 }
 
 async function applyMirroredTurnStartEffects(gs: GameState) {
@@ -429,7 +549,10 @@ function subscribeToGame(gId: string) {
             try {
               for (const card of cardsToEmit) {
                 if (card.location.type === 'unit') {
-                  await EventBus.emit(Event.UNIT_SUMMONED, card.gameId, { card })
+                  await EventBus.emit(Event.UNIT_SUMMONED, card.gameId, {
+                    card,
+                    skipEffectIndexes: getServerResolvedSummonEffectIndexes(card),
+                  })
                 } else if (card.location.type === 'power') {
                   await EventBus.emit(Event.POWER_SET, card.gameId, { card })
                 } else if (card.location.type === 'trap') {
@@ -483,18 +606,18 @@ function normalizeStateRecord(record: Record<string, string | number> | undefine
   return Object.fromEntries(Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b)))
 }
 
-function syncCardBuffs(silent = true, options?: { sourceDerivedOnly?: boolean }) {
-  const serverGs = multiplayerGame.value?.gameState
-  if (!serverGs) return
+type Crawlv2ActionResponse = {
+  success?: boolean
+  version?: number
+  message?: string
+}
 
-  const updates: {
-    gameId: string
-    buffs: Record<string, string | number>
-    debuffs: Record<string, string | number>
-    location?: Location
-    faceUp?: boolean
-    defensePosition?: boolean
-  }[] = []
+async function syncCardBuffs(silent = true, options?: { sourceDerivedOnly?: boolean }) {
+  const rawServerGs = multiplayerGame.value?.gameState
+  if (!rawServerGs) return
+  const serverGs = buildPendingStatusSyncBase(rawServerGs)
+
+  const updates: StatusSyncUpdate[] = []
 
   for (const card of gameState.value.cards) {
     const serverCard = (serverGs.cards as GameCard[]).find((candidate) => candidate.gameId === card.gameId)
@@ -536,7 +659,18 @@ function syncCardBuffs(silent = true, options?: { sourceDerivedOnly?: boolean })
 
   if (!updates.length && !player1HPChanged && !player2HPChanged && !player1APChanged && !player2APChanged) return
 
-  sendAction(
+  const batch: PendingStatusSyncBatch = {
+    updates,
+    ...(player1HPChanged ? { player1HP: gameState.value.player1HP } : {}),
+    ...(player2HPChanged ? { player2HP: gameState.value.player2HP } : {}),
+    ...(player1APChanged ? { player1AP: gameState.value.player1AP } : {}),
+    ...(player2APChanged ? { player2AP: gameState.value.player2AP } : {}),
+    serverVersion: null,
+  }
+
+  pendingStatusSyncBatches.value = [...pendingStatusSyncBatches.value, batch]
+
+  const data = await sendAction(
     {
       type: 'update_card_buffs',
       updates,
@@ -547,6 +681,17 @@ function syncCardBuffs(silent = true, options?: { sourceDerivedOnly?: boolean })
     },
     { silent },
   )
+
+  if (!data?.success || typeof data.version !== 'number') {
+    pendingStatusSyncBatches.value = pendingStatusSyncBatches.value.filter((candidate) => candidate !== batch)
+    return
+  }
+
+  batch.serverVersion = data.version
+  const snapshotVersion = multiplayerGame.value?._version ?? 0
+  if (batch.serverVersion <= snapshotVersion) {
+    pendingStatusSyncBatches.value = pendingStatusSyncBatches.value.filter((candidate) => candidate !== batch)
+  }
 }
 
 async function sendAction(action: Record<string, unknown>, options?: { silent?: boolean }) {
@@ -559,10 +704,12 @@ async function sendAction(action: Record<string, unknown>, options?: { silent?: 
         action: { ...action, actionId: uuid() },
       }),
     })
-    const data = await res.json()
+    const data = (await res.json()) as Crawlv2ActionResponse
     if (!res.ok) {
       console.error('Action failed:', data.message)
+      return data
     }
+    return data
   } catch (err) {
     console.error('Action error:', err)
   } finally {
@@ -578,6 +725,7 @@ const {
   pending,
   selectedTargets,
   toggleTarget,
+  confirmSelection,
   cancelSelection,
   pendingZone,
   pickZone,
@@ -734,6 +882,7 @@ async function selectAttackTargets(card: GameCard, effectIndex: number, validTar
 
 const activateEffect = async (card: GameCard, effectIndex: number) => {
   if (!isMyTurn.value) return
+  if (syncingLocalState.value) return
   const effect = card.effects?.[effectIndex]
   if (!effect) return
 
@@ -755,6 +904,7 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
         atk: card.atk,
         def: card.def,
         damage: card.damage,
+        ...(zoneType === 'unit' ? { summonEffects: getServerResolvedSummonEffects(card) } : {}),
       })
       break
     }
@@ -881,6 +1031,7 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
 // ─── Turn management ──────────────────────────────────────────────────────────
 
 const endTurn = async () => {
+  if (syncingLocalState.value) return
   await sendAction({ type: 'end_turn' })
 }
 

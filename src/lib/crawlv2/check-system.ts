@@ -1,18 +1,10 @@
 import type { GameCard, Check, Condition, EffectDef } from '../../types/cards.js'
 import type { GameState, LocationKeys } from '../../types/crawlv2.js'
 import { getEffective } from './buff-system.js'
+import { getEffectiveUses } from './effect-uses.js'
 
-export type Comparator =
-  | 'equals'
-  | 'not_equals'
-  | 'less_than'
-  | 'more_than'
-  | 'location'
-  | 'itself'
-  | 'owner'
-  | 'current_player'
-  | 'is_undefined'
-  | 'location_check'
+import type { Comparator } from '../../types/card-types.js'
+export type { Comparator } from '../../types/card-types.js'
 
 function getNestedValue<T extends object>(obj: T, key?: string): unknown {
   if (!key) return undefined
@@ -196,9 +188,11 @@ export function evaluateConditions(
 }
 
 export function hasAvailableTargets(card: GameCard, gs: GameState): boolean {
-  const manualEffects = card.effects?.filter(
-    (e) => e.trigger === 'manual' && (e.uses === undefined || (e.activations ?? 0) < e.uses),
-  )
+  const manualEffects = card.effects?.filter((e) => {
+    if (e.trigger !== 'manual') return false
+    const maxUses = getEffectiveUses(card, e)
+    return maxUses === undefined || (e.activations ?? 0) < maxUses
+  })
 
   if (!manualEffects?.length) return false
 

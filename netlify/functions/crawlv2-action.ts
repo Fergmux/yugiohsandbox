@@ -94,6 +94,12 @@ interface SerializedEffectAction {
   targets?: string[]
 }
 
+interface SerializedSummonEffect {
+  effectIndex: number
+  effectType: string
+  effectOptions?: Record<string, unknown>
+}
+
 interface CrawlV2Game {
   _version: number
   code: number | null
@@ -117,6 +123,7 @@ type GameAction =
       atk?: number
       def?: number
       damage?: string
+      summonEffects?: SerializedSummonEffect[]
       actionId: string
     }
   | {
@@ -422,11 +429,12 @@ function resolveCombat(gs: GameState, source: GameCard, target: GameCard): void 
   }
 }
 
-function trackActivation(card: GameCard, effectIndex?: number, maxUses?: number): string | null {
+function trackActivation(card: GameCard, effectIndex?: number, maxUses?: number, effectType?: string): string | null {
   if (effectIndex === undefined) return null
   if (!card.effectActivations) card.effectActivations = {}
   const count = card.effectActivations[effectIndex] ?? 0
-  if (maxUses !== undefined && count >= maxUses) return 'Effect uses exhausted'
+  const effectiveMaxUses = getEffectiveUses(card, maxUses, effectType)
+  if (effectiveMaxUses !== undefined && count >= effectiveMaxUses) return 'Effect uses exhausted'
   card.effectActivations[effectIndex] = count + 1
   return null
 }
@@ -443,7 +451,8 @@ function resolveActivatedEffectAction(
   if (chargeError) return { success: false, error: chargeError }
 
   const activationCount = card.effectActivations?.[action.effectIndex] ?? 0
-  if (action.maxUses !== undefined && activationCount >= action.maxUses) {
+  const effectiveMaxUses = getEffectiveUses(card, action.maxUses, action.effectType)
+  if (effectiveMaxUses !== undefined && activationCount >= effectiveMaxUses) {
     return { success: false, error: 'Effect uses exhausted' }
   }
 
@@ -654,6 +663,28 @@ function processSummonEffects(gs: GameState, card: GameCard): void {
   }
 }
 
+/**
+ * Process simple self-only summon effects serialized by the client so summon
+ * state becomes authoritative on the server in multiplayer.
+ */
+function processSerializedSummonEffects(
+  gs: GameState,
+  card: GameCard,
+  summonEffects?: SerializedSummonEffect[],
+): void {
+  for (const effect of summonEffects ?? []) {
+    applyEffect(
+      gs,
+      card,
+      {
+        effect: effect.effectType,
+        ...(effect.effectOptions ? { options: effect.effectOptions } : {}),
+      } as EffectDef,
+      [card],
+    )
+  }
+}
+
 function drawCardForPlayer(gs: GameState, player: Player): void {
   const deckCards = gs.cards
     .filter((c) => c.location.type === 'deck' && c.owner === player)
@@ -700,6 +731,19 @@ function normalizeStatusKey(key: string): string {
   if (normalized === 'angered') return 'anger'
   if (normalized === 'damage_type') return 'damage'
   return normalized
+}
+
+function getStatusStacks(record: Record<string, string | number>, status: string): number {
+  return Object.entries(record).reduce(
+    (total, [key, value]) => total + (normalizeStatusKey(key) === status && typeof value === 'number' ? value : 0),
+    0,
+  )
+}
+
+function getEffectiveUses(card: GameCard, baseUses?: number, effectType?: string): number | undefined {
+  if (baseUses === undefined) return undefined
+  if (effectType !== 'damage') return baseUses
+  return baseUses + getStatusStacks(card.buffs, 'anger') + getStatusStacks(card.debuffs, 'anger')
 }
 
 function hasCursedDebuff(record: Record<string, string | number>): boolean {
@@ -1140,7 +1184,7 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       deductAP(gs, card)
       card.location = { id: zone.id, type: zone.type, index: 0, player: zone.player, name: 'Unit' }
       card.faceUp = true
-      processSummonEffects(gs, card)
+      processSerializedSummonEffects(gs, card, action.summonEffects)
       return { success: true }
     }
     case 'set_trap': {
@@ -1189,7 +1233,7 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       if (source.owner !== playerKey) return { success: false, error: 'Not your card' }
       if (source.location.type !== 'unit') return { success: false, error: 'Attacker not on field' }
       if (source.defensePosition) return { success: false, error: 'Cannot attack in defense' }
-      const atkErr = trackActivation(source, action.effectIndex, action.maxUses)
+      const atkErr = trackActivation(source, action.effectIndex, action.maxUses, 'damage')
       if (atkErr) return { success: false, error: atkErr }
 
       const validTargets = getValidAttackTargets(gs, playerKey)
@@ -1244,7 +1288,7 @@ function handleGameAction(game: CrawlV2Game, action: GameAction, playerKey: Play
       if (source.owner !== playerKey) return { success: false, error: 'Not your card' }
       if (source.location.type !== 'unit') return { success: false, error: 'Attacker not on field' }
       if (source.defensePosition) return { success: false, error: 'Cannot attack in defense' }
-      const directErr = trackActivation(source, action.effectIndex, action.maxUses)
+      const directErr = trackActivation(source, action.effectIndex, action.maxUses, 'damage')
       if (directErr) return { success: false, error: directErr }
       // Verify no opponent units exist
       const opponent = playerKey === 'player1' ? 'player2' : 'player1'
@@ -1292,6 +1336,7 @@ const handler = async (event: { body: string; headers: Record<string, string> })
 
     const docRef = doc(db, 'crawlv2_games', gameId)
     let result: ActionResult = { success: false, error: 'Unknown error' }
+    let committedVersion: number | null = null
 
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(docRef)
@@ -1304,6 +1349,7 @@ const handler = async (event: { body: string; headers: Record<string, string> })
 
       if (game.processedActions.includes(action.actionId)) {
         result = { success: true }
+        committedVersion = game._version ?? 0
         return
       }
 
@@ -1338,6 +1384,7 @@ const handler = async (event: { body: string; headers: Record<string, string> })
       }
 
       game._version = (game._version ?? 0) + 1
+      committedVersion = game._version
       transaction.set(docRef, game)
     })
 
@@ -1352,7 +1399,7 @@ const handler = async (event: { body: string; headers: Record<string, string> })
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: true }),
+      body: JSON.stringify({ success: true, version: committedVersion }),
     }
   } catch (err) {
     console.error(err)

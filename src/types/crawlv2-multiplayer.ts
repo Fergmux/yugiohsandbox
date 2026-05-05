@@ -23,6 +23,12 @@ export interface SerializedEffectAction {
   targets?: string[]
 }
 
+export interface SerializedSummonEffect {
+  effectIndex: number
+  effectType: string
+  effectOptions?: Record<string, unknown>
+}
+
 export interface PendingReaction {
   id: string
   type: 'trap_activation' | 'effect_activation'
@@ -61,7 +67,13 @@ export interface CrawlV2Game {
 export type GameAction =
   | { type: 'select_deck'; cardIds: number[]; actionId: string }
   | { type: 'ready_up'; actionId: string }
-  | { type: 'summon_unit'; cardGameId: string; zoneId: string; actionId: string }
+  | {
+      type: 'summon_unit'
+      cardGameId: string
+      zoneId: string
+      summonEffects?: SerializedSummonEffect[]
+      actionId: string
+    }
   | {
       type: 'set_trap'
       cardGameId: string

@@ -1,4 +1,4 @@
-import type { GameCard } from './cards.js'
+import type { GameCard } from './card-types.js'
 
 export interface Card {
   name: string
