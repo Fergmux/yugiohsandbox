@@ -23,7 +23,7 @@
         @activate-effect="onActivateEffect"
       />
 
-      <!-- Description tooltip: visible for own cards (including face-down), outside overflow-hidden -->
+      <!-- Description tooltip: show your own cards freely, but only reveal opponent field cards when face-up. -->
       <div
         v-if="card.description && showTooltip"
         class="pointer-events-none invisible absolute -top-2 left-1/2 z-50 w-max max-w-[200px] -translate-x-1/2 -translate-y-full rounded bg-black/90 px-2 py-1.5 text-[9px] leading-tight font-normal text-white group-hover/zone:visible"
@@ -64,7 +64,8 @@ import { type GameCard } from '@/types/cards'
 import type { Location } from '@/types/crawlv2'
 import { useActivationPrompt } from '@/composables/crawlv2/useActivationPrompt'
 
-const FIELD_ZONES = new Set(['hand', 'power', 'unit', 'trap'])
+const TOOLTIP_ZONES = new Set(['hand', 'power', 'unit', 'trap'])
+const OPPONENT_FIELD_ZONES = new Set(['power', 'unit', 'trap'])
 
 const props = defineProps<{
   name: string
@@ -88,9 +89,16 @@ const isOwnCard = computed(() => {
   return props.card.owner === props.myPlayer || props.card.location?.player === props.myPlayer
 })
 
-const showTooltip = computed(() =>
-  isOwnCard.value && props.card && FIELD_ZONES.has(props.card.location?.type)
-)
+const showTooltip = computed(() => {
+  if (!props.card) return false
+
+  const zoneType = props.card.location?.type
+  if (!TOOLTIP_ZONES.has(zoneType)) return false
+
+  if (isOwnCard.value) return true
+
+  return OPPONENT_FIELD_ZONES.has(zoneType) && props.card.faceUp === true
+})
 
 function onActivateEffect(card: GameCard, effectIndex: number) {
   emit('activate-effect', card, effectIndex)
