@@ -59,6 +59,7 @@ type DragState = {
   startY: number
   ghostX: number
   ghostY: number
+  cardWidth: number
   active: boolean
 }
 
@@ -93,14 +94,6 @@ const buttonClasses = {
   flip: 'rounded-full border border-emerald-300/35 bg-emerald-300/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/55 hover:bg-emerald-300/25 disabled:cursor-not-allowed disabled:opacity-50',
   position:
     'rounded-full border border-orange-300/35 bg-orange-300/15 px-3 py-2 text-sm font-semibold text-orange-100 transition hover:border-orange-300/55 hover:bg-orange-300/25 disabled:cursor-not-allowed disabled:opacity-50',
-} as const
-
-const tableZoneCardStyle = {
-  '--crawlv3-card-width': 'clamp(4.2rem, min(6.8vw, 10vh), 8.4rem)',
-} as const
-
-const handZoneCardStyle = {
-  '--crawlv3-card-width': 'clamp(4rem, min(6vw, 8.8vh), 7.4rem)',
 } as const
 
 const userStore = useUserStore()
@@ -309,9 +302,8 @@ const tooltipStyle = computed(() => {
 
 const dragGhostStyle = computed(() => {
   const currentDrag = dragState.value
-  const card = currentDrag ? game.value?.cards[currentDrag.instanceId] : null
 
-  if (!currentDrag || !card) {
+  if (!currentDrag) {
     return {
       left: '0px',
       top: '0px',
@@ -321,8 +313,7 @@ const dragGhostStyle = computed(() => {
   return {
     left: `${currentDrag.ghostX}px`,
     top: `${currentDrag.ghostY}px`,
-    ...(card.zone === 'table' ? tableZoneCardStyle : {}),
-    ...(card.zone === 'hand' ? handZoneCardStyle : {}),
+    width: `${currentDrag.cardWidth}px`,
   }
 })
 
@@ -651,11 +642,19 @@ function normalizeZonePoint(zone: Crawlv3Zone, x: number, y: number) {
 
 function cardPositionStyle(card: Crawlv3CardState) {
   const point = normalizeZonePoint(card.zone, card.x, card.y)
+  const width =
+    card.zone === 'table'
+      ? 'clamp(2.75rem, 5.15%, 8.4rem)'
+      : card.zone === 'hand'
+        ? 'clamp(2.5rem, 4.75%, 7.2rem)'
+        : undefined
+
   return {
     left: `${(point.x * 100).toFixed(2)}%`,
     top: `${(point.y * 100).toFixed(2)}%`,
     zIndex: String(card.z),
     transform: 'translate(-50%, -50%)',
+    ...(width ? { width } : {}),
   }
 }
 
@@ -666,6 +665,8 @@ function selectCard(cardId: string) {
 function startCardDrag(card: Crawlv3CardState, event: PointerEvent) {
   if (!myPlayer.value || card.owner !== myPlayer.value || event.button !== 0) return
 
+  const cardElement = event.currentTarget as HTMLElement | null
+
   event.preventDefault()
   hoveredTooltip.value = null
   dragState.value = {
@@ -674,6 +675,7 @@ function startCardDrag(card: Crawlv3CardState, event: PointerEvent) {
     startY: event.clientY,
     ghostX: event.clientX,
     ghostY: event.clientY,
+    cardWidth: cardElement?.getBoundingClientRect().width ?? 0,
     active: false,
   }
 
@@ -1528,7 +1530,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-else-if="phase === 'game' && game && myPlayer && opponentPlayer" class="mx-auto max-w-[168rem] py-6">
+    <div v-else-if="phase === 'game' && game && myPlayer && opponentPlayer" class="mx-auto py-6">
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div class="space-y-4">
           <header
@@ -1696,8 +1698,7 @@ onBeforeUnmount(() => {
               </div>
 
               <div
-                class="relative min-h-[clamp(13rem,16vw,17rem)] overflow-hidden rounded-[1.35rem] border border-white/10 bg-[linear-gradient(135deg,rgba(61,99,114,0.15),rgba(20,22,33,0.65))] ring-1 ring-white/5"
-                :style="handZoneCardStyle"
+                class="relative h-[clamp(10.5rem,15vh,13rem)] overflow-hidden rounded-[1.35rem] border border-white/10 bg-[linear-gradient(135deg,rgba(61,99,114,0.15),rgba(20,22,33,0.65))] ring-1 ring-white/5"
                 data-crawlv3-drop-zone="hand"
                 :data-crawlv3-owner="opponentPlayer"
               >
@@ -1711,6 +1712,7 @@ onBeforeUnmount(() => {
                 >
                   <CrawlV3Card
                     :card="card"
+                    fill-parent
                     :show-face="getCardRenderFace(card)"
                     :status-labels="statusLabels"
                     @pointerdown="startCardDrag(card, $event)"
@@ -1735,8 +1737,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div
-              class="relative h-[min(46vw,calc(100vh-30rem))] min-h-[34rem] max-h-[68rem] overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(69,46,24,0.22),rgba(20,16,13,0.78)),radial-gradient(circle_at_top,rgba(210,167,93,0.22),transparent_45%)] ring-1 ring-white/5"
-              :style="tableZoneCardStyle"
+              class="relative h-[min(50vw,calc(100vh-26rem))] max-h-[68rem] min-h-[38rem] overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(69,46,24,0.22),rgba(20,16,13,0.78)),radial-gradient(circle_at_top,rgba(210,167,93,0.22),transparent_45%)] ring-1 ring-white/5"
               data-crawlv3-drop-zone="table"
             >
               <div
@@ -1746,6 +1747,7 @@ onBeforeUnmount(() => {
               <div v-for="card in tableCards" :key="card.instanceId" class="absolute" :style="cardPositionStyle(card)">
                 <CrawlV3Card
                   :card="card"
+                  fill-parent
                   :show-face="getCardRenderFace(card)"
                   :selected="selectedCardId === card.instanceId"
                   :status-labels="statusLabels"
@@ -1771,8 +1773,7 @@ onBeforeUnmount(() => {
               </div>
 
               <div
-                class="relative min-h-[clamp(13rem,16vw,17rem)] overflow-hidden rounded-[1.35rem] border border-white/10 bg-[linear-gradient(135deg,rgba(54,79,55,0.15),rgba(20,22,33,0.65))] ring-1 ring-white/5"
-                :style="handZoneCardStyle"
+                class="relative h-[clamp(10.5rem,15vh,13rem)] overflow-hidden rounded-[1.35rem] border border-white/10 bg-[linear-gradient(135deg,rgba(54,79,55,0.15),rgba(20,22,33,0.65))] ring-1 ring-white/5"
                 data-crawlv3-drop-zone="hand"
                 :data-crawlv3-owner="myPlayer"
               >
@@ -1786,6 +1787,7 @@ onBeforeUnmount(() => {
                 >
                   <CrawlV3Card
                     :card="card"
+                    fill-parent
                     :show-face="getCardRenderFace(card)"
                     :selected="selectedCardId === card.instanceId"
                     :status-labels="statusLabels"
@@ -2098,6 +2100,7 @@ onBeforeUnmount(() => {
     >
       <CrawlV3Card
         :card="game.cards[dragState.instanceId]"
+        fill-parent
         :show-face="getCardRenderFace(game.cards[dragState.instanceId])"
         :status-labels="statusLabels"
         ghosted

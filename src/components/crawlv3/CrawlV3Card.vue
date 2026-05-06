@@ -11,11 +11,13 @@ const props = withDefaults(
     showFace: boolean
     selected?: boolean
     ghosted?: boolean
+    fillParent?: boolean
     statusLabels?: Record<string, string>
   }>(),
   {
     selected: false,
     ghosted: false,
+    fillParent: false,
     statusLabels: () => ({}),
   },
 )
@@ -32,7 +34,7 @@ defineEmits<{
 const buffEntries = computed(() => Object.entries(props.card.buffs))
 const debuffEntries = computed(() => Object.entries(props.card.debuffs))
 const cardStyle = computed(() => ({
-  width: 'var(--crawlv3-card-width, clamp(5.2rem, 8vw, 8.4rem))',
+  width: props.fillParent ? '100%' : 'var(--crawlv3-card-width, clamp(5.2rem, 8vw, 8.4rem))',
   transform: props.card.rotated ? 'rotate(90deg)' : undefined,
 }))
 </script>
