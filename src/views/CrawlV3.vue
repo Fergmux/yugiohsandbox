@@ -129,6 +129,7 @@ const configExpanded = ref(false)
 
 const selectedCardId = ref<string | null>(null)
 const previewCardId = ref<string | null>(null)
+const catalogPreviewCard = ref<Crawlv3CatalogCard | null>(null)
 const statusCardId = ref<string | null>(null)
 const openPile = ref<OpenPileState | null>(null)
 const hoveredTooltip = ref<TooltipState | null>(null)
@@ -267,6 +268,37 @@ const tooltipCard = computed(() => {
 const previewCard = computed(() => {
   if (!game.value || !previewCardId.value) return null
   return game.value.cards[previewCardId.value] ?? null
+})
+
+const catalogPreviewState = computed<Crawlv3CardState | null>(() => {
+  const card = catalogPreviewCard.value
+  if (!card) return null
+
+  return {
+    instanceId: `catalog-preview-${card.id}`,
+    cardId: card.id,
+    owner: myPlayer.value ?? 'player1',
+    title: card.title,
+    cost: card.cost,
+    baseAtk: card.atk,
+    baseDef: card.def,
+    atk: card.atk,
+    def: card.def,
+    category: card.category,
+    race: card.race,
+    damageType: card.damageType,
+    description: card.description,
+    imageUrl: card.imageUrl,
+    zone: 'deck',
+    x: 0,
+    y: 0,
+    z: 0,
+    order: 0,
+    faceUp: true,
+    rotated: false,
+    buffs: {},
+    debuffs: {},
+  }
 })
 
 const statusCard = computed(() => {
@@ -471,6 +503,7 @@ function leaveRoom() {
   localSelectionIds.value = []
   selectedCardId.value = null
   previewCardId.value = null
+  catalogPreviewCard.value = null
   statusCardId.value = null
   openPile.value = null
   configExpanded.value = false
@@ -1528,8 +1561,9 @@ onBeforeUnmount(() => {
                   canEditDeckSelection ? cardSummary(card) : `${cardSummary(card)}\n\nUnready to change your selection.`
                 "
                 @click="toggleCardSelection(card.id)"
+                @contextmenu.prevent.stop="catalogPreviewCard = card"
               >
-                <div class="aspect-[63/88] overflow-hidden bg-black/20">
+                <div class="relative aspect-[63/88] overflow-hidden bg-black/20">
                   <img v-if="card.imageUrl" :src="card.imageUrl" :alt="card.title" class="h-full w-full object-cover" />
                   <div
                     v-else
@@ -1537,19 +1571,19 @@ onBeforeUnmount(() => {
                   >
                     {{ card.title }}
                   </div>
+                  <span
+                    v-if="selectedCatalogIdSet.has(card.id)"
+                    class="absolute top-2 right-2 rounded-full bg-amber-300 px-2 py-1 text-[0.7rem] font-semibold text-amber-950 shadow-lg"
+                  >
+                    Selected
+                  </span>
                 </div>
 
-                <div class="flex items-center justify-between gap-3 p-3">
+                <div class="p-3">
                   <div class="min-w-0">
                     <p class="truncate font-semibold">{{ card.title }}</p>
                     <p class="mt-1 text-xs text-white/50">{{ card.race }} - {{ card.damageType }}</p>
                   </div>
-                  <span
-                    v-if="selectedCatalogIdSet.has(card.id)"
-                    class="rounded-full bg-amber-300 px-2 py-1 text-[0.7rem] font-semibold text-amber-950"
-                  >
-                    Selected
-                  </span>
                 </div>
               </button>
             </div>
@@ -2236,6 +2270,13 @@ onBeforeUnmount(() => {
       :card="previewCard"
       :show-face="canSeeCardDetails(previewCard)"
       @close="previewCardId = null"
+    />
+
+    <CrawlV3CardPreviewModal
+      v-if="catalogPreviewState"
+      :card="catalogPreviewState"
+      :show-face="true"
+      @close="catalogPreviewCard = null"
     />
 
     <CrawlV3StatusModal
