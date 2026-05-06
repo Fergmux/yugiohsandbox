@@ -148,6 +148,7 @@ export function normalizeCatalogCards(
         cost: getMappedValue(row, config.headers.cost).trim(),
         atk: getMappedValue(row, config.headers.atk).trim(),
         def: getMappedValue(row, config.headers.def).trim(),
+        category: getMappedValue(row, config.headers.category).trim(),
         race: getMappedValue(row, config.headers.race).trim(),
         damageType: getMappedValue(row, config.headers.damageType).trim(),
         description: getMappedValue(row, config.headers.description).trim(),

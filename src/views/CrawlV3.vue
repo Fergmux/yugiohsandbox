@@ -203,7 +203,10 @@ const filteredCatalogCards = computed(() => {
   if (!catalogSearch.value.trim()) return catalogCards.value
   const query = catalogSearch.value.trim().toLowerCase()
   return catalogCards.value.filter((card) =>
-    [card.title, card.id, card.description, card.race, card.damageType].join(' ').toLowerCase().includes(query),
+    [card.title, card.id, card.category, card.description, card.race, card.damageType]
+      .join(' ')
+      .toLowerCase()
+      .includes(query),
   )
 })
 
@@ -245,6 +248,14 @@ const selectedCard = computed(() => {
 const selectedOwnCard = computed(() => {
   if (!selectedCard.value || !myPlayer.value) return null
   return selectedCard.value.owner === myPlayer.value ? selectedCard.value : null
+})
+
+const selectedOwnCardPreview = computed(() => {
+  if (!selectedOwnCard.value) return null
+  return {
+    ...selectedOwnCard.value,
+    rotated: false,
+  }
 })
 
 const tooltipCard = computed(() => {
@@ -675,7 +686,7 @@ function startCardDrag(card: Crawlv3CardState, event: PointerEvent) {
     startY: event.clientY,
     ghostX: event.clientX,
     ghostY: event.clientY,
-    cardWidth: cardElement?.getBoundingClientRect().width ?? 0,
+    cardWidth: cardElement?.offsetWidth || cardElement?.getBoundingClientRect().width || 0,
     active: false,
   }
 
@@ -870,6 +881,14 @@ function savePlayerStats(player: Crawlv3Player) {
   commitPlayerStats(player)
 }
 
+function adjustLifePoints(player: Crawlv3Player, delta: number) {
+  const playerState = game.value?.players[player]
+  if (!playerState) return
+
+  const nextValue = parseNumericInput(statDrafts.value[player].lifePoints, playerState.lifePoints) + delta
+  commitPlayerStats(player, { lifePoints: nextValue })
+}
+
 function adjustActionPoints(player: Crawlv3Player, delta: number) {
   const playerState = game.value?.players[player]
   if (!playerState) return
@@ -992,6 +1011,7 @@ function cardSummary(card: Crawlv3CatalogCard) {
     `Cost: ${card.cost || '-'}`,
     `ATK: ${card.atk || '-'}`,
     `DEF: ${card.def || '-'}`,
+    card.category ? `Category: ${card.category}` : '',
     card.race || card.damageType || '',
     card.description || '',
   ]
@@ -1239,6 +1259,7 @@ onBeforeUnmount(() => {
                     ['cost', 'Cost header'],
                     ['atk', 'ATK header'],
                     ['def', 'DEF header'],
+                    ['category', 'Category header'],
                     ['race', 'Race header'],
                     ['damageType', 'Damage type header'],
                     ['description', 'Description header'],
@@ -1642,16 +1663,30 @@ onBeforeUnmount(() => {
                 <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">Opponent Stats</p>
 
                 <div class="mt-4 space-y-3">
-                  <label class="block">
+                  <div class="space-y-2">
                     <span class="mb-2 block text-sm text-white/60">Life Points</span>
-                    <input
-                      v-model="statDrafts[opponentPlayer].lifePoints"
-                      type="number"
-                      class="w-full rounded-[1rem] border border-white/10 bg-white/5 px-4 py-3 transition outline-none focus:border-amber-300/50"
-                      @keyup.enter="savePlayerStats(opponentPlayer)"
-                      @blur="savePlayerStats(opponentPlayer)"
-                    />
-                  </label>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input
+                        v-model="statDrafts[opponentPlayer].lifePoints"
+                        type="number"
+                        class="min-w-[7rem] flex-1 rounded-[1rem] border border-white/10 bg-white/5 px-4 py-3 transition outline-none focus:border-amber-300/50"
+                        @keyup.enter="savePlayerStats(opponentPlayer)"
+                        @blur="savePlayerStats(opponentPlayer)"
+                      />
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(opponentPlayer, -5)">
+                        -5
+                      </button>
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(opponentPlayer, -1)">
+                        -1
+                      </button>
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(opponentPlayer, 1)">
+                        +1
+                      </button>
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(opponentPlayer, 5)">
+                        +5
+                      </button>
+                    </div>
+                  </div>
                   <div class="space-y-2">
                     <span class="block text-sm text-white/60">Action Points</span>
                     <div class="flex flex-wrap items-center gap-2">
@@ -1803,50 +1838,68 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="grid gap-4 xl:grid-cols-3">
-              <div
-                class="rounded-[1.4rem] border border-white/10 bg-neutral-950/70 p-4 shadow-2xl backdrop-blur-sm"
-                data-crawlv3-drop-zone="deck"
-                :data-crawlv3-owner="myPlayer"
-              >
-                <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">Your Deck</p>
-                <div class="mt-4 flex items-center gap-4">
-                  <div class="relative h-28 w-20">
-                    <div
-                      v-if="!myDeckCards.length"
-                      class="absolute inset-0 border border-dashed border-white/10 bg-white/5"
-                    />
-                    <img
-                      v-for="depth in Math.min(myDeckCards.length, 3)"
-                      :key="depth"
-                      :src="cardBackImage"
-                      alt="Deck pile"
-                      class="absolute inset-0 h-full w-full border border-white/10 object-cover shadow-lg"
-                      :style="{ transform: `translate(${(depth - 1) * 5}px, ${(depth - 1) * 3}px)` }"
-                    />
-                  </div>
-                  <div>
-                    <p class="text-2xl font-semibold">{{ myDeckCards.length }}</p>
-                  </div>
-                </div>
+              <div class="rounded-[1.4rem] border border-white/10 bg-neutral-950/70 p-4 shadow-2xl backdrop-blur-sm">
+                <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">You</p>
+                <h2 class="mt-2 text-2xl font-semibold">{{ game.players[myPlayer]?.username }}</h2>
 
-                <div class="mt-4 flex flex-wrap gap-2">
-                  <button type="button" :class="buttonClasses.hand" @click="moveTopPileCardTo('deck', 'hand')">
-                    Draw Card
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
-                    @click="shuffleDeck"
-                  >
-                    Shuffle
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-full bg-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-200"
-                    @click="openPileViewer(myPlayer, 'deck')"
-                  >
-                    Open
-                  </button>
+                <div class="mt-4 space-y-3">
+                  <div class="space-y-2">
+                    <span class="mb-2 block text-sm text-white/60">Life Points</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input
+                        v-model="statDrafts[myPlayer].lifePoints"
+                        type="number"
+                        class="min-w-[7rem] flex-1 rounded-[1rem] border border-white/10 bg-white/5 px-4 py-3 transition outline-none focus:border-amber-300/50"
+                        @keyup.enter="savePlayerStats(myPlayer)"
+                        @blur="savePlayerStats(myPlayer)"
+                      />
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(myPlayer, -5)">
+                        -5
+                      </button>
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(myPlayer, -1)">
+                        -1
+                      </button>
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(myPlayer, 1)">
+                        +1
+                      </button>
+                      <button type="button" :class="buttonClasses.neutral" @click="adjustLifePoints(myPlayer, 5)">
+                        +5
+                      </button>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <span class="block text-sm text-white/60">Action Points</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input
+                        v-model="statDrafts[myPlayer].actionPoints"
+                        type="number"
+                        class="min-w-[7rem] flex-1 rounded-[1rem] border border-white/10 bg-white/5 px-4 py-3 transition outline-none focus:border-amber-300/50"
+                        @keyup.enter="savePlayerStats(myPlayer)"
+                        @blur="savePlayerStats(myPlayer)"
+                      />
+                      <button
+                        type="button"
+                        class="rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+                        @click="adjustActionPoints(myPlayer, -1)"
+                      >
+                        -1
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+                        @click="adjustActionPoints(myPlayer, 1)"
+                      >
+                        +1
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+                        @click="resetActionPoints(myPlayer)"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1906,54 +1959,54 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <div class="rounded-[1.4rem] border border-white/10 bg-neutral-950/70 p-4 shadow-2xl backdrop-blur-sm">
-                <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">You</p>
-                <h2 class="mt-2 text-2xl font-semibold">{{ game.players[myPlayer]?.username }}</h2>
-
-                <div class="mt-4 space-y-3">
-                  <label class="block">
-                    <span class="mb-2 block text-sm text-white/60">Life Points</span>
-                    <input
-                      v-model="statDrafts[myPlayer].lifePoints"
-                      type="number"
-                      class="w-full rounded-[1rem] border border-white/10 bg-white/5 px-4 py-3 transition outline-none focus:border-amber-300/50"
-                      @keyup.enter="savePlayerStats(myPlayer)"
-                      @blur="savePlayerStats(myPlayer)"
-                    />
-                  </label>
-                  <div class="space-y-2">
-                    <span class="block text-sm text-white/60">Action Points</span>
-                    <div class="flex flex-wrap items-center gap-2">
-                      <input
-                        v-model="statDrafts[myPlayer].actionPoints"
-                        type="number"
-                        class="min-w-[7rem] flex-1 rounded-[1rem] border border-white/10 bg-white/5 px-4 py-3 transition outline-none focus:border-amber-300/50"
-                        @keyup.enter="savePlayerStats(myPlayer)"
-                        @blur="savePlayerStats(myPlayer)"
-                      />
-                      <button
-                        type="button"
-                        class="rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
-                        @click="adjustActionPoints(myPlayer, -1)"
-                      >
-                        -1
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
-                        @click="adjustActionPoints(myPlayer, 1)"
-                      >
-                        +1
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
-                        @click="resetActionPoints(myPlayer)"
-                      >
-                        Reset
-                      </button>
-                    </div>
+              <div
+                class="rounded-[1.4rem] border border-white/10 bg-neutral-950/70 p-4 shadow-2xl backdrop-blur-sm"
+                data-crawlv3-drop-zone="deck"
+                :data-crawlv3-owner="myPlayer"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">Your Deck</p>
                   </div>
+                  <button
+                    type="button"
+                    class="rounded-full bg-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-200"
+                    @click="openPileViewer(myPlayer, 'deck')"
+                  >
+                    Open
+                  </button>
+                </div>
+                <div class="mt-4 flex items-center gap-4">
+                  <div class="relative h-28 w-20">
+                    <div
+                      v-if="!myDeckCards.length"
+                      class="absolute inset-0 border border-dashed border-white/10 bg-white/5"
+                    />
+                    <img
+                      v-for="depth in Math.min(myDeckCards.length, 3)"
+                      :key="depth"
+                      :src="cardBackImage"
+                      alt="Deck pile"
+                      class="absolute inset-0 h-full w-full border border-white/10 object-cover shadow-lg"
+                      :style="{ transform: `translate(${(depth - 1) * 5}px, ${(depth - 1) * 3}px)` }"
+                    />
+                  </div>
+                  <div>
+                    <p class="text-2xl font-semibold">{{ myDeckCards.length }}</p>
+                  </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <button type="button" :class="buttonClasses.hand" @click="moveTopPileCardTo('deck', 'hand')">
+                    Draw Card
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+                    @click="shuffleDeck"
+                  >
+                    Shuffle
+                  </button>
                 </div>
               </div>
             </div>
@@ -1968,7 +2021,7 @@ onBeforeUnmount(() => {
           <template v-if="selectedOwnCard">
             <div class="mt-4 flex justify-center">
               <CrawlV3Card
-                :card="selectedOwnCard"
+                :card="selectedOwnCardPreview ?? selectedOwnCard"
                 :show-face="true"
                 :status-labels="statusLabels"
                 @contextmenu.prevent="previewCardId = selectedOwnCard.instanceId"
@@ -2114,9 +2167,12 @@ onBeforeUnmount(() => {
         :style="tooltipStyle"
       >
         <h3 class="text-lg font-semibold">{{ tooltipCard.title }}</h3>
-        <p class="mt-1 text-white/55">
-          Cost {{ tooltipCard.cost || '-' }} | ATK {{ tooltipCard.atk || '-' }} | DEF {{ tooltipCard.def || '-' }}
-        </p>
+        <p class="mt-1 text-white/60">{{ tooltipCard.category || '-' }}</p>
+        <div class="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-white/55">
+          <span>Cost {{ tooltipCard.cost || '-' }}</span>
+          <span>ATK <span class="text-base font-bold text-white">{{ tooltipCard.atk || '-' }}</span></span>
+          <span>DEF <span class="text-base font-bold text-white">{{ tooltipCard.def || '-' }}</span></span>
+        </div>
         <p class="mt-1 text-white/55">{{ tooltipCard.race || tooltipCard.damageType || 'No tags' }}</p>
         <p class="mt-3 whitespace-pre-wrap text-white/82">
           {{ tooltipCard.description || 'No description provided.' }}

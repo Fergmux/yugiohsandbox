@@ -10,6 +10,7 @@ export const CRAWLV3_DEV_CONFIG: { defaultRoomConfig: Crawlv3CatalogConfig } = {
       cost: 'cost',
       atk: 'atk',
       def: 'def',
+      category: 'category',
       race: 'race',
       damageType: 'type',
       description: 'description',

@@ -29,6 +29,7 @@ const emit = defineEmits<{
         <div class="rounded-[1.75rem] border border-white/10 bg-neutral-950/90 p-6 text-white shadow-2xl" @click.stop>
           <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">Card Preview</p>
           <h2 class="mt-3 text-3xl font-semibold">{{ showFace ? card.title : 'Face-down card' }}</h2>
+          <p v-if="showFace" class="mt-2 text-lg text-white/60">{{ card.category || '-' }}</p>
 
           <div v-if="showFace" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl bg-white/5 p-3">

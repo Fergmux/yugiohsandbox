@@ -13,6 +13,7 @@ interface Crawlv3CatalogHeaders {
   cost: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string
@@ -42,6 +43,7 @@ interface Crawlv3CatalogCard {
   cost: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string
@@ -71,6 +73,7 @@ interface Crawlv3CardState {
   baseDef: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string
@@ -114,6 +117,7 @@ function createDefaultConfig(): Crawlv3CatalogConfig {
       cost: '',
       atk: '',
       def: '',
+      category: '',
       race: '',
       damageType: '',
       description: '',
@@ -204,6 +208,7 @@ function sanitizeConfig(config: Crawlv3CatalogConfig | undefined): Crawlv3Catalo
       cost: config?.headers?.cost?.trim() ?? fallback.headers.cost,
       atk: config?.headers?.atk?.trim() ?? fallback.headers.atk,
       def: config?.headers?.def?.trim() ?? fallback.headers.def,
+      category: config?.headers?.category?.trim() ?? fallback.headers.category,
       race: config?.headers?.race?.trim() ?? fallback.headers.race,
       damageType: config?.headers?.damageType?.trim() ?? fallback.headers.damageType,
       description: config?.headers?.description?.trim() ?? fallback.headers.description,
@@ -233,6 +238,7 @@ function sanitizeCard(card: Crawlv3CatalogCard): Crawlv3CatalogCard {
     cost: card.cost?.trim() ?? '',
     atk: card.atk?.trim() ?? '',
     def: card.def?.trim() ?? '',
+    category: card.category?.trim() ?? '',
     race: card.race?.trim() ?? '',
     damageType: card.damageType?.trim() ?? '',
     description: card.description?.trim() ?? '',
@@ -295,6 +301,7 @@ function createCardInstance(card: Crawlv3CatalogCard, owner: Crawlv3Player, orde
     baseDef: card.def,
     atk: card.atk,
     def: card.def,
+    category: card.category,
     race: card.race,
     damageType: card.damageType,
     description: card.description,

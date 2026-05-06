@@ -170,6 +170,7 @@ export function createCardInstance(
     baseDef: card.def,
     atk: card.atk,
     def: card.def,
+    category: card.category,
     race: card.race,
     damageType: card.damageType,
     description: card.description,

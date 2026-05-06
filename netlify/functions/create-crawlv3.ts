@@ -11,6 +11,7 @@ interface Crawlv3CatalogHeaders {
   cost: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string
@@ -75,6 +76,7 @@ function createDefaultConfig(): Crawlv3CatalogConfig {
       cost: '',
       atk: '',
       def: '',
+      category: '',
       race: '',
       damageType: '',
       description: '',
@@ -104,6 +106,7 @@ function sanitizeConfig(config: Crawlv3CatalogConfig | undefined): Crawlv3Catalo
       cost: config?.headers?.cost?.trim() ?? fallback.headers.cost,
       atk: config?.headers?.atk?.trim() ?? fallback.headers.atk,
       def: config?.headers?.def?.trim() ?? fallback.headers.def,
+      category: config?.headers?.category?.trim() ?? fallback.headers.category,
       race: config?.headers?.race?.trim() ?? fallback.headers.race,
       damageType: config?.headers?.damageType?.trim() ?? fallback.headers.damageType,
       description: config?.headers?.description?.trim() ?? fallback.headers.description,

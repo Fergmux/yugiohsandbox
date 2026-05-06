@@ -9,6 +9,7 @@ export interface Crawlv3CatalogHeaders {
   cost: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string
@@ -38,6 +39,7 @@ export interface Crawlv3CatalogCard {
   cost: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string
@@ -74,6 +76,7 @@ export interface Crawlv3CardState {
   baseDef: string
   atk: string
   def: string
+  category: string
   race: string
   damageType: string
   description: string

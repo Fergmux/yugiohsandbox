@@ -39,7 +39,10 @@ const filteredCards = computed(() => {
   if (!search.value.trim()) return uniqueCards.value
   const query = search.value.trim().toLowerCase()
   return uniqueCards.value.filter((card) =>
-    [card.title, card.cardId, card.description, card.race, card.damageType].join(' ').toLowerCase().includes(query),
+    [card.title, card.cardId, card.category, card.description, card.race, card.damageType]
+      .join(' ')
+      .toLowerCase()
+      .includes(query),
   )
 })
 
