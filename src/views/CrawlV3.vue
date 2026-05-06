@@ -104,6 +104,7 @@ const gameId = ref<string | null>(null)
 const joinCode = ref(String(route.params.gameCode ?? ''))
 const loading = ref(false)
 const error = ref<string | null>(null)
+const boardCardScale = ref(1)
 const serverSnapshot = shallowRef<Crawlv3Game | null>(null)
 const pendingActions = shallowRef<PendingActionBatch[]>([])
 const sendQueue: PendingActionBatch[] = []
@@ -285,6 +286,7 @@ const statusPreviewNames = computed(() => statusDefinitions.value.map((status) =
 
 const tooltipBuffs = computed(() => (tooltipCard.value ? getCardStatusEntries(tooltipCard.value, 'buff') : []))
 const tooltipDebuffs = computed(() => (tooltipCard.value ? getCardStatusEntries(tooltipCard.value, 'debuff') : []))
+const boardCardScaleLabel = computed(() => `${Math.round(boardCardScale.value * 100)}%`)
 
 const activePileCards = computed(() => {
   if (!openPile.value || !game.value) return []
@@ -652,12 +654,13 @@ function normalizeZonePoint(zone: Crawlv3Zone, x: number, y: number) {
 }
 
 function cardPositionStyle(card: Crawlv3CardState) {
+  const scale = boardCardScale.value.toFixed(2)
   const point = normalizeZonePoint(card.zone, card.x, card.y)
   const width =
     card.zone === 'table'
-      ? 'clamp(2.75rem, 5.15%, 8.4rem)'
+      ? `calc(clamp(1.75rem, 5.15%, 8.4rem) * ${scale})`
       : card.zone === 'hand'
-        ? 'clamp(2.5rem, 4.75%, 7.2rem)'
+        ? `calc(clamp(1.6rem, 4.75%, 7.2rem) * ${scale})`
         : undefined
 
   return {
@@ -671,6 +674,10 @@ function cardPositionStyle(card: Crawlv3CardState) {
 
 function selectCard(cardId: string) {
   selectedCardId.value = selectedCardId.value === cardId ? null : cardId
+}
+
+function adjustBoardCardScale(delta: number) {
+  boardCardScale.value = Math.min(1.5, Math.max(0.65, Number((boardCardScale.value + delta).toFixed(2))))
 }
 
 function startCardDrag(card: Crawlv3CardState, event: PointerEvent) {
@@ -1768,7 +1775,14 @@ onBeforeUnmount(() => {
                 <p class="text-xs font-semibold tracking-[0.35em] text-white/45 uppercase">Shared Table</p>
                 <p class="mt-1 text-sm text-white/55">{{ tableCards.length }} cards in play</p>
               </div>
-              <p class="text-sm text-white/45">Drag your cards anywhere in this zone</p>
+              <div class="flex flex-wrap items-center justify-end gap-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-white/45">Card Size {{ boardCardScaleLabel }}</span>
+                  <button type="button" :class="buttonClasses.neutral" @click="adjustBoardCardScale(-0.1)">-</button>
+                  <button type="button" :class="buttonClasses.neutral" @click="adjustBoardCardScale(0.1)">+</button>
+                </div>
+                <p class="text-sm text-white/45">Drag your cards anywhere in this zone</p>
+              </div>
             </div>
 
             <div

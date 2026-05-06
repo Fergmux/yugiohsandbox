@@ -15,7 +15,9 @@
       <div class="flex items-center gap-3">
         <div class="rounded bg-black/70 px-3 py-1 text-sm text-white">
           Turn {{ gameState.turn }} &mdash;
-          <span class="font-bold">{{ gameState.currentPlayer === 'player1' ? playerNames.player1 : playerNames.player2 }}'s turn</span>
+          <span class="font-bold"
+            >{{ gameState.currentPlayer === 'player1' ? playerNames.player1 : playerNames.player2 }}'s turn</span
+          >
         </div>
         <button
           v-if="isMyTurn && !waitingForReaction && !activationPending && !syncingLocalState"
@@ -42,7 +44,6 @@
       Waiting for opponent response...
     </div>
 
-
     <!-- Prompts -->
     <div
       v-if="targetPending"
@@ -62,10 +63,7 @@
     </div>
 
     <!-- Game over overlay -->
-    <div
-      v-if="gameOver"
-      class="absolute inset-0 z-50 flex items-center justify-center bg-black/80"
-    >
+    <div v-if="gameOver" class="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
       <div class="rounded-xl bg-gray-800 p-8 text-center text-white shadow-2xl">
         <h2 class="text-4xl font-bold">{{ gameOver === myPlayer ? 'You Win!' : 'You Lose!' }}</h2>
       </div>
@@ -87,7 +85,6 @@
         }"
         :key="location.id"
         :name="location.name"
-        :card="getCard(location)"
         :type="location.type"
         :location="location"
         :turn="gameState.turn"
@@ -435,7 +432,9 @@ async function processMultiplayerTurnStart(gs: GameState) {
     return
   }
 
-  const myFieldCards = gs.cards.filter((card) => fieldZones.includes(card.location.type) && card.owner === myPlayer.value)
+  const myFieldCards = gs.cards.filter(
+    (card) => fieldZones.includes(card.location.type) && card.owner === myPlayer.value,
+  )
   for (const card of myFieldCards) {
     for (const effect of card.effects ?? []) {
       if (effect.trigger !== Event.TURN_START) continue
@@ -461,7 +460,6 @@ function subscribeToGame(gId: string) {
     const { serverGs, hydrated } = syncGameStateFromServer(data)
 
     if (data.status === 'active') {
-
       // Detect newly field-placed cards before updating state
       const fieldTypes = new Set(['unit', 'power', 'trap'])
       const newFieldCards: GameCard[] = []
@@ -489,7 +487,11 @@ function subscribeToGame(gId: string) {
       // handler tries to show target selection UI via selectTargets.
       // Handle pending reaction using the card-level activation prompt
       const pendingReaction = data.pendingReaction
-      if (pendingReaction && pendingReaction.respondingPlayer === myPlayer.value && pendingReaction.id !== handledReactionId) {
+      if (
+        pendingReaction &&
+        pendingReaction.respondingPlayer === myPlayer.value &&
+        pendingReaction.id !== handledReactionId
+      ) {
         handledReactionId = pendingReaction.id
         const trapCardId = pendingReaction.eligibleCards[0]
         const trapCard = hydrated.find((c) => c.gameId === trapCardId)
@@ -628,7 +630,8 @@ async function syncCardBuffs(silent = true, options?: { sourceDerivedOnly?: bool
       JSON.stringify(normalizeStateRecord(nextDebuffs)) !== JSON.stringify(normalizeStateRecord(serverCard.debuffs))
     const locationChanged = options?.sourceDerivedOnly
       ? false
-      : JSON.stringify(normalizeSyncLocation(card.location)) !== JSON.stringify(normalizeSyncLocation(serverCard.location))
+      : JSON.stringify(normalizeSyncLocation(card.location)) !==
+        JSON.stringify(normalizeSyncLocation(serverCard.location))
     const faceUpChanged = options?.sourceDerivedOnly ? false : card.faceUp !== serverCard.faceUp
     const defenseChanged = options?.sourceDerivedOnly ? false : !!card.defensePosition !== !!serverCard.defensePosition
 
@@ -708,7 +711,6 @@ async function sendAction(action: Record<string, unknown>, options?: { silent?: 
     if (!options?.silent) actionLoading.value = false
   }
 }
-
 
 // ─── Composables ────────────────────────────────────────────────────────────
 
@@ -829,7 +831,9 @@ function serializeFollowUpEffect(
 function serializeReactionEffect(effect: EffectDef, card: GameCard, reaction: PendingReaction) {
   return {
     trapEffectType: effect.effect,
-    trapEffectOptions: effect.options ? resolveEffectOptions(effect.options as Record<string, unknown>, card) : undefined,
+    trapEffectOptions: effect.options
+      ? resolveEffectOptions(effect.options as Record<string, unknown>, card)
+      : undefined,
     trapTargets: resolveReactionTargets(effect, card, reaction),
     trapThenEffect: effect.then
       ? {
@@ -842,7 +846,9 @@ function serializeReactionEffect(effect: EffectDef, card: GameCard, reaction: Pe
       : undefined,
     trapAndEffects: effect.and?.map((sibling) => ({
       effectType: sibling.effect,
-      effectOptions: sibling.options ? resolveEffectOptions(sibling.options as Record<string, unknown>, card) : undefined,
+      effectOptions: sibling.options
+        ? resolveEffectOptions(sibling.options as Record<string, unknown>, card)
+        : undefined,
       targets: resolveReactionTargets(sibling, card, reaction),
     })),
   }
@@ -881,9 +887,7 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
     case 'summon': {
       const zoneType = card.type === 'unit' ? 'unit' : card.type === 'power' ? 'power' : null
       if (!zoneType) return
-      const validZones = locations.filter(
-        (loc) => loc.type === zoneType && loc.player === card.owner && !getCard(loc),
-      )
+      const validZones = locations.filter((loc) => loc.type === zoneType && loc.player === card.owner && !getCard(loc))
       if (!validZones.length) return
       const zone = await selectZone(validZones, card.name ?? undefined)
       if (!zone) return
@@ -900,16 +904,12 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
       break
     }
     case 'set_trap': {
-      const validZones = locations.filter(
-        (loc) => loc.type === 'trap' && loc.player === card.owner && !getCard(loc),
-      )
+      const validZones = locations.filter((loc) => loc.type === 'trap' && loc.player === card.owner && !getCard(loc))
       if (!validZones.length) return
       const zone = await selectZone(validZones, card.name ?? undefined)
       if (!zone) return
       // Send trap trigger types so the server can check for reactions
-      const trapTriggers = (card.effects ?? [])
-        .filter((e) => e.trigger !== 'manual')
-        .map((e) => e.trigger as string)
+      const trapTriggers = (card.effects ?? []).filter((e) => e.trigger !== 'manual').map((e) => e.trigger as string)
       const trapReactionRules = (card.effects ?? [])
         .filter((e) => e.trigger !== 'manual')
         .map((e) => ({
@@ -933,9 +933,7 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
       break
     }
     case 'set_power': {
-      const validZones = locations.filter(
-        (loc) => loc.type === 'power' && loc.player === card.owner && !getCard(loc),
-      )
+      const validZones = locations.filter((loc) => loc.type === 'power' && loc.player === card.owner && !getCard(loc))
       if (!validZones.length) return
       const zone = await selectZone(validZones, card.name ?? undefined)
       if (!zone) return
@@ -947,10 +945,12 @@ const activateEffect = async (card: GameCard, effectIndex: number) => {
 
       // Check for opponent units
       const opponentUnits = filterByChecks(
-        [[
-          { comparitor: 'equals', key: 'location.type', value: 'unit' },
-          { comparitor: 'owner', value: 'opponent' },
-        ]],
+        [
+          [
+            { comparitor: 'equals', key: 'location.type', value: 'unit' },
+            { comparitor: 'owner', value: 'opponent' },
+          ],
+        ],
         card,
       )
       if (!opponentUnits.length) {
