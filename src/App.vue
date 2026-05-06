@@ -63,6 +63,14 @@ const hasReceivedInvite = computed(() => {
       >
         CrawlV2
       </button>
+      <button
+        :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.matched.some((r) => r.name === 'crawlv3') }"
+        class="cursor-pointer p-1"
+        v-if="userStore.user"
+        @click="router.push('/crawlv3')"
+      >
+        CrawlV3
+      </button>
       <span v-if="userStore.user" class="relative inline-block">
         <button
           :class="{ 'bg-neutral-400 font-semibold text-gray-900': route.name === 'user' }"

@@ -74,6 +74,11 @@ const router = createRouter({
       name: 'crawlv2',
       component: () => import('@/views/CrawlV2.vue'),
     },
+    {
+      path: '/crawlv3/:gameCode?',
+      name: 'crawlv3',
+      component: () => import('@/views/CrawlV3.vue'),
+    },
     // {
     //   path: '/about',
     //   name: 'about',
@@ -100,9 +105,7 @@ router.beforeEach(async (to, from, next) => {
     next({
       name: 'login',
       params:
-        to.name === 'play' || to.name === 'crawlv2'
-          ? { gameCode: to.params.gameCode }
-          : {},
+        to.name === 'play' || to.name === 'crawlv2' || to.name === 'crawlv3' ? { gameCode: to.params.gameCode } : {},
     })
   } else if (userStore.user && to.name === 'login') {
     next({ name: 'deck' })
