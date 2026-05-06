@@ -155,7 +155,6 @@ watch(
                     </button>
                   </div>
                 </div>
-                <p class="text-sm text-white/60">{{ option.description || 'No description provided.' }}</p>
               </div>
             </div>
           </section>
@@ -195,7 +194,6 @@ watch(
                     </button>
                   </div>
                 </div>
-                <p class="text-sm text-white/60">{{ option.description || 'No description provided.' }}</p>
               </div>
             </div>
           </section>
