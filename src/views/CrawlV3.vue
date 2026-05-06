@@ -1531,7 +1531,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div
-            v-if="catalogLoading"
+            v-if="catalogLoading && !catalogCards.length"
             class="mt-8 rounded-[1.25rem] border border-white/10 bg-white/5 p-8 text-center text-white/65"
           >
             Loading catalog...
@@ -1556,7 +1556,7 @@ onBeforeUnmount(() => {
                     ? 'border-amber-300/50 bg-amber-300/10'
                     : 'border-white/10 hover:border-white/25 hover:bg-white/10'
                 "
-                :disabled="!canEditDeckSelection"
+                :aria-disabled="!canEditDeckSelection"
                 :title="
                   canEditDeckSelection ? cardSummary(card) : `${cardSummary(card)}\n\nUnready to change your selection.`
                 "
