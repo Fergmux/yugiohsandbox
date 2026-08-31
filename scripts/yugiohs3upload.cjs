@@ -10,12 +10,16 @@ const axios = require('axios')
 const s3 = new S3Client({
   region: 'eu-west-2',
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.S3_UPLOAD_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_UPLOAD_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
+    ...(process.env.S3_UPLOAD_SESSION_TOKEN || process.env.AWS_SESSION_TOKEN
+      ? { sessionToken: process.env.S3_UPLOAD_SESSION_TOKEN || process.env.AWS_SESSION_TOKEN }
+      : {}),
   },
 })
 
 const BUCKET_NAME = 'yugioh-simulator'
+const CARD_IMAGE_PREFIX = 'yugioh_cards'
 const API_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php'
 
 async function downloadImage(url) {
@@ -30,7 +34,7 @@ async function downloadImage(url) {
 async function objectExistsInS3(filename) {
   const params = {
     Bucket: BUCKET_NAME,
-    Key: `yugioh_cards/${filename}`,
+    Key: `${CARD_IMAGE_PREFIX}/${filename}`,
   }
 
   try {
@@ -48,9 +52,9 @@ async function objectExistsInS3(filename) {
 async function uploadToS3(imageBuffer, filename) {
   const params = {
     Bucket: BUCKET_NAME,
-    Key: `yugioh_cards/${filename}`,
+    Key: `${CARD_IMAGE_PREFIX}/${filename}`,
     Body: imageBuffer,
-    ContentType: 'image/png',
+    ContentType: 'image/jpeg',
   }
 
   const command = new PutObjectCommand(params)

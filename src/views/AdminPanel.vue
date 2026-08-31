@@ -12,15 +12,29 @@ const decks = ref<Deck[]>([])
 const loading = ref(false)
 const loadingDecks = ref(false)
 const saving = ref(false)
+const uploadingCardImages = ref(false)
 
 const editingPower = ref<Power | null>(null)
 const showAddForm = ref(false)
 
 const formName = ref('')
 const formDescription = ref('')
+const cardImageInput = ref<HTMLInputElement | null>(null)
+const cardImageUploads = ref<CardImageUpload[]>([])
 
 const editName = ref('')
 const editDescription = ref('')
+
+type CardImageUploadStatus = 'pending' | 'signing' | 'uploading' | 'uploaded' | 'failed'
+
+interface CardImageUpload {
+  id: string
+  file: File
+  progress: number
+  status: CardImageUploadStatus
+  publicUrl: string
+  error: string
+}
 
 const fetchPowers = async () => {
   loading.value = true
@@ -45,6 +59,9 @@ const fetchDecks = async () => {
 const starterDecks = computed(() => decks.value.filter((d) => d.type === 'starter'))
 const rewardDecks = computed(() => decks.value.filter((d) => d.type === 'reward'))
 const unassignedDecks = computed(() => decks.value.filter((d) => !d.type))
+const hasCardImagesToUpload = computed(() =>
+  cardImageUploads.value.some((upload) => upload.status === 'pending' || upload.status === 'failed'),
+)
 
 const toggleDeckType = async (deck: Deck, type: 'starter' | 'reward') => {
   const newType = deck.type === type ? null : type
@@ -133,6 +150,102 @@ const deletePower = async (power: Power) => {
   }
 }
 
+const selectCardImage = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  cardImageUploads.value = Array.from(input.files ?? []).map((file, index) => ({
+    id: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+    file,
+    progress: 0,
+    status: 'pending',
+    publicUrl: '',
+    error: '',
+  }))
+}
+
+const uploadFileToS3 = (uploadUrl: string, file: File, onProgress: (progress: number) => void) =>
+  new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest()
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      onProgress(Math.round((event.loaded / event.total) * 100))
+    }
+
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress(100)
+        resolve()
+      } else {
+        const responseText = request.responseText?.trim()
+        reject(new Error(`S3 upload failed with ${request.status}${responseText ? `: ${responseText}` : ''}`))
+      }
+    }
+
+    request.onerror = () => reject(new Error('S3 upload failed. Check the browser console for CORS details.'))
+    request.onabort = () => reject(new Error('S3 upload cancelled'))
+    request.open('PUT', uploadUrl)
+    request.setRequestHeader('Content-Type', file.type)
+    request.send(file)
+  })
+
+const uploadSingleCardImage = async (upload: CardImageUpload) => {
+  upload.status = 'signing'
+  upload.error = ''
+
+  try {
+    const response = await authFetch('/.netlify/functions/create-card-image-upload', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileName: upload.file.name,
+        contentType: upload.file.type,
+        size: upload.file.size,
+      }),
+    })
+    const uploadConfig: { uploadUrl?: string; publicUrl?: string; message?: string } = await response.json()
+    if (response.status !== 200 || !uploadConfig.uploadUrl || !uploadConfig.publicUrl) {
+      throw new Error(uploadConfig.message ?? 'Unable to create upload URL')
+    }
+
+    upload.status = 'uploading'
+    await uploadFileToS3(uploadConfig.uploadUrl, upload.file, (progress) => {
+      upload.progress = progress
+    })
+
+    upload.publicUrl = uploadConfig.publicUrl
+    upload.status = 'uploaded'
+  } catch (err) {
+    upload.error = err instanceof Error ? err.message : 'Upload failed'
+    upload.status = 'failed'
+  }
+}
+
+const uploadCardImages = async () => {
+  const pendingUploads = cardImageUploads.value.filter((upload) => upload.status === 'pending' || upload.status === 'failed')
+  if (pendingUploads.length === 0) return
+
+  uploadingCardImages.value = true
+
+  try {
+    const uploadQueue = [...pendingUploads]
+    const workerCount = Math.min(uploadQueue.length, 4)
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (uploadQueue.length) {
+          const nextUpload = uploadQueue.shift()
+          if (nextUpload) await uploadSingleCardImage(nextUpload)
+        }
+      }),
+    )
+
+    if (cardImageUploads.value.every((upload) => upload.status === 'uploaded')) {
+      if (cardImageInput.value) cardImageInput.value.value = ''
+    }
+  } finally {
+    uploadingCardImages.value = false
+  }
+}
+
 onMounted(() => {
   fetchPowers()
   fetchDecks()
@@ -150,6 +263,63 @@ onMounted(() => {
         + Add Power
       </button>
     </div>
+
+    <section class="mb-10 rounded-md border-1 border-gray-300 p-4">
+      <h2 class="mb-4 text-2xl font-semibold">Card Images</h2>
+      <form class="flex flex-col gap-4" @submit.prevent="uploadCardImages">
+        <div>
+          <label class="mb-1 block text-sm text-gray-400">Image</label>
+          <input
+            ref="cardImageInput"
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp"
+            class="w-full cursor-pointer rounded-md border-1 border-gray-300 bg-transparent p-2 text-sm file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-neutral-700 file:px-3 file:py-1 file:text-white"
+            @change="selectCardImage"
+          />
+        </div>
+
+        <ul v-if="cardImageUploads.length" class="flex flex-col gap-2">
+          <li
+            v-for="upload in cardImageUploads"
+            :key="upload.id"
+            class="rounded-md border-1 border-gray-300 p-3"
+          >
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <span class="min-w-0 truncate text-sm">{{ upload.file.name }}</span>
+              <span
+                class="shrink-0 text-xs"
+                :class="{
+                  'text-green-400': upload.status === 'uploaded',
+                  'text-red-400': upload.status === 'failed',
+                  'text-gray-400': upload.status !== 'uploaded' && upload.status !== 'failed',
+                }"
+              >
+                {{ upload.status === 'uploaded' ? 'Uploaded' : upload.status === 'failed' ? 'Failed' : `${upload.progress}%` }}
+              </span>
+            </div>
+            <div class="h-2 overflow-hidden rounded-full bg-neutral-800">
+              <div
+                class="h-full rounded-full transition-all"
+                :class="upload.status === 'failed' ? 'bg-red-500' : 'bg-green-500'"
+                :style="{ width: `${upload.status === 'signing' ? 4 : upload.progress}%` }"
+              />
+            </div>
+            <p v-if="upload.error" class="mt-2 text-xs text-red-400">{{ upload.error }}</p>
+          </li>
+        </ul>
+
+        <div class="flex items-center justify-end gap-3">
+          <button
+            type="submit"
+            :disabled="uploadingCardImages || !hasCardImagesToUpload"
+            class="cursor-pointer rounded-md border-1 border-gray-300 px-4 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ uploadingCardImages ? 'Uploading...' : 'Upload Images' }}
+          </button>
+        </div>
+      </form>
+    </section>
 
     <div v-if="loading" class="py-12 text-center text-lg text-gray-400">Loading powers...</div>
 
