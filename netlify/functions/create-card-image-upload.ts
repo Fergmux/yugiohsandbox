@@ -30,16 +30,15 @@ const json = (statusCode: number, body: Record<string, unknown>) => ({
 const encodeS3Key = (key: string) => key.split('/').map(encodeURIComponent).join('/')
 
 const getAwsCredentials = () => {
-  const accessKeyId = process.env.S3_UPLOAD_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID
-  const secretAccessKey = process.env.S3_UPLOAD_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY
-  const sessionToken = process.env.S3_UPLOAD_SESSION_TOKEN ?? process.env.AWS_SESSION_TOKEN
+  const uploadAccessKeyId = process.env.S3_UPLOAD_ACCESS_KEY_ID
+  const uploadSecretAccessKey = process.env.S3_UPLOAD_SECRET_ACCESS_KEY
 
-  if (!accessKeyId || !secretAccessKey) return null
+  if (!uploadAccessKeyId || !uploadSecretAccessKey) return null
 
   return {
-    accessKeyId,
-    secretAccessKey,
-    ...(sessionToken ? { sessionToken } : {}),
+    accessKeyId: uploadAccessKeyId,
+    secretAccessKey: uploadSecretAccessKey,
+    ...(process.env.S3_UPLOAD_SESSION_TOKEN ? { sessionToken: process.env.S3_UPLOAD_SESSION_TOKEN } : {}),
   }
 }
 
@@ -53,7 +52,7 @@ const buildPublicUrl = (fileName: string, key: string) => {
   const publicBaseUrl = process.env.S3_PUBLIC_BASE_URL ?? process.env.VITE_S3_BUCKET_URL
   if (publicBaseUrl) return `${publicBaseUrl.replace(/\/?$/, '/')}${encodeURIComponent(fileName)}`
 
-  const region = process.env.S3_UPLOAD_REGION ?? process.env.AWS_REGION ?? DEFAULT_REGION
+  const region = process.env.S3_UPLOAD_REGION ?? DEFAULT_REGION
   return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${encodeS3Key(key)}`
 }
 
@@ -83,7 +82,7 @@ const handler = async (event: { body: string | null; headers: Record<string, str
       return json(400, { message: 'Image must be 5 MB or smaller' })
     }
 
-    const region = process.env.S3_UPLOAD_REGION ?? process.env.AWS_REGION ?? DEFAULT_REGION
+    const region = process.env.S3_UPLOAD_REGION ?? DEFAULT_REGION
     const key = `${CARD_IMAGE_PREFIX}/${fileName}`
     const credentials = getAwsCredentials()
 
