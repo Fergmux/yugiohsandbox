@@ -407,7 +407,7 @@ watch(
               Choose any number of cards. Changes save automatically, so ready up once you are happy.
             </p>
             <p v-else class="mt-2 text-white/60">
-              Watch either player perspective, or choose Both to inspect every selected card.
+              Choose the player perspective you want for the game. Both players' selected cards stay visible here.
             </p>
           </div>
           <div v-if="!isSpectator" class="flex flex-wrap gap-3">

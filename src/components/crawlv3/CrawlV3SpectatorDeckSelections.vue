@@ -18,10 +18,6 @@ defineEmits<{
 }>()
 
 const playerKeys: Crawlv3Player[] = ['player1', 'player2']
-
-function canSeePlayerSelection(playerKey: Crawlv3Player) {
-  return perspective.value === 'both' || perspective.value === playerKey
-}
 </script>
 
 <template>
@@ -37,7 +33,6 @@ function canSeePlayerSelection(playerKey: Crawlv3Player) {
       v-for="playerKey in playerKeys"
       :key="`spectator-selection-${playerKey}`"
       class="rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
-      :class="!canSeePlayerSelection(playerKey) ? 'opacity-75' : ''"
     >
       <div class="flex items-center justify-between gap-3">
         <div>
@@ -49,23 +44,12 @@ function canSeePlayerSelection(playerKey: Crawlv3Player) {
           </h3>
         </div>
         <span class="rounded-full bg-black/25 px-3 py-1 text-xs font-semibold text-white/70">
-          {{
-            canSeePlayerSelection(playerKey)
-              ? `${game?.deckSelections[playerKey]?.cards.length ?? 0} cards`
-              : 'Hidden'
-          }}
+          {{ game?.deckSelections[playerKey]?.cards.length ?? 0 }} cards
         </span>
       </div>
 
       <div
-        v-if="!canSeePlayerSelection(playerKey)"
-        class="mt-4 rounded-[1rem] border border-white/10 bg-black/20 p-4 text-sm text-white/50"
-      >
-        This player's selected cards are hidden for your current spectator view.
-      </div>
-
-      <div
-        v-else-if="!playerSelectionRows[playerKey].length"
+        v-if="!playerSelectionRows[playerKey].length"
         class="mt-4 rounded-[1rem] border border-white/10 bg-black/20 p-4 text-sm text-white/50"
       >
         No cards selected.

@@ -290,9 +290,7 @@ const otherSelectedCardIds = computed(() => {
       ([uid, selection]) =>
         uid !== currentUserUid.value &&
         !!selection.instanceId &&
-        (actualPlayer.value
-          ? selection.visibleTo.includes(actualPlayer.value)
-          : spectatorPerspective.value === 'both' || selection.visibleTo.includes(spectatorPerspective.value)),
+        (isSpectator.value || (actualPlayer.value && selection.visibleTo.includes(actualPlayer.value))),
     )
     .map(([, selection]) => selection.instanceId as string)
 })
