@@ -693,6 +693,8 @@ watch(
         @clear="clearCatalogSelection"
         @remove="removeCardSelection"
         @preview="catalogPreviewCard = $event"
+        @tooltip="updateCatalogTooltip"
+        @tooltip-clear="clearCatalogTooltip"
       />
     </div>
 

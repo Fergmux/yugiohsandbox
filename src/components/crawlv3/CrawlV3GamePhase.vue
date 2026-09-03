@@ -54,7 +54,7 @@ const { statusDefinitions } = useCrawlv3StatusDefinitions({
   config: computed(() => game.value?.config),
 })
 
-const revealAllCards = computed(() => isSpectator.value && spectatorPerspective.value === 'both')
+const revealAllCards = computed(() => isSpectator.value)
 const spectatorPerspectiveOptions = computed<{ value: Crawlv3SpectatorPerspective; label: string }[]>(() => [
   { value: 'both', label: 'Both' },
   { value: 'player1', label: game.value?.players.player1?.username ?? 'Player 1' },
@@ -287,8 +287,7 @@ const selectedCardHighlightVisibleTo = computed<Crawlv3Player[]>(() => {
     return selectedCard.value.owner !== actualPlayer.value ? [selectedCard.value.owner] : []
   }
   if (!isSpectator.value) return []
-  if (spectatorPerspective.value === 'both') return ['player1', 'player2']
-  return [spectatorPerspective.value]
+  return ['player1', 'player2']
 })
 const otherSelectedCardIds = computed(() => {
   const selections = displayGame.value?.cardSelections ?? {}

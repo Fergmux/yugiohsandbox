@@ -10,11 +10,21 @@ defineProps<{
   canEdit: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (event: 'clear'): void
   (event: 'remove', cardId: string): void
   (event: 'preview', card: Crawlv3CatalogCard): void
+  (event: 'tooltip', card: Crawlv3CatalogCard, mouseEvent: MouseEvent): void
+  (event: 'tooltip-clear', card: Crawlv3CatalogCard): void
 }>()
+
+function forwardTooltip(card: Crawlv3CatalogCard, mouseEvent: MouseEvent) {
+  emit('tooltip', card, mouseEvent)
+}
+
+function forwardTooltipClear(card: Crawlv3CatalogCard) {
+  emit('tooltip-clear', card)
+}
 </script>
 
 <template>
@@ -68,6 +78,8 @@ defineEmits<{
         :interactive="canEdit"
         @select="$emit('remove', card.id)"
         @preview="$emit('preview', card)"
+        @tooltip="forwardTooltip"
+        @tooltip-clear="forwardTooltipClear"
       />
     </div>
   </aside>

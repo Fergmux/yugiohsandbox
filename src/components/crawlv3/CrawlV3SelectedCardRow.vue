@@ -12,6 +12,8 @@ defineProps<{
 defineEmits<{
   (event: 'select'): void
   (event: 'preview'): void
+  (event: 'tooltip', card: Crawlv3CatalogCard, mouseEvent: MouseEvent): void
+  (event: 'tooltip-clear', card: Crawlv3CatalogCard): void
 }>()
 </script>
 
@@ -31,6 +33,9 @@ defineEmits<{
     :aria-label="`${card.title} selected ${count} times`"
     @click="interactive && $emit('select')"
     @contextmenu.prevent.stop="$emit('preview')"
+    @mouseenter="$emit('tooltip', card, $event)"
+    @mousemove="$emit('tooltip', card, $event)"
+    @mouseleave="$emit('tooltip-clear', card)"
   >
     <div class="h-14 w-10 shrink-0 overflow-hidden border border-white/10 bg-transparent">
       <img v-if="card.imageUrl" :src="card.imageUrl" :alt="card.title" class="h-full w-full object-cover" />
