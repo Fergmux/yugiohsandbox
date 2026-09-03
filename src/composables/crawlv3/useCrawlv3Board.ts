@@ -22,6 +22,10 @@ type UseCrawlv3BoardOptions = {
   onClearTransientUi?: () => void
 }
 
+type StartCardDragOptions = {
+  selectable?: boolean
+}
+
 const fixedBoardCardScale = 0.95
 const pileZones = new Set<Crawlv3Zone>(['deck', 'extraDeck', 'discard', 'exhausted'])
 
@@ -172,10 +176,11 @@ export function useCrawlv3Board({
     return null
   }
 
-  function startCardDrag(card: Crawlv3CardState, event: PointerEvent) {
+  function startCardDrag(card: Crawlv3CardState, event: PointerEvent, options: StartCardDragOptions = {}) {
     if (event.button !== 0) return
+    const selectable = options.selectable ?? true
     if (!actorPlayer.value || card.owner !== actorPlayer.value) {
-      selectCard(card.instanceId)
+      if (selectable) selectCard(card.instanceId)
       return
     }
 
@@ -199,6 +204,7 @@ export function useCrawlv3Board({
       cardWidth: rect?.width || positionElement?.offsetWidth || 0,
       cardHeight: rect?.height || positionElement?.offsetHeight || 0,
       active: false,
+      selectable,
     }
 
     window.addEventListener('pointermove', handlePointerMove)
@@ -245,13 +251,13 @@ export function useCrawlv3Board({
     const deltaY = event.clientY - currentDrag.startY
     const nextActive = currentDrag.active || Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 6
 
-    if (nextActive && !currentDrag.active) {
+    if (nextActive && !currentDrag.active && currentDrag.selectable) {
       selectedCardId.value = currentDrag.instanceId
     }
 
     const card = game.value?.cards[currentDrag.instanceId]
     const target = nextActive ? resolveDropTarget(event.clientX, event.clientY, currentDrag) : null
-    const previewPlacement = card ? getDragPreviewPlacement(card, target, event) : null
+    const previewPlacement = card && currentDrag.selectable ? getDragPreviewPlacement(card, target, event) : null
 
     dragState.value = {
       ...currentDrag,
@@ -276,6 +282,7 @@ export function useCrawlv3Board({
     if (!card) return
 
     if (!currentDrag.active) {
+      if (!currentDrag.selectable) return
       selectCard(card.instanceId)
       return
     }

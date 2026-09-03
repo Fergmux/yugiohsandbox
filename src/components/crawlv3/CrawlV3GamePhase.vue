@@ -270,7 +270,9 @@ const selectedDamageTypeOptions = computed(() => [
 
 const selectedCard = computed(() => {
   if (!displayGame.value || !selectedCardId.value) return null
-  return displayGame.value.cards[selectedCardId.value] ?? null
+  const card = displayGame.value.cards[selectedCardId.value] ?? null
+  if (card?.owner === actualPlayer.value && card.zone === 'deck') return null
+  return card
 })
 const selectedCardVisible = computed(() => (selectedCard.value ? canSeeCardDetails(selectedCard.value) : false))
 const selectedReadonlyShowFace = computed(() => !!selectedCard.value && selectedCardVisible.value)
@@ -418,7 +420,7 @@ function startTopPileDrag(zone: Crawlv3PileZone, event: PointerEvent) {
   if (!isPlayerInteractive.value) return
 
   if (zone === 'deck' && myTopDeckCard.value) {
-    startCardDrag(myTopDeckCard.value, event)
+    startCardDrag(myTopDeckCard.value, event, { selectable: false })
   } else if (zone === 'extraDeck' && myTopExtraDeckCard.value) {
     startCardDrag(myTopExtraDeckCard.value, event)
   } else if (zone === 'discard' && myTopDiscardCard.value) {

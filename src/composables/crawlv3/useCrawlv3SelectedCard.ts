@@ -50,6 +50,7 @@ export function useCrawlv3SelectedCard({
 
   const selectedOwnCard = computed(() => {
     if (!selectedCard.value || !myPlayer.value) return null
+    if (selectedCard.value.zone === 'deck') return null
     return selectedCard.value.owner === myPlayer.value ? selectedCard.value : null
   })
 
