@@ -1,4 +1,5 @@
 export type Crawlv3Player = 'player1' | 'player2'
+export type Crawlv3SpectatorPerspective = Crawlv3Player | 'both'
 
 export type Crawlv3Zone = 'table' | 'hand' | 'deck' | 'extraDeck' | 'discard' | 'exhausted'
 export type Crawlv3StatusType = 'buff' | 'debuff'
@@ -69,6 +70,7 @@ export interface Crawlv3SpectatorInfo {
   uid: string
   username: string
   joinedAt: number
+  spectatorPerspective: Crawlv3SpectatorPerspective
 }
 
 export interface Crawlv3DeckSelection {
@@ -150,6 +152,11 @@ export type Crawlv3Action =
       type: 'select_card'
       instanceId: string | null
       visibleTo: Crawlv3Player[]
+      actionId: string
+    }
+  | {
+      type: 'update_spectator_perspective'
+      perspective: Crawlv3SpectatorPerspective
       actionId: string
     }
   | {

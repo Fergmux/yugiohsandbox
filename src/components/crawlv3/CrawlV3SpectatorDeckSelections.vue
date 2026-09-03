@@ -13,18 +13,24 @@ defineProps<{
   playerSelectionRows: Record<Crawlv3Player, Crawlv3SelectedCardRow[]>
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (event: 'preview', card: Crawlv3CatalogCard): void
+  (event: 'save-perspective', perspective: Crawlv3SpectatorPerspective): void
 }>()
 
 const playerKeys: Crawlv3Player[] = ['player1', 'player2']
+
+function savePerspective(value: string) {
+  if (value !== 'both' && value !== 'player1' && value !== 'player2') return
+  emit('save-perspective', value)
+}
 </script>
 
 <template>
   <div class="mt-6 rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
     <label class="block">
       <span class="mb-2 block text-sm text-white/65">Spectate</span>
-      <CrawlV3Select v-model="perspective" :options="perspectiveOptions" />
+      <CrawlV3Select v-model="perspective" :options="perspectiveOptions" @change="savePerspective" />
     </label>
   </div>
 

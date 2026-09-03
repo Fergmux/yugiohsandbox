@@ -336,6 +336,13 @@ export function applyCrawlv3Action(
       }
       break
     }
+    case 'update_spectator_perspective': {
+      if (!actorUid) break
+      const spectator = nextGame.spectators.find((entry) => entry.uid === actorUid)
+      if (!spectator) break
+      spectator.spectatorPerspective = action.perspective
+      break
+    }
     case 'move_card': {
       if (!actor) break
       const card = nextGame.cards[action.instanceId]

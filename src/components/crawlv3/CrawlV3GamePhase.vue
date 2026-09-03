@@ -10,6 +10,7 @@ import CrawlV3PilePanel from '@/components/crawlv3/CrawlV3PilePanel.vue'
 import CrawlV3PlayerStatsPanel from '@/components/crawlv3/CrawlV3PlayerStatsPanel.vue'
 import CrawlV3RulesModal from '@/components/crawlv3/CrawlV3RulesModal.vue'
 import CrawlV3SelectedCardPanel from '@/components/crawlv3/CrawlV3SelectedCardPanel.vue'
+import CrawlV3Select from '@/components/crawlv3/CrawlV3Select.vue'
 import CrawlV3ShortcutsModal from '@/components/crawlv3/CrawlV3ShortcutsModal.vue'
 import CrawlV3StatusModal from '@/components/crawlv3/CrawlV3StatusModal.vue'
 import { useCrawlv3Board } from '@/composables/crawlv3/useCrawlv3Board'
@@ -22,7 +23,7 @@ import { loadCatalogCards } from '@/lib/crawlv3/catalog'
 import { getTopPileCard, getZoneCards } from '@/lib/crawlv3/game-state'
 import { safeTrim, shuffleItems, withDefaultCatalogConfig } from '@/lib/crawlv3/ui-utils'
 import type { Crawlv3CardState, Crawlv3CatalogCard, Crawlv3Player } from '@/types/crawlv3'
-import type { Crawlv3PileZone, OpenCrawlv3PileState } from '@/types/crawlv3-ui'
+import type { Crawlv3PileZone, Crawlv3SpectatorPerspective, OpenCrawlv3PileState } from '@/types/crawlv3-ui'
 
 const {
   game,
@@ -31,6 +32,7 @@ const {
   isSpectator,
   spectatorPerspective,
   enqueueAction,
+  saveSpectatorPerspective,
   resetRoomSession,
 } = useCrawlv3Controller()
 
@@ -53,6 +55,11 @@ const { statusDefinitions } = useCrawlv3StatusDefinitions({
 })
 
 const revealAllCards = computed(() => isSpectator.value && spectatorPerspective.value === 'both')
+const spectatorPerspectiveOptions = computed<{ value: Crawlv3SpectatorPerspective; label: string }[]>(() => [
+  { value: 'both', label: 'Both' },
+  { value: 'player1', label: game.value?.players.player1?.username ?? 'Player 1' },
+  { value: 'player2', label: game.value?.players.player2?.username ?? 'Player 2' },
+])
 const myPlayer = computed<Crawlv3Player>(() => {
   if (actualPlayer.value) return actualPlayer.value
   return spectatorPerspective.value === 'player2' ? 'player2' : 'player1'
@@ -359,6 +366,11 @@ function clearPublishedSelectedCardState() {
   publishSelectedCard(null)
 }
 
+function savePerspective(value: string) {
+  if (value !== 'both' && value !== 'player1' && value !== 'player2') return
+  saveSpectatorPerspective(value)
+}
+
 function leaveRoom() {
   previewCardId.value = null
   clearPublishedSelectedCardState()
@@ -586,6 +598,14 @@ onBeforeUnmount(() => {
             <p class="mt-1 text-3xl font-semibold tracking-[0.2em] text-amber-200">{{ game.code }}</p>
           </div>
           <div class="flex flex-wrap gap-3">
+            <label v-if="isSpectator" class="block min-w-48">
+              <span class="sr-only">Spectate</span>
+              <CrawlV3Select
+                v-model="spectatorPerspective"
+                :options="spectatorPerspectiveOptions"
+                @change="savePerspective"
+              />
+            </label>
             <button
               type="button"
               class="cursor-pointer rounded-full border border-violet-300/35 bg-violet-300/12 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:border-violet-300/50 hover:bg-violet-300/18"

@@ -41,8 +41,7 @@ export function useCrawlv3RoomSession() {
   const mySpectator = computed(() => {
     if (!serverSnapshot.value || !userStore.user) return null
     return (
-      (serverSnapshot.value.spectators ?? []).find((spectator) => spectator.uid === userStore.user?.firebaseUid) ??
-      null
+      (serverSnapshot.value.spectators ?? []).find((spectator) => spectator.uid === userStore.user?.firebaseUid) ?? null
     )
   })
 
@@ -70,10 +69,19 @@ export function useCrawlv3RoomSession() {
   const isHost = computed(() => myPlayer.value === 'player1')
   const isPerspectiveFlipped = computed(() => myPlayer.value === 'player2')
 
+  function normalizeSpectatorPerspective(value: unknown): Crawlv3SpectatorPerspective {
+    return value === 'player1' || value === 'player2' || value === 'both' ? value : 'both'
+  }
+
   function normalizeGameSnapshot(game: Crawlv3Game): Crawlv3Game {
     return {
       ...game,
-      spectators: Array.isArray(game.spectators) ? game.spectators : [],
+      spectators: Array.isArray(game.spectators)
+        ? game.spectators.map((spectator) => ({
+            ...spectator,
+            spectatorPerspective: normalizeSpectatorPerspective(spectator.spectatorPerspective),
+          }))
+        : [],
       cardSelections:
         game.cardSelections && typeof game.cardSelections === 'object'
           ? Object.fromEntries(
@@ -194,7 +202,7 @@ export function useCrawlv3RoomSession() {
   }
 
   function enqueueAction(action: QueuedCrawlv3Action) {
-    if (!myPlayer.value && action.type !== 'select_card') {
+    if (!myPlayer.value && action.type !== 'select_card' && action.type !== 'update_spectator_perspective') {
       error.value = 'Spectators cannot perform game actions'
       return
     }
@@ -207,6 +215,16 @@ export function useCrawlv3RoomSession() {
     pendingActions.value = [...pendingActions.value, batch]
     sendQueue.push(batch)
     void flushQueue()
+  }
+
+  function saveSpectatorPerspective(perspective: Crawlv3SpectatorPerspective) {
+    spectatorPerspective.value = perspective
+    if (!isSpectator.value) return
+
+    enqueueAction({
+      type: 'update_spectator_perspective',
+      perspective,
+    })
   }
 
   function resetRoomSession() {
@@ -233,6 +251,15 @@ export function useCrawlv3RoomSession() {
       errorTimer = null
     }, 5000)
   })
+
+  watch(
+    () => mySpectator.value?.spectatorPerspective,
+    (perspective) => {
+      if (!perspective) return
+      spectatorPerspective.value = perspective
+    },
+    { immediate: true },
+  )
 
   onMounted(() => {
     if (route.params.gameCode) {
@@ -266,6 +293,7 @@ export function useCrawlv3RoomSession() {
     createGame,
     joinGame,
     enqueueAction,
+    saveSpectatorPerspective,
     resetRoomSession,
   }
 }

@@ -30,6 +30,7 @@ const {
   isDeckReady,
   canEditDeckSelection,
   setReadyState,
+  saveSpectatorPerspective,
 } = useCrawlv3Controller()
 
 const {
@@ -455,6 +456,7 @@ watch(
             :perspective-options="spectatorPerspectiveOptions"
             :player-selection-rows="playerSelectionRows"
             @preview="catalogPreviewCard = $event"
+            @save-perspective="saveSpectatorPerspective"
           />
         </template>
         <template v-else>

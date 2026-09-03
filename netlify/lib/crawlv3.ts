@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid'
 export const CRAWLV3_GAMES_COLLECTION = 'crawlv3_games'
 
 export type Crawlv3Player = 'player1' | 'player2'
+export type Crawlv3SpectatorPerspective = Crawlv3Player | 'both'
 export type Crawlv3Zone = 'table' | 'hand' | 'deck' | 'extraDeck' | 'discard' | 'exhausted'
 export type Crawlv3StatusType = 'buff' | 'debuff'
 
@@ -76,6 +77,7 @@ export interface Crawlv3SpectatorInfo {
   uid: string
   username: string
   joinedAt: number
+  spectatorPerspective: Crawlv3SpectatorPerspective
 }
 
 export interface Crawlv3CardState {
@@ -146,6 +148,11 @@ export type Crawlv3Action =
       type: 'select_card'
       instanceId: string | null
       visibleTo: Crawlv3Player[]
+      actionId: string
+    }
+  | {
+      type: 'update_spectator_perspective'
+      perspective: Crawlv3SpectatorPerspective
       actionId: string
     }
   | {
@@ -304,11 +311,25 @@ export function isCrawlv3Spectator(game: Crawlv3Game, uid: string) {
   return game.spectators.some((spectator) => spectator.uid === uid)
 }
 
+function getCrawlv3Spectator(game: Crawlv3Game, uid: string) {
+  game.spectators = Array.isArray(game.spectators) ? game.spectators : []
+  return game.spectators.find((spectator) => spectator.uid === uid) ?? null
+}
+
 function isCrawlv3Participant(game: Crawlv3Game, uid: string) {
   return !!getCrawlv3PlayerKey(game, uid) || isCrawlv3Spectator(game, uid)
 }
 
-function sanitizeSelectionVisibility(game: Crawlv3Game, uid: string, instanceId: string | null, requested: Crawlv3Player[]) {
+function sanitizeSpectatorPerspective(value: unknown): Crawlv3SpectatorPerspective {
+  return value === 'player1' || value === 'player2' || value === 'both' ? value : 'both'
+}
+
+function sanitizeSelectionVisibility(
+  game: Crawlv3Game,
+  uid: string,
+  instanceId: string | null,
+  requested: Crawlv3Player[],
+) {
   const actorPlayer = getCrawlv3PlayerKey(game, uid)
   const cardOwner = instanceId ? game.cards[instanceId]?.owner : null
 
@@ -333,6 +354,7 @@ export function addCrawlv3Spectator(game: Crawlv3Game, uid: string, username: st
     uid,
     username,
     joinedAt: Date.now(),
+    spectatorPerspective: 'both',
   })
   game._version = (game._version ?? 0) + 1
 }
@@ -748,7 +770,12 @@ export function applyAuthenticatedCrawlv3Action(
   uid: string,
 ): Crawlv3ActionResult {
   game.config = sanitizeCrawlv3Config(game.config)
-  game.spectators = Array.isArray(game.spectators) ? game.spectators : []
+  game.spectators = Array.isArray(game.spectators)
+    ? game.spectators.map((spectator) => ({
+        ...spectator,
+        spectatorPerspective: sanitizeSpectatorPerspective(spectator.spectatorPerspective),
+      }))
+    : []
   game.cardSelections = game.cardSelections && typeof game.cardSelections === 'object' ? game.cardSelections : {}
   game.processedActions = Array.isArray(game.processedActions) ? game.processedActions : []
   const playerKey = getCrawlv3PlayerKey(game, uid)
@@ -768,6 +795,19 @@ export function applyAuthenticatedCrawlv3Action(
       instanceId: action.instanceId,
       visibleTo: sanitizeSelectionVisibility(game, uid, action.instanceId, action.visibleTo),
     }
+    game.processedActions.push(action.actionId)
+    if (game.processedActions.length > 100) game.processedActions.shift()
+    game._version = (game._version ?? 0) + 1
+    return { success: true }
+  }
+
+  if (action.type === 'update_spectator_perspective') {
+    const spectator = getCrawlv3Spectator(game, uid)
+    if (!spectator) {
+      return { success: false, error: 'Only spectators can update spectator perspective' }
+    }
+
+    spectator.spectatorPerspective = sanitizeSpectatorPerspective(action.perspective)
     game.processedActions.push(action.actionId)
     if (game.processedActions.length > 100) game.processedActions.shift()
     game._version = (game._version ?? 0) + 1
