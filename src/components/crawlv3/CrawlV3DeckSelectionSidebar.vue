@@ -3,16 +3,27 @@ import CrawlV3SelectedCardRow from '@/components/crawlv3/CrawlV3SelectedCardRow.
 import type { Crawlv3SelectedCardRow } from '@/lib/crawlv3/selected-card-rows'
 import type { Crawlv3CatalogCard } from '@/types/crawlv3'
 
-defineProps<{
-  rows: Crawlv3SelectedCardRow[]
-  categoryRows: { category: string; count: number }[]
-  total: number
-  canEdit: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    rows: Crawlv3SelectedCardRow[]
+    categoryRows: { category: string; count: number }[]
+    total: number
+    title?: string
+    canEdit: boolean
+    canHighlight?: boolean
+    highlightedCardIds?: Set<string>
+  }>(),
+  {
+    title: 'Your Deck',
+    canHighlight: false,
+    highlightedCardIds: () => new Set<string>(),
+  },
+)
 
 const emit = defineEmits<{
   (event: 'clear'): void
   (event: 'remove', cardId: string): void
+  (event: 'highlight', card: Crawlv3CatalogCard): void
   (event: 'preview', card: Crawlv3CatalogCard): void
   (event: 'tooltip', card: Crawlv3CatalogCard, mouseEvent: MouseEvent): void
   (event: 'tooltip-clear', card: Crawlv3CatalogCard): void
@@ -25,6 +36,17 @@ function forwardTooltip(card: Crawlv3CatalogCard, mouseEvent: MouseEvent) {
 function forwardTooltipClear(card: Crawlv3CatalogCard) {
   emit('tooltip-clear', card)
 }
+
+function handleRowSelect(card: Crawlv3CatalogCard) {
+  if (props.canEdit) {
+    emit('remove', card.id)
+    return
+  }
+
+  if (props.canHighlight) {
+    emit('highlight', card)
+  }
+}
 </script>
 
 <template>
@@ -34,7 +56,7 @@ function forwardTooltipClear(card: Crawlv3CatalogCard) {
     <div class="flex items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold tracking-[0.3em] text-white/45 uppercase">Selected</p>
-        <h2 class="mt-2 text-2xl font-semibold">Your Deck</h2>
+        <h2 class="mt-2 text-2xl font-semibold">{{ title }}</h2>
       </div>
       <button
         type="button"
@@ -75,8 +97,9 @@ function forwardTooltipClear(card: Crawlv3CatalogCard) {
         :key="`selected-${card.id}`"
         :card="card"
         :count="count"
-        :interactive="canEdit"
-        @select="$emit('remove', card.id)"
+        :interactive="canEdit || canHighlight"
+        :highlighted="highlightedCardIds.has(card.id)"
+        @select="handleRowSelect(card)"
         @preview="$emit('preview', card)"
         @tooltip="forwardTooltip"
         @tooltip-clear="forwardTooltipClear"

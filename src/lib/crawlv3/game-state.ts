@@ -5,6 +5,8 @@ import type {
   Crawlv3CatalogConfig,
   Crawlv3DeckSelection,
   Crawlv3Game,
+  Crawlv3LobbyCardSelection,
+  Crawlv3LobbyViewState,
   Crawlv3Player,
   Crawlv3PlayerInfo,
   Crawlv3Zone,
@@ -14,6 +16,14 @@ import { createDefaultCrawlv3Config } from './catalog'
 
 function randomRoomCode() {
   return Math.floor(1000 + Math.random() * 9000)
+}
+
+export function createDefaultCrawlv3LobbyViewState(): Crawlv3LobbyViewState {
+  return {
+    draftMode: 'catalog',
+    draftCategory: '',
+    draftChoiceIds: [],
+  }
 }
 
 export function createPlayerInfo(uid: string, username: string, config: Crawlv3CatalogConfig): Crawlv3PlayerInfo {
@@ -43,6 +53,11 @@ export function createEmptyCrawlv3Game(): Crawlv3Game {
       player1: null,
       player2: null,
     },
+    lobbyStates: {
+      player1: createDefaultCrawlv3LobbyViewState(),
+      player2: createDefaultCrawlv3LobbyViewState(),
+    },
+    lobbyCardSelections: {},
     cardSelections: {},
     cards: {},
     processedActions: [],
@@ -69,6 +84,44 @@ export function normalizeConfigDefaults(config: Crawlv3CatalogConfig): Crawlv3Ca
     defaultLifePoints: Number.isFinite(config.defaultLifePoints) ? Number(config.defaultLifePoints) : 8000,
     defaultActionPoints: Number.isFinite(config.defaultActionPoints) ? Number(config.defaultActionPoints) : 0,
   }
+}
+
+export function normalizeLobbyViewState(state: Partial<Crawlv3LobbyViewState> | undefined): Crawlv3LobbyViewState {
+  const draftMode =
+    state?.draftMode === 'categories' || state?.draftMode === 'choices' || state?.draftMode === 'catalog'
+      ? state.draftMode
+      : 'catalog'
+
+  return {
+    draftMode,
+    draftCategory: typeof state?.draftCategory === 'string' ? state.draftCategory : '',
+    draftChoiceIds: Array.isArray(state?.draftChoiceIds)
+      ? state.draftChoiceIds.filter((id): id is string => typeof id === 'string')
+      : [],
+  }
+}
+
+function normalizePlayerList(players: unknown): Crawlv3Player[] {
+  const allowedPlayers = new Set<Crawlv3Player>(['player1', 'player2'])
+  return Array.isArray(players)
+    ? [...new Set(players)].filter((player): player is Crawlv3Player => allowedPlayers.has(player))
+    : []
+}
+
+export function normalizeLobbyCardSelections(
+  selections: Record<string, Partial<Crawlv3LobbyCardSelection>> | undefined,
+): Record<string, Crawlv3LobbyCardSelection> {
+  if (!selections || typeof selections !== 'object') return {}
+
+  return Object.fromEntries(
+    Object.entries(selections).map(([uid, selection]) => [
+      uid,
+      {
+        cardId: typeof selection?.cardId === 'string' ? selection.cardId : null,
+        visibleTo: normalizePlayerList(selection?.visibleTo),
+      },
+    ]),
+  )
 }
 
 export function sanitizeStatusRecord(record: Record<string, number> | undefined) {
@@ -288,6 +341,11 @@ export function completeCrawlv3Game(game: Crawlv3Game) {
   game.status = 'lobby'
   game.cards = {}
   game.cardSelections = {}
+  game.lobbyStates = {
+    player1: createDefaultCrawlv3LobbyViewState(),
+    player2: createDefaultCrawlv3LobbyViewState(),
+  }
+  game.lobbyCardSelections = {}
   for (const playerKey of ['player1', 'player2'] as const) {
     const selection = game.deckSelections[playerKey]
     if (!selection) continue
@@ -325,6 +383,24 @@ export function applyCrawlv3Action(
       if (!actor || !nextGame.deckSelections[actor]) break
       if (action.ready && !nextGame.deckSelections[actor].cards.length) break
       nextGame.deckSelections[actor].ready = action.ready
+      break
+    }
+    case 'update_lobby_state': {
+      if (!actor) break
+      nextGame.lobbyStates = nextGame.lobbyStates ?? {
+        player1: createDefaultCrawlv3LobbyViewState(),
+        player2: createDefaultCrawlv3LobbyViewState(),
+      }
+      nextGame.lobbyStates[actor] = normalizeLobbyViewState(action.state)
+      break
+    }
+    case 'select_lobby_card': {
+      if (!actorUid) break
+      nextGame.lobbyCardSelections = nextGame.lobbyCardSelections ?? {}
+      nextGame.lobbyCardSelections[actorUid] = {
+        cardId: typeof action.cardId === 'string' ? action.cardId : null,
+        visibleTo: normalizePlayerList(action.visibleTo),
+      }
       break
     }
     case 'select_card': {

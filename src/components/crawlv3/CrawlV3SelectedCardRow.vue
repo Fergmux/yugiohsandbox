@@ -7,6 +7,7 @@ defineProps<{
   count: number
   interactive?: boolean
   variant?: 'default' | 'readonly'
+  highlighted?: boolean
 }>()
 
 defineEmits<{
@@ -23,9 +24,12 @@ defineEmits<{
     class="flex w-full items-center gap-3 rounded-2xl border p-2 text-left"
     :class="
       variant === 'readonly'
-        ? 'cursor-default border-white/10 bg-black/20'
+        ? highlighted
+          ? 'cursor-default border-sky-300/70 bg-sky-300/10 ring-2 ring-sky-300/50'
+          : 'cursor-default border-white/10 bg-black/20'
         : [
             'border-white/10 bg-white/5 transition hover:border-rose-300/35 hover:bg-rose-300/10',
+            highlighted ? 'border-sky-300/70 bg-sky-300/10 ring-2 ring-sky-300/50' : '',
             interactive ? 'cursor-pointer' : 'cursor-default opacity-70',
           ]
     "

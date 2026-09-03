@@ -79,6 +79,17 @@ export interface Crawlv3DeckSelection {
   updatedAt: number
 }
 
+export interface Crawlv3LobbyViewState {
+  draftMode: 'catalog' | 'categories' | 'choices'
+  draftCategory: string
+  draftChoiceIds: string[]
+}
+
+export interface Crawlv3LobbyCardSelection {
+  cardId: string | null
+  visibleTo: Crawlv3Player[]
+}
+
 export interface Crawlv3CardSelection {
   instanceId: string | null
   visibleTo: Crawlv3Player[]
@@ -127,6 +138,8 @@ export interface Crawlv3Game {
     player1: Crawlv3DeckSelection | null
     player2: Crawlv3DeckSelection | null
   }
+  lobbyStates: Record<Crawlv3Player, Crawlv3LobbyViewState>
+  lobbyCardSelections: Record<string, Crawlv3LobbyCardSelection>
   cardSelections: Record<string, Crawlv3CardSelection>
   cards: Record<string, Crawlv3CardState>
   processedActions: string[]
@@ -146,6 +159,17 @@ export type Crawlv3Action =
   | {
       type: 'set_ready'
       ready: boolean
+      actionId: string
+    }
+  | {
+      type: 'update_lobby_state'
+      state: Crawlv3LobbyViewState
+      actionId: string
+    }
+  | {
+      type: 'select_lobby_card'
+      cardId: string | null
+      visibleTo: Crawlv3Player[]
       actionId: string
     }
   | {

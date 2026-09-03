@@ -61,6 +61,17 @@ export interface Crawlv3DeckSelection {
   updatedAt: number
 }
 
+export interface Crawlv3LobbyViewState {
+  draftMode: 'catalog' | 'categories' | 'choices'
+  draftCategory: string
+  draftChoiceIds: string[]
+}
+
+export interface Crawlv3LobbyCardSelection {
+  cardId: string | null
+  visibleTo: Crawlv3Player[]
+}
+
 export interface Crawlv3CardSelection {
   instanceId: string | null
   visibleTo: Crawlv3Player[]
@@ -123,6 +134,8 @@ export interface Crawlv3Game {
     player1: Crawlv3DeckSelection | null
     player2: Crawlv3DeckSelection | null
   }
+  lobbyStates: Record<Crawlv3Player, Crawlv3LobbyViewState>
+  lobbyCardSelections: Record<string, Crawlv3LobbyCardSelection>
   cardSelections: Record<string, Crawlv3CardSelection>
   cards: Record<string, Crawlv3CardState>
   processedActions: string[]
@@ -142,6 +155,17 @@ export type Crawlv3Action =
   | {
       type: 'set_ready'
       ready: boolean
+      actionId: string
+    }
+  | {
+      type: 'update_lobby_state'
+      state: Crawlv3LobbyViewState
+      actionId: string
+    }
+  | {
+      type: 'select_lobby_card'
+      cardId: string | null
+      visibleTo: Crawlv3Player[]
       actionId: string
     }
   | {
@@ -277,6 +301,14 @@ export function createCrawlv3Player(uid: string, username: string, config: Crawl
   }
 }
 
+export function createDefaultCrawlv3LobbyViewState(): Crawlv3LobbyViewState {
+  return {
+    draftMode: 'catalog',
+    draftCategory: '',
+    draftChoiceIds: [],
+  }
+}
+
 export function createCrawlv3Game(uid: string, username: string, config: Crawlv3CatalogConfig): Crawlv3Game {
   return {
     _version: 0,
@@ -294,6 +326,11 @@ export function createCrawlv3Game(uid: string, username: string, config: Crawlv3
       player1: null,
       player2: null,
     },
+    lobbyStates: {
+      player1: createDefaultCrawlv3LobbyViewState(),
+      player2: createDefaultCrawlv3LobbyViewState(),
+    },
+    lobbyCardSelections: {},
     cardSelections: {},
     cards: {},
     processedActions: [],
@@ -387,6 +424,44 @@ function sanitizeStatusRecord(record: Record<string, number> | undefined) {
     .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
 
   return Object.fromEntries(entries)
+}
+
+function sanitizeLobbyViewState(state: Partial<Crawlv3LobbyViewState> | undefined): Crawlv3LobbyViewState {
+  const draftMode =
+    state?.draftMode === 'categories' || state?.draftMode === 'choices' || state?.draftMode === 'catalog'
+      ? state.draftMode
+      : 'catalog'
+
+  return {
+    draftMode,
+    draftCategory: typeof state?.draftCategory === 'string' ? state.draftCategory : '',
+    draftChoiceIds: Array.isArray(state?.draftChoiceIds)
+      ? state.draftChoiceIds.filter((id): id is string => typeof id === 'string')
+      : [],
+  }
+}
+
+function sanitizePlayerList(players: unknown): Crawlv3Player[] {
+  const allowedPlayers = new Set<Crawlv3Player>(['player1', 'player2'])
+  return Array.isArray(players)
+    ? [...new Set(players)].filter((player): player is Crawlv3Player => allowedPlayers.has(player))
+    : []
+}
+
+function sanitizeLobbyCardSelections(
+  selections: Record<string, Partial<Crawlv3LobbyCardSelection>> | undefined,
+): Record<string, Crawlv3LobbyCardSelection> {
+  if (!selections || typeof selections !== 'object') return {}
+
+  return Object.fromEntries(
+    Object.entries(selections).map(([uid, selection]) => [
+      uid,
+      {
+        cardId: typeof selection?.cardId === 'string' ? selection.cardId : null,
+        visibleTo: sanitizePlayerList(selection?.visibleTo),
+      },
+    ]),
+  )
 }
 
 function shuffleItems<T>(items: T[]): T[] {
@@ -541,6 +616,11 @@ function completeGame(game: Crawlv3Game) {
   game.status = 'lobby'
   game.cards = {}
   game.cardSelections = {}
+  game.lobbyStates = {
+    player1: createDefaultCrawlv3LobbyViewState(),
+    player2: createDefaultCrawlv3LobbyViewState(),
+  }
+  game.lobbyCardSelections = {}
   for (const playerKey of ['player1', 'player2'] as const) {
     const selection = game.deckSelections[playerKey]
     if (!selection) continue
@@ -634,6 +714,10 @@ function handleLobbyAction(game: Crawlv3Game, action: Crawlv3Action, playerKey: 
       selection.ready = action.ready
       selection.updatedAt = Date.now()
       startGameIfReady(game)
+      return { success: true }
+    }
+    case 'update_lobby_state': {
+      game.lobbyStates[playerKey] = sanitizeLobbyViewState(action.state)
       return { success: true }
     }
     default:
@@ -776,6 +860,11 @@ export function applyAuthenticatedCrawlv3Action(
         spectatorPerspective: sanitizeSpectatorPerspective(spectator.spectatorPerspective),
       }))
     : []
+  game.lobbyStates = {
+    player1: sanitizeLobbyViewState(game.lobbyStates?.player1),
+    player2: sanitizeLobbyViewState(game.lobbyStates?.player2),
+  }
+  game.lobbyCardSelections = sanitizeLobbyCardSelections(game.lobbyCardSelections)
   game.cardSelections = game.cardSelections && typeof game.cardSelections === 'object' ? game.cardSelections : {}
   game.processedActions = Array.isArray(game.processedActions) ? game.processedActions : []
   const playerKey = getCrawlv3PlayerKey(game, uid)
@@ -794,6 +883,21 @@ export function applyAuthenticatedCrawlv3Action(
     game.cardSelections[uid] = {
       instanceId: action.instanceId,
       visibleTo: sanitizeSelectionVisibility(game, uid, action.instanceId, action.visibleTo),
+    }
+    game.processedActions.push(action.actionId)
+    if (game.processedActions.length > 100) game.processedActions.shift()
+    game._version = (game._version ?? 0) + 1
+    return { success: true }
+  }
+
+  if (action.type === 'select_lobby_card') {
+    if (!isCrawlv3Participant(game, uid)) {
+      return { success: false, error: 'Not a participant in this game' }
+    }
+
+    game.lobbyCardSelections[uid] = {
+      cardId: typeof action.cardId === 'string' ? action.cardId : null,
+      visibleTo: sanitizePlayerList(action.visibleTo),
     }
     game.processedActions.push(action.actionId)
     if (game.processedActions.length > 100) game.processedActions.shift()

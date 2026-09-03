@@ -11,6 +11,8 @@ export type QueuedCrawlv3Action =
   | Omit<Extract<Crawlv3Action, { type: 'update_config' }>, 'actionId'>
   | Omit<Extract<Crawlv3Action, { type: 'select_deck' }>, 'actionId'>
   | Omit<Extract<Crawlv3Action, { type: 'set_ready' }>, 'actionId'>
+  | Omit<Extract<Crawlv3Action, { type: 'update_lobby_state' }>, 'actionId'>
+  | Omit<Extract<Crawlv3Action, { type: 'select_lobby_card' }>, 'actionId'>
   | Omit<Extract<Crawlv3Action, { type: 'select_card' }>, 'actionId'>
   | Omit<Extract<Crawlv3Action, { type: 'update_spectator_perspective' }>, 'actionId'>
   | Omit<Extract<Crawlv3Action, { type: 'move_card' }>, 'actionId'>

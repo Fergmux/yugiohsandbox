@@ -13,11 +13,12 @@ import { useCrawlv3Controller } from '@/composables/crawlv3/useCrawlv3Controller
 import { getCardTags } from '@/lib/crawlv3/card-display'
 import { getSelectedCardRows, type Crawlv3SelectedCardRow } from '@/lib/crawlv3/selected-card-rows'
 import { createCatalogPreviewCardState, safeTrim } from '@/lib/crawlv3/ui-utils'
-import type { Crawlv3CatalogCard } from '@/types/crawlv3'
+import type { Crawlv3CatalogCard, Crawlv3LobbyViewState, Crawlv3Player } from '@/types/crawlv3'
 import type { Crawlv3SpectatorPerspective } from '@/types/crawlv3-ui'
 
 const {
   game,
+  currentUserUid,
   myPlayer,
   isSpectator,
   isHost,
@@ -68,25 +69,68 @@ const catalogPreviewCard = ref<Crawlv3CatalogCard | null>(null)
 const catalogTooltipCard = ref<Crawlv3CatalogCard | null>(null)
 const catalogTooltipPoint = ref<{ x: number; y: number } | null>(null)
 
+function createDefaultLobbyViewState(): Crawlv3LobbyViewState {
+  return {
+    draftMode: 'catalog',
+    draftCategory: '',
+    draftChoiceIds: [],
+  }
+}
+
 const spectatorPerspectiveOptions = computed<{ value: Crawlv3SpectatorPerspective; label: string }[]>(() => [
   { value: 'both', label: 'Both' },
   { value: 'player1', label: game.value?.players.player1?.username ?? 'Player 1' },
   { value: 'player2', label: game.value?.players.player2?.username ?? 'Player 2' },
 ])
 
+const mirroredPlayer = computed<Crawlv3Player | null>(() => {
+  if (!isSpectator.value) return null
+  return spectatorPerspective.value === 'player1' || spectatorPerspective.value === 'player2'
+    ? spectatorPerspective.value
+    : null
+})
+const isMirroringPlayerLobby = computed(() => !!mirroredPlayer.value)
+const activePlayer = computed<Crawlv3Player | null>(() => mirroredPlayer.value ?? myPlayer.value)
+const activePlayerName = computed(() => {
+  const player = activePlayer.value
+  return player ? (game.value?.players[player]?.username ?? 'player') : 'player'
+})
+const activeCanEditDeckSelection = computed(() => !isSpectator.value && canEditDeckSelection.value)
+const canHighlightActiveCards = computed(() => isMirroringPlayerLobby.value && !!activePlayer.value)
+
+const activeLobbyState = computed<Crawlv3LobbyViewState>(() => {
+  const player = activePlayer.value
+  if (!player) return createDefaultLobbyViewState()
+
+  return game.value?.lobbyStates?.[player] ?? createDefaultLobbyViewState()
+})
+
 const canPreviewCatalogDraft = computed(() => {
   const config = configDraft.value
   return !!safeTrim(config?.csvUrl) && !!safeTrim(config?.headers?.id) && !!safeTrim(config?.headers?.title)
 })
 
+const activeSelectionIds = computed(() => {
+  const player = activePlayer.value
+  if (!player) return []
+  if (!isMirroringPlayerLobby.value) return localSelectionIds.value
+
+  return game.value?.deckSelections[player]?.cards.map((card) => card.id) ?? []
+})
+
 const selectedCatalogCounts = computed(() =>
-  localSelectionIds.value.reduce<Record<string, number>>((counts, cardId) => {
+  activeSelectionIds.value.reduce<Record<string, number>>((counts, cardId) => {
     counts[cardId] = (counts[cardId] ?? 0) + 1
     return counts
   }, {}),
 )
 
 const selectedCatalogRows = computed(() => {
+  const player = activePlayer.value
+  if (isMirroringPlayerLobby.value && player) {
+    return getSelectedCardRows(game.value?.deckSelections[player]?.cards)
+  }
+
   const counts = selectedCatalogCounts.value
   return catalogCards.value.map((card) => ({ card, count: counts[card.id] ?? 0 })).filter((row) => row.count > 0)
 })
@@ -136,11 +180,16 @@ const draftCategoryRows = computed(() =>
   })),
 )
 const selectedCategoryRows = computed(() =>
-  categoryFilterOptions.value.map((category) => ({
+  (isMirroringPlayerLobby.value
+    ? [...new Set(selectedCatalogRows.value.flatMap(({ card }) => splitCatalogValues(card.category)))].sort(
+        (left, right) => left.localeCompare(right, undefined, { numeric: true }),
+      )
+    : categoryFilterOptions.value
+  ).map((category) => ({
     category,
-    count: catalogCards.value.reduce((total, card) => {
+    count: selectedCatalogRows.value.reduce((total, { card, count }) => {
       if (!splitCatalogValues(card.category).includes(category)) return total
-      return total + (selectedCatalogCounts.value[card.id] ?? 0)
+      return total + count
     }, 0),
   })),
 )
@@ -201,19 +250,60 @@ const filteredCatalogCards = computed(() => {
     .map((result) => result.card)
 })
 
+const activeDraftChoices = computed(() => {
+  const cardsById = getCatalogCardsById()
+  const choiceIds = activeLobbyState.value.draftChoiceIds
+  const stateChoices = choiceIds
+    .map((cardId) => cardsById.get(cardId))
+    .filter((card): card is Crawlv3CatalogCard => !!card)
+
+  if (stateChoices.length === choiceIds.length) return stateChoices
+  if (!isMirroringPlayerLobby.value && activePlayer.value === myPlayer.value) return draftChoices.value
+
+  return []
+})
+
+const highlightedCatalogCardIds = computed(() => {
+  const selections = game.value?.lobbyCardSelections ?? {}
+  const highlightedIds = new Set<string>()
+
+  for (const [uid, selection] of Object.entries(selections)) {
+    if (!selection || typeof selection !== 'object' || typeof selection.cardId !== 'string') continue
+    const visibleTo = Array.isArray(selection.visibleTo) ? selection.visibleTo : []
+    if (uid === currentUserUid.value || (myPlayer.value && visibleTo.includes(myPlayer.value))) {
+      highlightedIds.add(selection.cardId)
+    }
+  }
+
+  return highlightedIds
+})
+
 const catalogPreviewState = computed(() => {
   const card = catalogPreviewCard.value
   if (!card) return null
 
-  return createCatalogPreviewCardState(card, myPlayer.value ?? 'player1')
+  return createCatalogPreviewCardState(card, activePlayer.value ?? 'player1')
 })
 
 const canReadyUp = computed(() => canEditDeckSelection.value && !!localSelectionIds.value.length)
 
+function saveLobbyViewState(state: Crawlv3LobbyViewState) {
+  draftMode.value = state.draftMode
+  draftCategory.value = state.draftCategory
+  draftChoices.value = state.draftChoiceIds
+    .map((cardId) => getCatalogCardsById().get(cardId))
+    .filter((card): card is Crawlv3CatalogCard => !!card)
+
+  if (!myPlayer.value || isSpectator.value) return
+
+  enqueueAction({
+    type: 'update_lobby_state',
+    state,
+  })
+}
+
 function resetDraftCardsState() {
-  draftMode.value = 'catalog'
-  draftCategory.value = ''
-  draftChoices.value = []
+  saveLobbyViewState(createDefaultLobbyViewState())
 }
 
 function resetLobbyCatalogState() {
@@ -286,15 +376,51 @@ function clearCatalogSelection() {
   saveDeckSelection([])
 }
 
+function highlightCardForViewedPlayer(cardId: string) {
+  const player = mirroredPlayer.value
+  if (!player) return
+
+  enqueueAction({
+    type: 'select_lobby_card',
+    cardId,
+    visibleTo: [player],
+  })
+}
+
+function handleCatalogCardClick(card: Crawlv3CatalogCard) {
+  if (isMirroringPlayerLobby.value) {
+    highlightCardForViewedPlayer(card.id)
+    return
+  }
+
+  addCardSelection(card.id)
+}
+
+function handleSelectedCardRowClick(card: Crawlv3CatalogCard) {
+  if (isMirroringPlayerLobby.value) {
+    highlightCardForViewedPlayer(card.id)
+    return
+  }
+
+  removeCardSelection(card.id)
+}
+
+function savePerspective(value: string) {
+  if (value !== 'both' && value !== 'player1' && value !== 'player2') return
+  saveSpectatorPerspective(value)
+}
+
 function clearCatalogSearch() {
   catalogSearch.value = ''
 }
 
 function startDraftCards() {
   if (!canEditDeckSelection.value || !catalogCards.value.length) return
-  draftMode.value = 'categories'
-  draftCategory.value = ''
-  draftChoices.value = []
+  saveLobbyViewState({
+    draftMode: 'categories',
+    draftCategory: '',
+    draftChoiceIds: [],
+  })
   clearCatalogTooltip()
 }
 
@@ -322,20 +448,30 @@ function chooseDraftCategory(category: string) {
   if (!canEditDeckSelection.value) return
   const choices = getRandomDraftChoices(getDraftCardsForCategory(category))
   if (!choices.length) return
-  draftCategory.value = category
   draftChoices.value = choices
-  draftMode.value = 'choices'
+  saveLobbyViewState({
+    draftMode: 'choices',
+    draftCategory: category,
+    draftChoiceIds: choices.map((card) => card.id),
+  })
   clearCatalogTooltip()
 }
 
 function returnToDraftCategories() {
-  draftCategory.value = ''
-  draftChoices.value = []
-  draftMode.value = 'categories'
+  saveLobbyViewState({
+    draftMode: 'categories',
+    draftCategory: '',
+    draftChoiceIds: [],
+  })
   clearCatalogTooltip()
 }
 
 function selectDraftCard(card: Crawlv3CatalogCard) {
+  if (isMirroringPlayerLobby.value) {
+    highlightCardForViewedPlayer(card.id)
+    return
+  }
+
   addCardSelection(card.id)
   returnToDraftCategories()
 }
@@ -396,7 +532,7 @@ watch(
       </aside>
       <section
         class="rounded-[1.75rem] border border-white/10 bg-neutral-950/70 p-6 shadow-2xl backdrop-blur-sm"
-        :class="isSpectator ? 'xl:col-span-2' : ''"
+        :class="isSpectator && !isMirroringPlayerLobby ? 'xl:col-span-2' : ''"
       >
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -407,16 +543,19 @@ watch(
             <p v-if="!isSpectator" class="mt-2 text-white/60">
               Choose any number of cards. Changes save automatically, so ready up once you are happy.
             </p>
+            <p v-else-if="!isMirroringPlayerLobby" class="mt-2 text-white/60">
+              Choose a player to mirror their lobby, or choose Both to compare selected decks.
+            </p>
             <p v-else class="mt-2 text-white/60">
-              Choose the player perspective you want for the game. Both players' selected cards stay visible here.
+              Mirroring {{ activePlayerName }}. Click a card to highlight it for them.
             </p>
           </div>
           <div v-if="!isSpectator" class="flex flex-wrap gap-3">
             <button
-              v-if="draftMode === 'catalog'"
+              v-if="activeLobbyState.draftMode === 'catalog'"
               type="button"
               class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="!canEditDeckSelection || !catalogCards.length"
+              :disabled="!activeCanEditDeckSelection || !catalogCards.length"
               @click="startDraftCards"
             >
               Draft Cards
@@ -424,7 +563,7 @@ watch(
             <button
               type="button"
               class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="!canEditDeckSelection"
+              :disabled="!activeCanEditDeckSelection"
               @click="clearCatalogSelection"
             >
               Clear Selection
@@ -447,9 +586,19 @@ watch(
               Unready
             </button>
           </div>
+          <div v-else-if="isMirroringPlayerLobby" class="min-w-48">
+            <label class="block">
+              <span class="mb-2 block text-sm text-white/65">Spectate</span>
+              <CrawlV3Select
+                v-model="spectatorPerspective"
+                :options="spectatorPerspectiveOptions"
+                @change="savePerspective"
+              />
+            </label>
+          </div>
         </div>
 
-        <template v-if="isSpectator">
+        <template v-if="isSpectator && !isMirroringPlayerLobby">
           <CrawlV3SpectatorDeckSelections
             v-model:perspective="spectatorPerspective"
             :game="game"
@@ -460,7 +609,10 @@ watch(
           />
         </template>
         <template v-else>
-          <div v-if="draftMode === 'catalog'" class="mt-6 flex flex-wrap items-center gap-3">
+          <div
+            v-if="activeLobbyState.draftMode === 'catalog' && !isMirroringPlayerLobby"
+            class="mt-6 flex flex-wrap items-center gap-3"
+          >
             <input
               v-model="catalogSearch"
               type="text"
@@ -477,7 +629,10 @@ watch(
             </button>
           </div>
 
-          <div v-if="draftMode === 'catalog'" class="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div
+            v-if="activeLobbyState.draftMode === 'catalog' && !isMirroringPlayerLobby"
+            class="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6"
+          >
             <label class="block">
               <span class="mb-2 block text-xs font-semibold tracking-[0.2em] text-white/45 uppercase">Cost</span>
               <CrawlV3Select v-model="catalogCostFilter" :options="costSelectOptions" />
@@ -522,18 +677,25 @@ watch(
             Save the catalog config and load the CSV to start picking cards.
           </div>
 
-          <div v-else-if="draftMode === 'categories'" class="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div
+            v-else-if="activeLobbyState.draftMode === 'categories'"
+            class="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6"
+          >
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p class="text-xs font-semibold tracking-[0.35em] text-amber-200/70 uppercase">Draft Cards</p>
                 <h3 class="mt-2 text-2xl font-semibold">Choose a Category</h3>
-                <p class="mt-2 text-sm text-white/60">
+                <p v-if="!isMirroringPlayerLobby" class="mt-2 text-sm text-white/60">
                   Pick a category to see three random cards from it. Selecting a card adds it to your deck.
+                </p>
+                <p v-else class="mt-2 text-sm text-white/60">
+                  Waiting for {{ activePlayerName }} to choose a draft category.
                 </p>
               </div>
               <button
                 type="button"
-                class="cursor-pointer rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-200"
+                class="cursor-pointer rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!activeCanEditDeckSelection"
                 @click="finishDraftCards"
               >
                 Finished
@@ -553,7 +715,7 @@ watch(
                 :key="`draft-category-${category}`"
                 type="button"
                 class="cursor-pointer rounded-[1.25rem] border border-white/10 bg-black/20 p-4 text-left transition hover:border-amber-300/45 hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canEditDeckSelection"
+                :disabled="!activeCanEditDeckSelection"
                 @click="chooseDraftCategory(category)"
               >
                 <span class="block text-lg font-semibold text-white">{{ category }}</span>
@@ -562,29 +724,44 @@ watch(
             </div>
           </div>
 
-          <div v-else-if="draftMode === 'choices'" class="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div
+            v-else-if="activeLobbyState.draftMode === 'choices'"
+            class="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6"
+          >
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p class="text-xs font-semibold tracking-[0.35em] text-amber-200/70 uppercase">
-                  {{ draftCategory }}
+                  {{ activeLobbyState.draftCategory }}
                 </p>
                 <h3 class="mt-2 text-2xl font-semibold">Pick One Card</h3>
-                <p class="mt-2 text-sm text-white/60">Choose one of these random cards, or skip this draft pick.</p>
+                <p v-if="!isMirroringPlayerLobby" class="mt-2 text-sm text-white/60">
+                  Choose one of these random cards, or skip this draft pick.
+                </p>
+                <p v-else class="mt-2 text-sm text-white/60">Click one of these cards to highlight it.</p>
               </div>
               <button
                 type="button"
-                class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+                class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!activeCanEditDeckSelection"
                 @click="returnToDraftCategories"
               >
                 Skip
               </button>
             </div>
 
-            <div class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-4">
+            <div
+              v-if="!activeDraftChoices.length"
+              class="mt-6 rounded-[1.25rem] border border-white/10 bg-black/20 p-6 text-center text-white/60"
+            >
+              No draft choices are visible for this pick.
+            </div>
+
+            <div v-else class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-4">
               <div
-                v-for="card in draftChoices"
+                v-for="card in activeDraftChoices"
                 :key="`draft-choice-${card.id}`"
                 class="relative overflow-hidden rounded-[1.4rem] border border-white/10 bg-black/20 transition hover:border-amber-300/45 hover:bg-amber-300/10"
+                :class="highlightedCatalogCardIds.has(card.id) ? 'ring-2 ring-sky-300/70' : ''"
                 @contextmenu.prevent.stop="catalogPreviewCard = card"
                 @mouseenter="updateCatalogTooltip(card, $event)"
                 @mousemove="updateCatalogTooltip(card, $event)"
@@ -593,7 +770,7 @@ watch(
                 <button
                   type="button"
                   class="block w-full cursor-pointer text-left disabled:cursor-not-allowed"
-                  :disabled="!canEditDeckSelection"
+                  :disabled="!activeCanEditDeckSelection && !canHighlightActiveCards"
                   :aria-label="`Draft ${card.title}`"
                   @click="selectDraftCard(card)"
                 >
@@ -627,12 +804,13 @@ watch(
                 v-for="(card, cardIndex) in filteredCatalogCards"
                 :key="`catalog-${card.id}-${cardIndex}`"
                 class="relative overflow-hidden rounded-[1.4rem] border bg-white/5 transition"
-                :class="
+                :class="[
                   selectedCatalogCounts[card.id]
                     ? 'border-amber-300/50 bg-amber-300/10'
-                    : 'border-white/10 hover:border-white/25 hover:bg-white/10'
-                "
-                :aria-disabled="!canEditDeckSelection"
+                    : 'border-white/10 hover:border-white/25 hover:bg-white/10',
+                  highlightedCatalogCardIds.has(card.id) ? 'ring-2 ring-sky-300/70' : '',
+                ]"
+                :aria-disabled="!activeCanEditDeckSelection && !canHighlightActiveCards"
                 @contextmenu.prevent.stop="catalogPreviewCard = card"
                 @mouseenter="updateCatalogTooltip(card, $event)"
                 @mousemove="updateCatalogTooltip(card, $event)"
@@ -641,9 +819,15 @@ watch(
                 <button
                   type="button"
                   class="block w-full cursor-pointer text-left disabled:cursor-not-allowed"
-                  :disabled="!canEditDeckSelection"
-                  :aria-label="canEditDeckSelection ? `Add ${card.title}` : 'Unready to change your selection'"
-                  @click="addCardSelection(card.id)"
+                  :disabled="!activeCanEditDeckSelection && !canHighlightActiveCards"
+                  :aria-label="
+                    canHighlightActiveCards
+                      ? `Highlight ${card.title}`
+                      : activeCanEditDeckSelection
+                        ? `Add ${card.title}`
+                        : 'Unready to change your selection'
+                  "
+                  @click="handleCatalogCardClick(card)"
                 >
                   <div class="relative aspect-63/88 overflow-hidden bg-transparent">
                     <img
@@ -669,10 +853,10 @@ watch(
                 </button>
 
                 <button
-                  v-if="selectedCatalogCounts[card.id]"
+                  v-if="selectedCatalogCounts[card.id] && activeCanEditDeckSelection"
                   type="button"
                   class="absolute top-2 right-2 cursor-pointer rounded-full bg-amber-300 px-2.5 py-1 text-[0.7rem] font-semibold text-amber-950 shadow-lg transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  :disabled="!canEditDeckSelection"
+                  :disabled="!activeCanEditDeckSelection"
                   :aria-label="`Remove one ${card.title}`"
                   @click.stop="removeCardSelection(card.id)"
                 >
@@ -685,13 +869,17 @@ watch(
       </section>
 
       <CrawlV3DeckSelectionSidebar
-        v-if="!isSpectator"
+        v-if="!isSpectator || isMirroringPlayerLobby"
         :rows="selectedCatalogRows"
         :category-rows="selectedCategoryRows"
-        :total="localSelectionIds.length"
-        :can-edit="canEditDeckSelection"
+        :total="activeSelectionIds.length"
+        :title="isMirroringPlayerLobby ? `${activePlayerName}'s Deck` : 'Your Deck'"
+        :can-edit="activeCanEditDeckSelection"
+        :can-highlight="canHighlightActiveCards"
+        :highlighted-card-ids="highlightedCatalogCardIds"
         @clear="clearCatalogSelection"
         @remove="removeCardSelection"
+        @highlight="handleSelectedCardRowClick"
         @preview="catalogPreviewCard = $event"
         @tooltip="updateCatalogTooltip"
         @tooltip-clear="clearCatalogTooltip"

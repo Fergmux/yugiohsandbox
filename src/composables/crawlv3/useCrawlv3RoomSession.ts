@@ -7,7 +7,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { db } from '@/firebase/client'
 import { authFetch } from '@/lib/authFetch'
 import { createDefaultCrawlv3Config } from '@/lib/crawlv3/catalog'
-import { applyCrawlv3Action, cloneGame } from '@/lib/crawlv3/game-state'
+import {
+  applyCrawlv3Action,
+  cloneGame,
+  normalizeLobbyCardSelections,
+  normalizeLobbyViewState,
+} from '@/lib/crawlv3/game-state'
 import { useUserStore } from '@/stores/user'
 import type { Crawlv3Action, Crawlv3Game, Crawlv3Player } from '@/types/crawlv3'
 import type { Crawlv3SpectatorPerspective, PendingCrawlv3ActionBatch, QueuedCrawlv3Action } from '@/types/crawlv3-ui'
@@ -82,6 +87,11 @@ export function useCrawlv3RoomSession() {
             spectatorPerspective: normalizeSpectatorPerspective(spectator.spectatorPerspective),
           }))
         : [],
+      lobbyStates: {
+        player1: normalizeLobbyViewState(game.lobbyStates?.player1),
+        player2: normalizeLobbyViewState(game.lobbyStates?.player2),
+      },
+      lobbyCardSelections: normalizeLobbyCardSelections(game.lobbyCardSelections),
       cardSelections:
         game.cardSelections && typeof game.cardSelections === 'object'
           ? Object.fromEntries(
@@ -202,7 +212,12 @@ export function useCrawlv3RoomSession() {
   }
 
   function enqueueAction(action: QueuedCrawlv3Action) {
-    if (!myPlayer.value && action.type !== 'select_card' && action.type !== 'update_spectator_perspective') {
+    if (
+      !myPlayer.value &&
+      action.type !== 'select_card' &&
+      action.type !== 'select_lobby_card' &&
+      action.type !== 'update_spectator_perspective'
+    ) {
       error.value = 'Spectators cannot perform game actions'
       return
     }
