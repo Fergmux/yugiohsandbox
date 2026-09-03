@@ -54,7 +54,7 @@ const { statusDefinitions } = useCrawlv3StatusDefinitions({
   config: computed(() => game.value?.config),
 })
 
-const revealAllCards = computed(() => isSpectator.value)
+const revealAllCards = computed(() => isSpectator.value && spectatorPerspective.value === 'both')
 const spectatorPerspectiveOptions = computed<{ value: Crawlv3SpectatorPerspective; label: string }[]>(() => [
   { value: 'both', label: 'Both' },
   { value: 'player1', label: game.value?.players.player1?.username ?? 'Player 1' },
